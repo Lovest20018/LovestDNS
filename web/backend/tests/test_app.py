@@ -64,6 +64,23 @@ def test_custom_env_requires_assignment_syntax(client):
     assert "Content validation failed" in response.get_json()["error"]
 
 
+def test_custom_env_rejects_embedded_double_quote(client):
+    # An embedded quote must not pass validation: custom_env.ini is consumed as
+    # shell KEY="VALUE" lines, so it would let the value break out of the quotes.
+    response = put_file(client, "custom_env.ini", 'CNAUTO="a"; echo INJECT"\n')
+
+    assert response.status_code == 400
+    assert "Content validation failed" in response.get_json()["error"]
+
+
+def test_parse_custom_env_ignores_embedded_quote_line(monkeypatch, tmp_path):
+    monkeypatch.setattr(backend, "DATA_DIR", str(tmp_path))
+    (tmp_path / "custom_env.ini").write_text('CNAUTO="a"; echo x"\n', encoding="utf-8")
+
+    # The stricter parser regex must not capture the injected tail.
+    assert backend._parse_env_from_custom_ini() == {}
+
+
 def test_valid_custom_env_is_written_and_backup_is_created(client, tmp_path):
     target = tmp_path / "custom_env.ini"
     target.write_text('CNAUTO="no"\n', encoding="utf-8")

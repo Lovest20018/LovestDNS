@@ -235,7 +235,9 @@ def _has_control_chars(value: str) -> bool:
 
 def _validate_custom_env(content: str) -> tuple[bool, str]:
     """Validate custom_env.ini assignment lines."""
-    assignment_re = re.compile(r'^[_a-zA-Z0-9]+=".*"$')
+    # Value must not contain a bare double quote: custom_env.ini is consumed as
+    # shell KEY="VALUE" lines, so an embedded quote would break out of the value.
+    assignment_re = re.compile(r'^[_a-zA-Z0-9]+="[^"]*"$')
     for line_no, line in enumerate(content.splitlines(), 1):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
@@ -444,7 +446,7 @@ def _parse_env_from_custom_ini() -> dict:
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
-                match = re.match(r'^([_a-zA-Z0-9]+)="(.*)"$', line)
+                match = re.match(r'^([_a-zA-Z0-9]+)="([^"]*)"$', line)
                 if match:
                     result[match.group(1)] = match.group(2)
     except Exception:

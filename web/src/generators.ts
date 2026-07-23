@@ -1,5 +1,6 @@
 import { useStore } from './store';
 import { ENV_VARS } from './types';
+import YAML from 'yaml';
 
 function isDefault(key: string, value: string): boolean {
   const envVar = ENV_VARS.find((v) => v.key === key);
@@ -79,41 +80,40 @@ export function generateCustomEnvIni(): string {
 
 export function generateCustomModYaml(): string {
   const { customModZones, customModSwaps, customModHosts } = useStore.getState();
-  const lines: string[] = [];
+
+  // Build a plain object and let the YAML serializer handle quoting/escaping,
+  // mirroring DeployPage's YAML.stringify approach. Manual string building would
+  // emit broken YAML for values containing ':', quotes, or leading indicators.
+  const doc: Record<string, unknown> = {};
 
   if (customModZones.length > 0) {
-    lines.push('Zones:');
-    customModZones.forEach((z) => {
-      lines.push(` - zone: ${z.zone}`);
-      lines.push(`   dns: ${z.dns}`);
-      lines.push(`   ttl: ${z.ttl}`);
-      lines.push(`   seq: ${z.seq}`);
-      lines.push(`   socks5: ${z.socks5}`);
-    });
+    doc.Zones = customModZones.map((z) => ({
+      zone: z.zone,
+      dns: z.dns,
+      ttl: z.ttl,
+      seq: z.seq,
+      socks5: z.socks5,
+    }));
   }
 
   if (customModSwaps.length > 0) {
-    if (lines.length > 0) lines.push('');
-    lines.push('Swaps:');
-    customModSwaps.forEach((s) => {
-      lines.push(` - env_key: ${s.env_key}`);
-      lines.push(`   cidr_file: "${s.cidr_file}"`);
-    });
+    doc.Swaps = customModSwaps.map((s) => ({
+      env_key: s.env_key,
+      cidr_file: s.cidr_file,
+    }));
   }
 
   if (customModHosts.length > 0) {
-    if (lines.length > 0) lines.push('');
-    lines.push('Hosts:');
-    customModHosts.forEach((h) => {
-      lines.push(` - env_key: ${h.env_key}`);
-      lines.push(`   zone: ${h.zone}`);
-    });
+    doc.Hosts = customModHosts.map((h) => ({
+      env_key: h.env_key,
+      zone: h.zone,
+    }));
   }
 
-  if (lines.length === 0) {
+  if (Object.keys(doc).length === 0) {
     return `# Custom Mod Configuration\n# Add Zones, Swaps, or Hosts configurations below\n`;
   }
-  return lines.join('\n') + '\n';
+  return YAML.stringify(doc);
 }
 
 export function downloadFile(content: string, filename: string) {
