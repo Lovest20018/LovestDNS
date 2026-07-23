@@ -297,6 +297,7 @@ Web UI 保存后会根据当前配置自动判断并提示热重载状态。由�
 - **写入大小限制** — 单次写入最大 2MB，按文件类型细分
 - **Token 鉴权** — 默认强制认证，仅支持 Bearer token
 - **敏感变量 mask** — 含 TOKEN/PASSWORD/SECRET/KEY 的值在 API 中显示为 `***`
+- **DNS 诊断目标可自定义** — 诊断接口（`/api/dns-test`、`/api/health-check`）允许指定任意 `server:port`，便于对比不同解析器的返回结果。该能力受 Token 鉴权保护，且仅发送 UDP DNS 查询、按 DNS 协议解析响应；请妥善保管 Token 并避免无鉴权暴露
 - **127.0.0.1 绑定** — 默认只监听本地，不直接暴露到网络
 
 ## 页面说明
