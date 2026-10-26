@@ -29,11 +29,13 @@ def main():
         docker("volume", "create", "--label", "paopaodns-suite-test=true", volume)
     try:
         # Seed supported legacy user configuration. No host paths or DNS port 53
-        # are used, and no production container or volume is inspected.
+        # are used, and no production container or volume is inspected. In
+        # CNAUTO=yes, route the local-zone test name to recursive Unbound;
+        # the forward layer deliberately does not include unbound_custom.conf.
         docker("run", "--rm", "--network", "none", "--entrypoint", "/bin/sh", "-v", f"{data}:/data",
                args.image, "-ec", '''printf 'server:\n    local-zone: "suite-test.example." static\n    local-data: "suite-test.example. 60 IN A 192.0.2.10"\n' > /data/unbound_custom.conf
 printf 'CUSTOM_VALUE="preserved"\n' > /data/custom_env.ini
-printf '# legacy rule\ndomain:example.org\n' > /data/force_recurse_list.txt
+printf '# legacy rule\ndomain:example.org\ndomain:suite-test.example\n' > /data/force_recurse_list.txt
 cp /usr/sbin/unbound.conf /data/unbound.conf
 ''')
 
@@ -54,19 +56,23 @@ cp /usr/sbin/unbound.conf /data/unbound.conf
             data_bytes = None if body is None else json.dumps(body).encode()
             return json.load(urllib.request.urlopen(urllib.request.Request(base + path, data=data_bytes, headers=headers, method=method), timeout=15))
 
-        def denied(base, path, expected, **kwargs):
+        def denied(base, path, expected, code=None, **kwargs):
             try:
                 request(base, path, **kwargs)
                 raise AssertionError(f"Expected {expected} for {path}")
             except urllib.error.HTTPError as exc:
                 assert exc.code == expected, (path, exc.code)
+                if code:
+                    payload = json.load(exc)
+                    assert payload["error"]["code"] == code and "data" not in payload, payload
+                    assert payload["meta"]["request_id"] == exc.headers["X-Request-ID"]
 
-        def wait_task(base, task_id):
+        def wait_task(base, task_id, expected="succeeded"):
             deadline = time.monotonic() + 90
             while time.monotonic() < deadline:
                 value = request(base, f"/api/v1/maintenance/tasks/{task_id}")["data"]["task"]
                 if value["state"] not in {"queued", "running"}:
-                    assert value["state"] == "succeeded", value
+                    assert value["state"] == expected, value
                     return value
                 time.sleep(1)
             raise RuntimeError("Maintenance task timed out")
@@ -88,6 +94,7 @@ cp /usr/sbin/unbound.conf /data/unbound.conf
 
         base = start("no")
         wait_ready(base)
+        print("PASS: CNAUTO=no core readiness", flush=True)
         identity = request(base, "/api/v1/instance", observer=True)["data"]["id"]
         assert request(base, "/api/v1/capabilities", observer=True)["data"]["permissions"]["configure"] is False
         denied(base, "/api/v1/status", 403, observer=True)
@@ -111,6 +118,7 @@ cp /usr/sbin/unbound.conf /data/unbound.conf
         answer = request(base, "/api/dns-test", {"domain": "suite-test.example", "record_type": "A"})
         assert answer["results"] == ["192.0.2.10"], answer
         assert "CUSTOM_VALUE" in request(base, "/api/file/custom_env.ini")["content"]
+        print("PASS: v1 roles, freshness, UDP/TCP, config history and restore", flush=True)
         try:
             request(base, "/api/capabilities", auth=False)
             raise AssertionError("Missing authentication was accepted")
@@ -126,6 +134,7 @@ cp /usr/sbin/unbound.conf /data/unbound.conf
         assert sample["layers"]["recursive"]["available"], sample
         assert sample["layers"]["forward"]["available"], sample
         assert docker("exec", name, "redis-cli", "-s", "/tmp/redis.sock", "GET", "suite-migration-marker") == "preserved"
+        print("PASS: CNAUTO=yes, both Unbound layers, instance identity and Redis RDB retention", flush=True)
         answer = request(base, "/api/dns-test", {"domain": "suite-test.example", "record_type": "A"})
         assert answer["results"] == ["192.0.2.10"], answer
         # A bounded, real custom_mod application: create a single hosts rule,
@@ -140,8 +149,54 @@ cp /usr/sbin/unbound.conf /data/unbound.conf
         finished = wait_task(base, task["id"])
         assert finished["result"]["verified"] is False
         assert request(base, "/api/v1/dns-test", {"domain": "suite-host.example", "record_type": "A"}, observer=True)["data"]["results"] == ["192.0.2.25"]
+        print("PASS: idempotent real config application and target DNS record", flush=True)
+        # Reject only this candidate at the real process boundary. Restoring the
+        # preceding runtime lets the actual MosDNS binary start again. This
+        # touches only the disposable container, never the image or preview.
+        old_runtime = docker("exec", name, "sha256sum", "/tmp/mosdns.yaml").split()[0]
+        old_mod = request(base, "/api/v1/file/custom_mod.yaml")["data"]["content"]
+        docker("exec", name, "/bin/sh", "-ec", '''mv /usr/sbin/mosdns /usr/sbin/mosdns.suite-test-original
+cat > /usr/sbin/mosdns <<'WRAPPER'
+#!/bin/sh
+if [ "$1" = start ] && grep -q suite-rejected-candidate.example /tmp/mosdns.yaml; then
+    exit 1
+fi
+exec /usr/sbin/mosdns.suite-test-original "$@"
+WRAPPER
+chmod 755 /usr/sbin/mosdns
+''')
+        try:
+            rejected = "Hosts:\n- env_key: SUITE_LOCAL_IP\n  zone: suite-rejected-candidate.example\n"
+            request(base, "/api/v1/file/custom_mod.yaml", {"content": rejected}, method="PUT")
+            failed_plan = request(base, "/api/v1/config/apply-plan")["data"]
+            failed_task = request(base, "/api/v1/maintenance/tasks", {"action": "apply_custom_mod",
+                "request_id": uuid.uuid4().hex, "expected_sha256": failed_plan["sha256"]})["data"]["task"]
+            failed = wait_task(base, failed_task["id"], expected="failed")
+            rollback = failed["result"]["rollback"]
+            assert rollback["attempted"] and rollback["runtime_restored"] and rollback["service_running"], failed
+            assert docker("exec", name, "sha256sum", "/tmp/mosdns.yaml").split()[0] == old_runtime
+            assert request(base, "/api/v1/file/custom_mod.yaml")["data"]["content"] == rejected
+            assert request(base, "/api/v1/dns-test", {"domain": "suite-host.example", "record_type": "A"}, observer=True)["data"]["results"] == ["192.0.2.25"]
+        finally:
+            docker("exec", name, "/bin/sh", "-ec", "mv /usr/sbin/mosdns.suite-test-original /usr/sbin/mosdns")
+            request(base, "/api/v1/file/custom_mod.yaml", {"content": old_mod}, method="PUT")
+        print("PASS: failed real process start, runtime rollback, retained desired file and DNS recovery", flush=True)
+        snapshot_task = request(base, "/api/v1/maintenance/tasks", {"action": "save_redis_snapshot",
+            "request_id": uuid.uuid4().hex, "expected_sha256": None})["data"]["task"]
+        snapshot_result = wait_task(base, snapshot_task["id"])["result"]
+        assert snapshot_result["state"] == "saved" and snapshot_result["bytes"] >= 9
+        print("PASS: real Redis background snapshot task", flush=True)
         # Stop and recover only a supervised test core. No host service is touched.
         ctl = ("/opt/venv/bin/supervisorctl", "-c", "/opt/suite/supervisord.conf")
+        docker("exec", name, *ctl, "stop", "observer")
+        try:
+            for operation in ("runtime", "metrics"):
+                denied(base, "/api/v1/" + operation, 503, "UNAVAILABLE", observer=True)
+            assert request(base, "/api/v1/capabilities", observer=True)["data"]["features"]["runtime_snapshot"] is False
+        finally:
+            docker("exec", name, *ctl, "start", "observer")
+        wait_ready(base)
+        print("PASS: collector disconnect gives 503/UNAVAILABLE and recovers", flush=True)
         docker("exec", name, *ctl, "stop", "mosdns")
         deadline = time.monotonic() + 25
         while time.monotonic() < deadline:
@@ -154,7 +209,7 @@ cp /usr/sbin/unbound.conf /data/unbound.conf
         wait_ready(base)
         docker("exec", name, "/opt/venv/bin/supervisorctl", "-c", "/opt/suite/supervisord.conf", "restart", "web")
         assert request(base, "/api/dns-test", {"domain": "suite-test.example", "record_type": "A"})["available"]
-        print("Container smoke test passed: v1 roles, freshness, DNS comparison, history/restore, idempotent apply, recovery, config and RDB retention")
+        print("Container smoke test passed: v1 roles, freshness, DNS comparison, history/restore, idempotent apply, failed-start rollback, collector recovery, snapshot task, config and RDB retention")
     finally:
         docker("stop", "--time", "150", name, check=False)
         docker("rm", "-f", name, check=False)

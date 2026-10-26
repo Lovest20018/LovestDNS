@@ -11,9 +11,14 @@
     }
   },
   "candidate_version": "0.1.0-dev.dns.20261026.1",
-  "container_runtime_acceptance": "not_completed",
+  "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
   "format_version": 1,
   "provenance": "All responses from actual Flask handlers with synthetic I/O and clocks; no live core/network acceptance evidence",
+  "runtime_acceptance_evidence": {
+    "report": "verification.md",
+    "scope": "Recorded isolated container run only; does not certify future runtime changes or a stable release",
+    "tested_runtime_commit": "49b47b5850d91550e27692e8ede337203d491ece"
+  },
   "sample_count": 18,
   "source": {
     "commit_lookup": "git log -1 --format=%H -- docs/contracts/v1/manifest.json",
@@ -26,7 +31,7 @@
       "docker-compose-web.yaml": "0409bc4340124407c7a72fdb01a352f8ef74347e5470af9ae1d21e020d5d7214",
       "docker-compose.integrated.yaml": "5bfb4e681e29c3ed02639813f5f66b03b4bbd9afe6c7908a916fce21f86a98cd",
       "docker-compose.sidecar.yaml": "2e9bd7a32e43599b9aedbc8bae3ef9e7cd2b93379d642446016940903fc45609",
-      "integrated/README.md": "4aa9491a08be6ad04cffbf36069e8a96635f23b7fae5981eaa74f60bdcf93eea",
+      "integrated/README.md": "14e321d113290b4237539cf31ca0638c84ca849ade39165b102405e9b49059de",
       "integrated/backend/api_schema.py": "524124c20491970087ddfee252bf3848b5b0b82604fadc105e3103bf5c20503a",
       "integrated/backend/api_v1.py": "d78494c08892a97c952d0756c2050e163d5b3d82f4dcdad8aaa387323401cb91",
       "integrated/backend/dns_wire.py": "018469ab45400272dedd92d9ce866236683ba7d79653a9addc22c00f6cad9fff",
@@ -85,10 +90,10 @@
       "packaging/standalone.freeze.json": "f6482e7601e3e24751f3ee3545fc4bfd30664abb51f32b029a1c0cd1ae23b4aa",
       "packaging/upstream.lock.json": "ed8474dd382f0641211ea817cdf9979daf94cc841d5dac4d43e1942536dc8149",
       "scripts/build-integrated-ui.py": "34e7d02f5d9447a28eecf8193bdae6f2d0757c24eae512f8df183b9c2890d217",
-      "scripts/export-api-contract.py": "a810c279c2f4ff09a29e41656158ea671db204deefed1005e371ac28fb597e8d",
+      "scripts/export-api-contract.py": "62128db9fc457d937d551d10d3b7432c1a0dd52161f8d38606a4413cd671fa85",
       "scripts/freeze-standalone.py": "c7d2d8fb5e128cc9df039318bb1c6e249c3effe6b9977c8461577fd28a58654f",
       "scripts/paopaodns-health-snapshot.py": "6772c67f5d4e14de6e4a35527cc8e979ac62af590ee5f9a54d105228edfa95c2",
-      "scripts/test-integrated-container.py": "13f047f7b20b0d583022dd09b403812726c264bfcdec58f40ca38005f077656d",
+      "scripts/test-integrated-container.py": "cbc39a7c36de4b9920df655fa10262b330a212d0351ffc1ea6f236d3d83693bc",
       "scripts/tests/test_health_snapshot.py": "148aa246ba9aae4906d16fdf8f034e9a70ff952b8e31142554ad19cc9adf1a60",
       "scripts/tests/test_standalone_freeze.py": "c89404a5fe80b2aef7d9c2f22e3b26dfca6dc93dc464c49424b5cc525dc342cb",
       "web/.gitignore": "fd8372e0e4ef4857a393ad7209d2378addcb2a5eabe65d5dfd039cfb2c6a27b9",
@@ -143,7 +148,7 @@
       "docker-compose.sidecar.yaml",
       ".github/workflows/web-docker-ghcr.yml"
     ],
-    "sha256": "dc976ff917d2326b6da11bcf304ac4eac8dcaf586268dfab755fd81196340bb1"
+    "sha256": "0f0ee0578c5c674e1b11055069755a4e294348e574c945e11b0d2c02fa4b12ac"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

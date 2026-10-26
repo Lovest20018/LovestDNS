@@ -1,6 +1,6 @@
 # dns / DNS API v1 开发候选基线
 
-候选：`0.1.0-dev.dns.20261026.1`，API 主版本：`1`。这是可追踪的本地开发基线，**不是稳定发行**。容器构建与运行验收尚未完成，未安装或修改生产服务，未推送镜像或创建稳定标签。dns 的实现由另一个聊天负责，本次只修改 DNS 项目。
+候选：`0.1.0-dev.dns.20261026.1`，API 主版本：`1`。这是可追踪的开发基线，**不是稳定发行**。2026-10-26 已在 validation-host 完成 Linux amd64 隔离容器验收并保留开发预览，详见 [部署与验收记录](../../verification.md)。未改动生产服务、推送镜像或创建稳定标签。dns 的实现由另一个聊天负责，本次只修改 DNS 项目。
 
 ## 文件与身份
 
@@ -73,7 +73,7 @@ python scripts/export-api-contract.py --write --output .build/dns-contract-revie
 - 独立版后端：46 passed；两版前端：14 passed。
 - 集成版 TypeScript/Vite 构建、ESLint：通过；独立版源码冻结：39 文件和原 ZIP SHA-256 通过。
 - 两次导出一致性、对本机凭据/路径隔离、契约漂移非零退出、实例新进程/并发/克隆身份及新鲜度边界已测试。
-- 当前没有 Docker CLI，容器构建及隔离运行验收**未执行**。核心监督、CNAUTO 双模式、真实配置应用/失败恢复、RDB 保留、Web 重启和卷身份的容器级证据仍待完成；现有 `scripts/test-integrated-container.py` 是后续入口。未重跑浏览器 UI 或真实 dns/DNS 网络联调。
+- Windows 开发机仍无 Docker CLI；后续通过 Xterminal 在 validation-host 完成了容器构建及隔离运行验收，包括核心监督、CNAUTO 双模式、配置应用/失败回退、RDB 保留、Web 重启和卷身份。明细及剩余范围见 [验收报告](../../verification.md)。未重跑浏览器 UI，dns 端联调由 dns 聊天负责。
 
 独立检查点 `standalone-20261024` 的 39 文件、冻结清单和原始 ZIP 保留不变。忽略规则排除凭据、运行数据库、缓存、截图和构建目录；唯一纳入版本控制的 ZIP 是已审阅的独立源码检查点。
 

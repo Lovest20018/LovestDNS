@@ -216,7 +216,12 @@ def build_bundle():
     payloads = {"openapi.json": encode(document), "samples.json": encode(samples)}
     manifest = {"format_version": 1, "api_version": "1", "candidate_version": server.VERSION,
                 "status": "development_candidate", "stable_release": False,
-                "container_runtime_acceptance": "not_completed", "source": source_summary(),
+                "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
+                "runtime_acceptance_evidence": {
+                    "tested_runtime_commit": "49b47b5850d91550e27692e8ede337203d491ece",
+                    "report": "verification.md",
+                    "scope": "Recorded isolated container run only; does not certify future runtime changes or a stable release"},
+                "source": source_summary(),
                 "artifacts": {name: {"sha256": sha256(data), "hash_mode": "UTF-8 canonical JSON with LF"}
                               for name, data in payloads.items()},
                 "sample_count": len(samples["cases"]),
