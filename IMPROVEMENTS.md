@@ -20,13 +20,13 @@
 | 原条目 | 校验结论 | 后续建议 |
 |---|---|---|
 | #1 DNS 实时统计面板 | 未实现 | 仍建议作为高优先级，但需要确认 WebUI 容器是否能访问 PaoPaoDNS 容器内的 `/tmp/redis.sock` 和 `unbound-control`，当前 sidecar 架构默认只能共享 `/data` |
-| #2 DNS 测试/诊断功能 | 已实现 MVP | 已新增 `/api/dns-test`、`/api/health-check` 和 Overview 诊断面板；使用 Python 标准库发 UDP DNS 查询，不依赖 `dig` |
+| #2 DNS 测试/诊断功能 | 已完成增强 | 目标记录检查、UDP/TCP 和自动回退、多链路对照、报告导入导出、宿主机快照展示；WebUI 不依赖 `dig` 或 Docker |
 | #3 React Router | 部分需求已满足 | 当前 `App.tsx` 已用 hash + `hashchange` 支持深链和浏览器前进/后退；是否引入 React Router 只剩维护性取舍 |
 | #4 Vite 代理配置 | 已实现 | `web/vite.config.ts` 已配置 `/api` 代理到 `http://127.0.0.1:8080`，不再列入后续开发待办 |
 | #5 后端内容验证 | 已实现 | 已在 `PUT /api/file/<filename>` 写入前校验字符串类型、NUL 字符、文件大小、`custom_env.ini`、`custom_mod.yaml`、TTL 规则、域名列表和 Tracker URL |
 | #6 移动端响应式布局 | 已实现基础版 | `web/src/index.css` 已有多处媒体查询；后续可做真机/浏览器截图验收，而不是从零添加 |
 | #7 DeployPage 完整部署配置 | 未实现 | 当前页面生成的 compose/run 仍只包含 PaoPaoDNS 主容器，未包含 WebUI sidecar |
-| #8 自动化测试 | 已实现后端基础覆盖 | 已新增 Flask test client 测试，覆盖鉴权、白名单、内容类型、内容验证、备份写入、文件大小限制和 DNS 诊断 API；前端测试可后置 |
+| #8 自动化测试 | 已覆盖基础功能与诊断 | 56 项 Python 测试覆盖后端与采集脚本，9 项前端测试覆盖报告解析及异常输入；组件交互测试可后续扩展 |
 
 ---
 
@@ -149,7 +149,7 @@ def _get_process_status() -> dict:
 
 ---
 
-## 2. DNS 测试/诊断功能 [已完成 MVP]
+## 2. DNS 测试/诊断功能 [已完成增强]
 
 ### 目标
 将上游的 `test.sh`、`debug.sh` 功能部分搬到 WebUI，用户无需 `docker exec` 即可诊断。
@@ -161,12 +161,17 @@ def _get_process_status() -> dict:
 - 查询目标支持 `DNS_TEST_SERVER`、`DNS_TEST_PORT`、`DNS_TEST_TIMEOUT` 环境变量，默认适配 compose service name `paopaodns:53`。
 - 实现使用 Python 标准库构造 UDP DNS 查询和解析响应，不依赖 `dig`，也不需要在镜像中安装 `bind-tools`。
 - Overview 页面已加入 DNS 诊断面板，支持自定义域名、记录类型、DNS 服务和端口。
+- 已修正健康检查：必须取得查询名称或 CNAME 链上的目标类型 IN 记录，CNAME-only 和无目标记录不再算成功。
+- 支持 UDP 截断后 TCP 回退、直接 TCP 查询，以及最多 4 个 API 目标的并行对照（页面提供三条可编辑链路）。
+- 支持版本化 JSON 报告导出、本地报告导入及宿主机统计快照展示；导入不上传、不执行、不写入配置。
+- 可选宿主机脚本 `scripts/paopaodns-health-snapshot.py` 以 `stats_noreset` 采集统计，WebUI 继续无需 Docker socket。
+- 使用、部署边界和测试说明见 [DNS 诊断与宿主机快照](docs/dns-diagnostics.md)。
 
 **安全注意**：
 - 域名、记录类型、DNS 服务和端口都在后端校验。
 - 不执行 shell 命令，避免命令注入面。
-- UDP 查询使用短超时，失败时返回结构化错误。
-- 该 MVP 只做网络可达诊断，不读取 Redis/Unbound 内部状态。
+- UDP / TCP 查询使用短超时，失败时返回结构化错误，并校验响应来源、问题与事务 ID。
+- WebUI 网络探测不直接读取 Redis/Unbound 内部状态；内部统计通过手动导入宿主机快照展示。
 
 ---
 
@@ -316,7 +321,7 @@ services:
 
 ---
 
-## 8. 自动化测试 [后端基础覆盖已完成]
+## 8. 自动化测试 [基础功能与诊断覆盖已完成]
 
 ### 后端测试
 
@@ -333,14 +338,14 @@ services:
 验证命令：
 
 ```bash
-python -m pytest web/backend/tests
+python -m pytest web/backend/tests scripts/tests
 ```
 
-当前结果：`15 passed`。
+当前结果：`56 passed`。诊断测试另覆盖 CNAME 链匹配、TTL 为 0、响应问题/ID 校验、UDP 截断回退与本地 TCP 分段接收、失败链路保留，以及宿主机脚本的完整/部分采集结果。
 
 ### 前端测试
 
-暂不强制，可后续添加 Vitest + React Testing Library，优先覆盖 DeployPage 生成器和 DNS 诊断交互。
+`npm --prefix web test` 使用 Node 内置测试运行器，当前 `9 passed`，覆盖报告往返、旧版宿主机快照、计数器重置、不一致状态、部分采集和无效/过大输入。后续可补充 DeployPage 生成器及 React 组件交互测试。
 
 ---
 
@@ -349,13 +354,13 @@ python -m pytest web/backend/tests
 ```
 Phase 1（核心价值提升）:
   ├── 先确认统计/诊断的容器访问边界（/tmp socket、命令依赖、网络目标）
-  ├── #2 DNS 测试/诊断功能（网络可达版已完成）
+  ├── #2 DNS 测试/诊断功能（网络对照及离线快照已完成）
   └── #1 DNS 实时统计面板（确认可访问 Redis/Unbound 后再做内部指标）
 
 Phase 2（体验优化）:
   ├── #5 后端内容验证（已完成）
   ├── #7 DeployPage 完整配置
-  └── #8 自动化测试（后端基础覆盖已完成，前端可后置）
+  └── #8 自动化测试（后端与诊断解析已覆盖，组件交互可后置）
 
 Phase 3（锦上添花）:
   ├── #3 React Router（可选维护性优化）

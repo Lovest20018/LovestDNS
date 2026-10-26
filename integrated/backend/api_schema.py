@@ -1,0 +1,138 @@
+"""Concrete OpenAPI 3.1 schemas, shared by docs and response contract tests."""
+import re
+from api_v1 import OPERATIONS, READ_OPERATIONS
+
+
+def ref(name):
+    return {"$ref": "#/components/schemas/" + name}
+
+
+def obj(properties, required=()):
+    return {"type": "object", "properties": properties, "required": list(required)}
+
+
+def array(items, **kwargs):
+    return {"type": "array", "items": items, **kwargs}
+
+
+def dictionary(values):
+    return {"type": "object", "additionalProperties": values}
+
+
+def openapi_document(version):
+    text = {"type": "string"}
+    boolean = {"type": "boolean"}
+    number = {"type": "number"}
+    nonnegative = {"type": "number", "minimum": 0}
+    integer = {"type": "integer", "minimum": 0}
+    nullable_number = {"type": ["number", "null"], "minimum": 0}
+    nullable_text = {"type": ["string", "null"]}
+    timestamp = {"type": "number", "description": "Unix UTC 时间戳，单位秒，可含小数"}
+    port = {"type": "integer", "minimum": 1, "maximum": 65535}
+    digest = {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    record_types = ["A", "AAAA", "CNAME", "NS", "MX", "TXT", "SRV", "PTR", "SVCB", "HTTPS"]
+    states = ["queued", "running", "succeeded", "failed", "interrupted"]
+    conditions = {"auto_reload": boolean, "requires_reload": boolean, "requires_restart": boolean,
+                  "watched_now": boolean, "condition": text, "verified": {"type": "boolean", "const": False}}
+    schemas = {
+        "Meta": obj({"api_version": {"type": "string", "const": "1"}, "request_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$"}}, ["api_version", "request_id"]),
+        "Error": obj({"error": obj({"code": {"type": "string", "enum": ["INVALID_ARGUMENT", "UNAUTHORIZED", "FORBIDDEN", "NOT_FOUND", "METHOD_NOT_ALLOWED", "CONFLICT", "PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "UNAVAILABLE", "STALE_DATA", "INTERNAL_ERROR"]}, "message": text}, ["code", "message"]), "meta": ref("Meta")}, ["error", "meta"]),
+        "Instance": obj({"id": {"type": "string", "format": "uuid", "description": "状态卷持久身份；Web/容器同卷重启保留，删除状态卷生成新身份，克隆状态卷会复制身份"}, "name": text, "kind": {"const": "paopaodns"}, "edition": {"const": "integrated"}, "version": text}, ["id", "name", "kind", "edition", "version"]),
+        "CoreBuild": obj({"image": text, "source_commit": text}, ["image", "source_commit"]),
+        "Capabilities": obj({"edition": {"const": "integrated"}, "version": text, "api_version": {"const": "1"}, "instance_id": {"type": "string", "format": "uuid"}, "name": text,
+            "access_role": {"enum": ["admin", "observer"]}, "core": ref("CoreBuild"),
+            "dns_defaults": obj({"server": text, "port": port}, ["server", "port"]),
+            "record_types": array({"enum": record_types}), "features": dictionary(boolean), "runtime_error": nullable_text,
+            "permissions": obj({key: boolean for key in ("observe", "diagnose", "configure", "maintain")}, ["observe", "diagnose", "configure", "maintain"])},
+            ["edition", "version", "api_version", "instance_id", "name", "access_role", "core", "dns_defaults", "record_types", "features", "permissions"]),
+        "Freshness": obj({"age_seconds": nonnegative, "max_age_seconds": {"type": "integer", "const": 25}}, ["age_seconds", "max_age_seconds"]),
+        "Component": obj({"statename": text, "pid": integer, "start": timestamp, "exitstatus": {"type": "integer"}}, ["statename", "pid", "start", "exitstatus"]),
+        "Layer": obj({"available": boolean, "counters": dictionary(nonnegative), "qps": nullable_number,
+            "cache_hit_ratio": {"type": ["number", "null"], "minimum": 0, "maximum": 1}, "comparable": boolean,
+            "comparison_reason": {"enum": ["comparable", "first_sample", "clock_changed", "process_changed", "missing_counters", "counters_reset"]},
+            "window_seconds": nullable_number, "error": text}, ["available"]),
+        "RedisInfo": obj({**{key: integer for key in ["used_memory", "maxmemory", "evicted_keys", "keyspace_hits", "keyspace_misses", "loading", "rdb_last_save_time", "rdb_changes_since_last_save", "rdb_bgsave_in_progress"]},
+            "rdb_last_bgsave_status": text, "redis_version": text,
+            **{key: obj({"keys": integer, "expires": integer, "avg_ttl": integer}) for key in ("db0", "db1")}}),
+        "Redis": obj({"available": boolean, "info": ref("RedisInfo"), "error": text}, ["available"]),
+        "Persistence": obj({"scope": text, "last_save_time": nullable_number, "last_save_status": nullable_text,
+            "saving": nullable_number, "loading": nullable_number, "changes_since_save": nullable_number,
+            "rdb_bytes": nullable_number, "disk_free_bytes": nonnegative, "storage_error": text, "warnings": array(text)}, ["scope", "warnings"]),
+        "Runtime": obj({"schema_version": {"const": 1}, "sampled_at": timestamp, "interval_seconds": nonnegative, "ready": boolean,
+            "core_healthy": boolean, "components": dictionary(ref("Component")), "layers": dictionary(ref("Layer")),
+            "redis": ref("Redis"), "persistence": ref("Persistence"), "freshness": ref("Freshness")},
+            ["schema_version", "sampled_at", "ready", "core_healthy", "components", "layers", "freshness"]),
+        "Metric": obj({"name": {"enum": ["qps", "cache_hit_ratio", "used_memory"]}, "source": {"enum": ["unbound", "redis"]},
+            "layer": {"enum": ["recursive", "forward", "shared"]}, "unit": {"enum": ["queries/second", "ratio", "bytes"]},
+            "value": nullable_number, "available": boolean, "unavailable_reason": nullable_text, "window_seconds": nullable_number},
+            ["name", "source", "layer", "unit", "value", "available", "unavailable_reason", "window_seconds"]),
+        "Metrics": obj({"sampled_at": timestamp, "interval_seconds": nonnegative, "freshness": ref("Freshness"), "metrics": array(ref("Metric"))}, ["sampled_at", "interval_seconds", "freshness", "metrics"]),
+        "Answer": obj({"name": text, "type": text, "class": integer, "ttl": {"type": "integer", "minimum": 0, "maximum": 4294967295}, "value": text}, ["name", "type", "ttl", "value"]),
+        "DnsResult": obj({"available": boolean, "responded": boolean, "domain": text, "record_type": {"enum": record_types}, "server": text, "port": port,
+            "answers": array(ref("Answer")), "authority": array(ref("Answer")), "additional": array(ref("Answer")), "results": array(text), "transport": {"enum": ["udp", "tcp"]}, "tcp_fallback": boolean, "udp_truncated": boolean,
+            "checked_at": {"type": "string", "format": "date-time"}, "elapsed_ms": nonnegative,
+            "status": {"enum": ["ok", "no_records", "dns_error", "incomplete", "timeout", "network_error", "invalid_response", "invalid_input", "probe_error"]},
+            "error": text, "rcode": text, "rcode_value": integer, "truncated": boolean, "authoritative": boolean, "recursion_available": boolean,
+            "counts": obj({key: integer for key in ("questions", "answers", "authority", "additional")}),
+            "debug": array(obj({"name": text, "value": text, "ttl": integer}, ["name", "value", "ttl"]))},
+            ["available", "responded", "domain", "record_type", "server", "port", "answers", "results", "transport", "tcp_fallback", "udp_truncated", "checked_at", "elapsed_ms", "status"]),
+        "DnsReport": obj({"schema_version": {"const": 1}, "kind": {"const": "paopaodns-dns-report"}, "started_utc": {"type": "string", "format": "date-time"},
+            "method": text, "tests": array(obj({"label": text, "result": ref("DnsResult")}, ["label", "result"]), minItems=1, maxItems=4)}, ["schema_version", "kind", "started_utc", "method", "tests"]),
+        "DnsHealth": obj({"pass": boolean, "server": text, "port": port, "error": text,
+            "tests": dictionary(obj({"domain": text, "resolved": boolean, "result": ref("DnsResult")}, ["domain", "resolved"]))}, ["pass", "server", "port", "tests"]),
+        "File": obj({"filename": text, "content": text, **conditions}, ["filename", "content", *conditions]),
+        "SavedFile": obj({"filename": text, "message": text, **conditions}, ["filename", "message", *conditions]),
+        "Status": obj({"data_dir": text, "data_readable": boolean, "data_writable": boolean, "auth_enabled": boolean,
+            "env": dictionary(text), "files": dictionary(boolean), "files_info": dictionary(obj({"exists": boolean, **conditions}, ["exists", *conditions]))},
+            ["data_dir", "data_readable", "data_writable", "auth_enabled", "env", "files", "files_info"]),
+        "Env": dictionary(text),
+        "Revision": obj({"id": integer, "created_at": timestamp, "sha256": digest, "bytes": integer, "reason": text}, ["id", "created_at", "sha256", "bytes", "reason"]),
+        "History": obj({"filename": text, "revisions": array(ref("Revision"), maxItems=20)}, ["filename", "revisions"]),
+        "RevisionContent": obj({"filename": text, "revision": integer, "content": text}, ["filename", "revision", "content"]),
+        "ApplyPlan": obj({"sha256": digest, "inputs": dictionary(digest), "candidate_sha256": digest, "candidate": text, "notice": text}, ["sha256", "inputs", "candidate_sha256", "candidate", "notice"]),
+        "TaskResult": obj({"message": text, "error": text, "state": {"enum": ["applied_unverified", "saved"]}, "verified": boolean,
+            "input_sha256": digest, "runtime_sha256": digest, "saved_at": timestamp, "bytes": integer, "changes_after_save": nullable_number,
+            "probe": obj({"responded": boolean, "rcode": integer, "scope": text}, ["responded", "rcode"]),
+            "rollback": obj({"attempted": boolean, "runtime_restored": boolean, "service_running": boolean, "error": text}, ["runtime_restored", "service_running"])}),
+        "Task": obj({"id": {"type": "string", "pattern": "^[a-f0-9]{32}$"}, "action": {"enum": ["apply_custom_mod", "save_redis_snapshot"]},
+            "expected_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}, "state": {"enum": states}, "created": timestamp, "updated": timestamp,
+            "result": {"anyOf": [ref("TaskResult"), {"type": "null"}]}}, ["id", "action", "state", "created", "updated", "result"]),
+        "Tasks": obj({"tasks": array(ref("Task"), maxItems=20)}, ["tasks"]),
+        "TaskResponse": obj({"task": ref("Task")}, ["task"]),
+        "Logs": obj({"component": text, "lines": array(text, maxItems=200), "error": text}, ["component", "lines"]),
+        "Query": obj({"domain": {"type": "string", "maxLength": 253, "example": "example.com"}, "record_type": {"enum": record_types, "default": "A"},
+            "server": text, "port": port, "transport": {"enum": ["udp", "tcp"], "default": "udp"}}, ["domain"]),
+        "Target": obj({"label": {"type": "string", "minLength": 1, "maxLength": 40}, "server": text, "port": port, "transport": {"enum": ["udp", "tcp"]}}, ["server", "port"]),
+        "TaskSubmission": {**obj({"action": {"enum": ["apply_custom_mod", "save_redis_snapshot"]}, "request_id": {"type": "string", "pattern": "^[a-f0-9]{32}$", "description": "幂等编号。网络重试复用；与 X-Request-ID 不同"},
+            "expected_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$", "description": "应用时为预览 sha256，快照必须为 null；不是文件保存的并发版本检查"}}, ["action", "request_id", "expected_sha256"]), "additionalProperties": False},
+    }
+    schemas["Comparison"] = obj({"domain": schemas["Query"]["properties"]["domain"], "record_type": schemas["Query"]["properties"]["record_type"], "targets": array(ref("Target"), minItems=1, maxItems=4)}, ["domain", "targets"])
+    output = {"instance": "Instance", "capabilities": "Capabilities", "runtime": "Runtime", "metrics": "Metrics", "status": "Status", "env": "Env", "file_read": "File", "file_write": "SavedFile", "dns_query": "DnsResult", "dns_compare": "DnsReport", "dns_health": "DnsHealth", "apply_plan": "ApplyPlan", "task_list": "Tasks", "task_submit": "TaskResponse", "task_read": "TaskResponse", "history_list": "History", "history_read": "RevisionContent", "history_restore": "SavedFile", "logs": "Logs"}
+    for name in set(output.values()):
+        schemas[name + "Response"] = obj({"data": ref(name), "meta": ref("Meta")}, ["data", "meta"])
+    operations = OPERATIONS + [("/instance", "GET", "instance", None, "持久实例身份"), ("/capabilities", "GET", "capabilities", None, "版本、权限与能力"),
+        ("/runtime", "GET", "runtime", None, "当前分层运行快照"), ("/metrics", "GET", "metrics", None, "带单位和来源的指标"), ("/openapi.json", "GET", "schema", None, "OpenAPI 契约")]
+    paths = {}
+    for route, method, operation, _, title in operations:
+        route = re.sub(r"<(?:int:)?(\w+)>", r"{\1}", route)
+        parameters = [{"name": "X-Request-ID", "in": "header", "schema": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$"}}]
+        for name in re.findall(r"{(\w+)}", route):
+            parameters.append({"name": name, "in": "path", "required": True, "schema": integer if name == "revision" else text})
+        if operation == "dns_health":
+            parameters += [{"name": name, "in": "query", "schema": prop} for name, prop in (("server", text), ("port", port))]
+        success = "202" if operation == "task_submit" else "200"
+        paths.setdefault(route, {})[method.lower()] = endpoint = {"operationId": operation, "summary": title,
+            "description": "管理或只读 Token" if operation in READ_OPERATIONS else "仅管理 Token", "parameters": parameters, "security": [{"BearerToken": []}],
+            "x-allowed-roles": ["admin", "observer"] if operation in READ_OPERATIONS else ["admin"],
+            "responses": {success: {"description": "DNS 查询完成请检查 available/status；任务完成不代表规则已验证", "headers": {"X-Request-ID": {"schema": text}},
+                "content": {"application/json": {"schema": ref(output[operation] + "Response") if operation != "schema" else {"type": "object"}}}},
+                **{str(code): {"description": label, "content": {"application/json": {"schema": ref("Error")}}} for code, label in [(400, "输入无效"), (401, "未认证"), (403, "权限不足"), (404, "对象不存在或已过保留期"), (405, "方法不支持"), (409, "冲突"), (413, "内容过大"), (415, "内容类型无效"), (500, "服务异常"), (503, "采集/维护服务不可用或样本过期")]}}
+        }
+        for response in endpoint["responses"].values():
+            response["headers"] = {"X-Request-ID": {"schema": schemas["Meta"]["properties"]["request_id"]},
+                                   "Cache-Control": {"schema": {"type": "string", "const": "no-store"}}}
+        endpoint["responses"]["503"]["description"] = "UNAVAILABLE：采集/维护服务不可用；STALE_DATA：样本年龄大于 25 秒、未来时间或无效时间戳。无 data 字段。"
+        body = {"dns_query": ref("Query"), "dns_compare": ref("Comparison"), "task_submit": ref("TaskSubmission"), "file_write": obj({"content": text}, ["content"])}.get(operation)
+        if body:
+            endpoint["requestBody"] = {"required": True, "content": {"application/json": {"schema": body}}}
+    return {"openapi": "3.1.0", "info": {"title": "PaoPaoDNS Integration API", "version": version, "description": "DNS 专用接口。Unix 时间戳单位秒；interval_seconds 为目标采集周期，window_seconds 为实际比较窗口。过期数据返回 503。详见 docs/integration-api.md。"}, "servers": [{"url": "/api/v1"}], "paths": paths, "components": {"securitySchemes": {"BearerToken": {"type": "http", "scheme": "bearer"}}, "schemas": schemas}}

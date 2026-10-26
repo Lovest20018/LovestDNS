@@ -1,0 +1,1304 @@
+{
+  "api_version": "1",
+  "candidate_version": "0.1.0-dev.dns.20261026.1",
+  "cases": [
+    {
+      "id": "observer_instance",
+      "operation_id": "instance",
+      "provenance": {
+        "inputs": "new temporary state volume; fixed UUID generator",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-observer_instance"
+        },
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "edition": "integrated",
+            "id": "00000000-0000-4000-8000-000000000001",
+            "kind": "paopaodns",
+            "name": "Contract DNS",
+            "version": "0.1.0-dev.dns.20261026.1"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-observer_instance"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-observer_instance"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "observer_capabilities",
+      "operation_id": "capabilities",
+      "provenance": {
+        "inputs": "collector and manager available; public upstream lock metadata",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-observer_capabilities"
+        },
+        "method": "GET",
+        "path": "/api/v1/capabilities",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "access_role": "observer",
+            "api_version": "1",
+            "core": {
+              "image": "public.ecr.aws/sliamb/paopaodns@sha256:df0f5689934b3ebb757b7bce0590cd27b97ba23173908eb7205587859012e5c4",
+              "source_commit": "a8da2e62a73026c9594b7edc36447538e51000ee"
+            },
+            "dns_defaults": {
+              "port": 53,
+              "server": "127.0.0.1"
+            },
+            "edition": "integrated",
+            "features": {
+              "cache_flush": false,
+              "client_policies": false,
+              "config_apply": false,
+              "config_history": false,
+              "dns_debug": true,
+              "redis_snapshot": false,
+              "runtime_snapshot": true
+            },
+            "instance_id": "00000000-0000-4000-8000-000000000001",
+            "name": "Contract DNS",
+            "permissions": {
+              "configure": false,
+              "diagnose": true,
+              "maintain": false,
+              "observe": true
+            },
+            "record_types": [
+              "A",
+              "NS",
+              "CNAME",
+              "PTR",
+              "MX",
+              "TXT",
+              "AAAA",
+              "SRV",
+              "SVCB",
+              "HTTPS"
+            ],
+            "runtime_error": null,
+            "version": "0.1.0-dev.dns.20261026.1"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-observer_capabilities"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-observer_capabilities"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "runtime_healthy",
+      "operation_id": "runtime",
+      "provenance": {
+        "inputs": "fresh synthetic collector snapshot",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-runtime_healthy"
+        },
+        "method": "GET",
+        "path": "/api/v1/runtime",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "components": {
+              "dnscrypt": {
+                "exitstatus": 0,
+                "pid": 14,
+                "start": 1792972700.0,
+                "statename": "RUNNING"
+              },
+              "mosdns": {
+                "exitstatus": 0,
+                "pid": 13,
+                "start": 1792972700.0,
+                "statename": "RUNNING"
+              },
+              "redis": {
+                "exitstatus": 0,
+                "pid": 12,
+                "start": 1792972700.0,
+                "statename": "RUNNING"
+              },
+              "unbound-forward": {
+                "exitstatus": 0,
+                "pid": 11,
+                "start": 1792972700.0,
+                "statename": "RUNNING"
+              },
+              "unbound-raw": {
+                "exitstatus": 0,
+                "pid": 10,
+                "start": 1792972700.0,
+                "statename": "RUNNING"
+              },
+              "watcher": {
+                "exitstatus": 0,
+                "pid": 15,
+                "start": 1792972700.0,
+                "statename": "RUNNING"
+              }
+            },
+            "core_healthy": true,
+            "freshness": {
+              "age_seconds": 2.0,
+              "max_age_seconds": 25
+            },
+            "interval_seconds": 5,
+            "layers": {
+              "forward": {
+                "available": true,
+                "cache_hit_ratio": null,
+                "comparable": true,
+                "comparison_reason": "comparable",
+                "counters": {
+                  "time.up": 105,
+                  "total.num.cachehits": 8,
+                  "total.num.cachemiss": 2,
+                  "total.num.queries": 10
+                },
+                "qps": 0.0,
+                "window_seconds": 5
+              },
+              "recursive": {
+                "available": true,
+                "cache_hit_ratio": null,
+                "comparable": true,
+                "comparison_reason": "comparable",
+                "counters": {
+                  "time.up": 105,
+                  "total.num.cachehits": 8,
+                  "total.num.cachemiss": 2,
+                  "total.num.queries": 10
+                },
+                "qps": 0.0,
+                "window_seconds": 5
+              }
+            },
+            "persistence": {
+              "last_save_status": "ok",
+              "last_save_time": 1792972740.0,
+              "scope": "Redis RDB",
+              "warnings": []
+            },
+            "ready": true,
+            "redis": {
+              "available": true,
+              "info": {
+                "loading": 0,
+                "used_memory": 1048576
+              }
+            },
+            "sampled_at": 1792972798.0,
+            "schema_version": 1
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-runtime_healthy"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-runtime_healthy"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "metrics_zero",
+      "operation_id": "metrics",
+      "provenance": {
+        "inputs": "unchanged query counters over 5 seconds; real observer.rate returns QPS=0 and ratio=null",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-metrics_zero"
+        },
+        "method": "GET",
+        "path": "/api/v1/metrics",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "freshness": {
+              "age_seconds": 2.0,
+              "max_age_seconds": 25
+            },
+            "interval_seconds": 5,
+            "metrics": [
+              {
+                "available": true,
+                "layer": "recursive",
+                "name": "qps",
+                "source": "unbound",
+                "unavailable_reason": null,
+                "unit": "queries/second",
+                "value": 0.0,
+                "window_seconds": 5
+              },
+              {
+                "available": false,
+                "layer": "recursive",
+                "name": "cache_hit_ratio",
+                "source": "unbound",
+                "unavailable_reason": "no_queries",
+                "unit": "ratio",
+                "value": null,
+                "window_seconds": 5
+              },
+              {
+                "available": true,
+                "layer": "forward",
+                "name": "qps",
+                "source": "unbound",
+                "unavailable_reason": null,
+                "unit": "queries/second",
+                "value": 0.0,
+                "window_seconds": 5
+              },
+              {
+                "available": false,
+                "layer": "forward",
+                "name": "cache_hit_ratio",
+                "source": "unbound",
+                "unavailable_reason": "no_queries",
+                "unit": "ratio",
+                "value": null,
+                "window_seconds": 5
+              },
+              {
+                "available": true,
+                "layer": "shared",
+                "name": "used_memory",
+                "source": "redis",
+                "unavailable_reason": null,
+                "unit": "bytes",
+                "value": 1048576,
+                "window_seconds": null
+              }
+            ],
+            "sampled_at": 1792972798.0
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-metrics_zero"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-metrics_zero"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "metrics_not_comparable",
+      "operation_id": "metrics",
+      "provenance": {
+        "inputs": "synthetic process restart and first sample; real observer.rate",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-metrics_not_comparable"
+        },
+        "method": "GET",
+        "path": "/api/v1/metrics",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "freshness": {
+              "age_seconds": 2.0,
+              "max_age_seconds": 25
+            },
+            "interval_seconds": 5,
+            "metrics": [
+              {
+                "available": false,
+                "layer": "recursive",
+                "name": "qps",
+                "source": "unbound",
+                "unavailable_reason": "process_changed",
+                "unit": "queries/second",
+                "value": null,
+                "window_seconds": null
+              },
+              {
+                "available": false,
+                "layer": "recursive",
+                "name": "cache_hit_ratio",
+                "source": "unbound",
+                "unavailable_reason": "process_changed",
+                "unit": "ratio",
+                "value": null,
+                "window_seconds": null
+              },
+              {
+                "available": false,
+                "layer": "forward",
+                "name": "qps",
+                "source": "unbound",
+                "unavailable_reason": "first_sample",
+                "unit": "queries/second",
+                "value": null,
+                "window_seconds": null
+              },
+              {
+                "available": false,
+                "layer": "forward",
+                "name": "cache_hit_ratio",
+                "source": "unbound",
+                "unavailable_reason": "first_sample",
+                "unit": "ratio",
+                "value": null,
+                "window_seconds": null
+              },
+              {
+                "available": true,
+                "layer": "shared",
+                "name": "used_memory",
+                "source": "redis",
+                "unavailable_reason": null,
+                "unit": "bytes",
+                "value": 1048576,
+                "window_seconds": null
+              }
+            ],
+            "sampled_at": 1792972798.0
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-metrics_not_comparable"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-metrics_not_comparable"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "runtime_partial",
+      "operation_id": "runtime",
+      "provenance": {
+        "inputs": "fresh evidence with unhealthy components; HTTP 200 is not core health",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-runtime_partial"
+        },
+        "method": "GET",
+        "path": "/api/v1/runtime",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "components": {
+              "dnscrypt": {
+                "exitstatus": 0,
+                "pid": 14,
+                "start": 1792972700.0,
+                "statename": "RUNNING"
+              },
+              "mosdns": {
+                "exitstatus": 0,
+                "pid": 13,
+                "start": 1792972700.0,
+                "statename": "RUNNING"
+              },
+              "redis": {
+                "exitstatus": 0,
+                "pid": 12,
+                "start": 1792972700.0,
+                "statename": "RUNNING"
+              },
+              "unbound-forward": {
+                "exitstatus": 0,
+                "pid": 11,
+                "start": 1792972700.0,
+                "statename": "STOPPED"
+              },
+              "unbound-raw": {
+                "exitstatus": 0,
+                "pid": 10,
+                "start": 1792972700.0,
+                "statename": "RUNNING"
+              },
+              "watcher": {
+                "exitstatus": 0,
+                "pid": 15,
+                "start": 1792972700.0,
+                "statename": "RUNNING"
+              }
+            },
+            "core_healthy": false,
+            "freshness": {
+              "age_seconds": 2.0,
+              "max_age_seconds": 25
+            },
+            "interval_seconds": 5,
+            "layers": {
+              "forward": {
+                "available": false,
+                "error": "component unavailable in test scenario"
+              },
+              "recursive": {
+                "available": true,
+                "cache_hit_ratio": null,
+                "comparable": true,
+                "comparison_reason": "comparable",
+                "counters": {
+                  "time.up": 105,
+                  "total.num.cachehits": 8,
+                  "total.num.cachemiss": 2,
+                  "total.num.queries": 10
+                },
+                "qps": 0.0,
+                "window_seconds": 5
+              }
+            },
+            "persistence": {
+              "last_save_status": "ok",
+              "last_save_time": 1792972740.0,
+              "scope": "Redis RDB",
+              "warnings": []
+            },
+            "ready": true,
+            "redis": {
+              "available": false,
+              "error": "component unavailable in test scenario"
+            },
+            "sampled_at": 1792972798.0,
+            "schema_version": 1
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-runtime_partial"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-runtime_partial"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "metrics_partial",
+      "operation_id": "metrics",
+      "provenance": {
+        "inputs": "recursive zero; forward and Redis unavailable -> null",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-metrics_partial"
+        },
+        "method": "GET",
+        "path": "/api/v1/metrics",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "freshness": {
+              "age_seconds": 2.0,
+              "max_age_seconds": 25
+            },
+            "interval_seconds": 5,
+            "metrics": [
+              {
+                "available": true,
+                "layer": "recursive",
+                "name": "qps",
+                "source": "unbound",
+                "unavailable_reason": null,
+                "unit": "queries/second",
+                "value": 0.0,
+                "window_seconds": 5
+              },
+              {
+                "available": false,
+                "layer": "recursive",
+                "name": "cache_hit_ratio",
+                "source": "unbound",
+                "unavailable_reason": "no_queries",
+                "unit": "ratio",
+                "value": null,
+                "window_seconds": 5
+              },
+              {
+                "available": false,
+                "layer": "forward",
+                "name": "qps",
+                "source": "unbound",
+                "unavailable_reason": "component_unavailable",
+                "unit": "queries/second",
+                "value": null,
+                "window_seconds": null
+              },
+              {
+                "available": false,
+                "layer": "forward",
+                "name": "cache_hit_ratio",
+                "source": "unbound",
+                "unavailable_reason": "component_unavailable",
+                "unit": "ratio",
+                "value": null,
+                "window_seconds": null
+              },
+              {
+                "available": false,
+                "layer": "shared",
+                "name": "used_memory",
+                "source": "redis",
+                "unavailable_reason": "component_unavailable",
+                "unit": "bytes",
+                "value": null,
+                "window_seconds": null
+              }
+            ],
+            "sampled_at": 1792972798.0
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-metrics_partial"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-metrics_partial"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "runtime_stale",
+      "operation_id": "runtime",
+      "provenance": {
+        "inputs": "26-second-old synthetic snapshot; real sample_age rejects age >25",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-runtime_stale"
+        },
+        "method": "GET",
+        "path": "/api/v1/runtime",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "STALE_DATA",
+            "message": "Collector sample is stale or clock is inconsistent"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-runtime_stale"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-runtime_stale"
+        },
+        "status": 503
+      }
+    },
+    {
+      "id": "metrics_stale",
+      "operation_id": "metrics",
+      "provenance": {
+        "inputs": "26-second-old synthetic snapshot; real sample_age rejects age >25",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-metrics_stale"
+        },
+        "method": "GET",
+        "path": "/api/v1/metrics",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "STALE_DATA",
+            "message": "Collector sample is stale or clock is inconsistent"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-metrics_stale"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-metrics_stale"
+        },
+        "status": 503
+      }
+    },
+    {
+      "id": "capabilities_unavailable",
+      "operation_id": "capabilities",
+      "provenance": {
+        "inputs": "collector unavailable; permission-aware capability response",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-capabilities_unavailable"
+        },
+        "method": "GET",
+        "path": "/api/v1/capabilities",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "access_role": "observer",
+            "api_version": "1",
+            "core": {
+              "image": "public.ecr.aws/sliamb/paopaodns@sha256:df0f5689934b3ebb757b7bce0590cd27b97ba23173908eb7205587859012e5c4",
+              "source_commit": "a8da2e62a73026c9594b7edc36447538e51000ee"
+            },
+            "dns_defaults": {
+              "port": 53,
+              "server": "127.0.0.1"
+            },
+            "edition": "integrated",
+            "features": {
+              "cache_flush": false,
+              "client_policies": false,
+              "config_apply": false,
+              "config_history": false,
+              "dns_debug": true,
+              "redis_snapshot": false,
+              "runtime_snapshot": false
+            },
+            "instance_id": "00000000-0000-4000-8000-000000000001",
+            "name": "Contract DNS",
+            "permissions": {
+              "configure": false,
+              "diagnose": true,
+              "maintain": false,
+              "observe": true
+            },
+            "record_types": [
+              "A",
+              "NS",
+              "CNAME",
+              "PTR",
+              "MX",
+              "TXT",
+              "AAAA",
+              "SRV",
+              "SVCB",
+              "HTTPS"
+            ],
+            "runtime_error": "collector unavailable in test scenario",
+            "version": "0.1.0-dev.dns.20261026.1"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-capabilities_unavailable"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-capabilities_unavailable"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "runtime_unavailable",
+      "operation_id": "runtime",
+      "provenance": {
+        "inputs": "collector I/O failure substituted at snapshot boundary",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-runtime_unavailable"
+        },
+        "method": "GET",
+        "path": "/api/v1/runtime",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "UNAVAILABLE",
+            "message": "collector unavailable in test scenario"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-runtime_unavailable"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-runtime_unavailable"
+        },
+        "status": 503
+      }
+    },
+    {
+      "id": "metrics_unavailable",
+      "operation_id": "metrics",
+      "provenance": {
+        "inputs": "collector I/O failure substituted at snapshot boundary",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-metrics_unavailable"
+        },
+        "method": "GET",
+        "path": "/api/v1/metrics",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "UNAVAILABLE",
+            "message": "collector unavailable in test scenario"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-metrics_unavailable"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-metrics_unavailable"
+        },
+        "status": 503
+      }
+    },
+    {
+      "id": "unauthorized",
+      "operation_id": "instance",
+      "provenance": {
+        "inputs": "no Authorization header",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-unauthorized"
+        },
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "role": "anonymous"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "UNAUTHORIZED",
+            "message": "请提供有效的 Bearer Token"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-unauthorized"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-unauthorized"
+        },
+        "status": 401
+      }
+    },
+    {
+      "id": "forbidden_config",
+      "operation_id": "file_read",
+      "provenance": {
+        "inputs": "observer credential; real config-read authorization guard",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-forbidden_config"
+        },
+        "method": "GET",
+        "path": "/api/v1/file/custom_env.ini",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "FORBIDDEN",
+            "message": "只读接入不能访问配置、日志或维护任务"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-forbidden_config"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-forbidden_config"
+        },
+        "status": 403
+      }
+    },
+    {
+      "id": "dns_success",
+      "operation_id": "dns_query",
+      "provenance": {
+        "inputs": "synthetic DNS wire packet at exchange boundary; real lookup/parser; fixed clock yields 0ms",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "body": {
+          "domain": "example.com",
+          "port": 53,
+          "record_type": "A",
+          "server": "127.0.0.1"
+        },
+        "headers": {
+          "X-Request-ID": "contract-dns_success"
+        },
+        "method": "POST",
+        "path": "/api/v1/dns-test",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "additional": [],
+            "answers": [
+              {
+                "class": 1,
+                "name": "example.com",
+                "ttl": 60,
+                "type": "A",
+                "value": "192.0.2.53"
+              }
+            ],
+            "authoritative": false,
+            "authority": [],
+            "available": true,
+            "checked_at": "2026-10-26T00:00:00+00:00",
+            "counts": {
+              "additional": 0,
+              "answers": 1,
+              "authority": 0,
+              "questions": 1
+            },
+            "debug": [],
+            "domain": "example.com",
+            "elapsed_ms": 0.0,
+            "port": 53,
+            "rcode": "NOERROR",
+            "rcode_value": 0,
+            "record_type": "A",
+            "recursion_available": true,
+            "responded": true,
+            "results": [
+              "192.0.2.53"
+            ],
+            "server": "127.0.0.1",
+            "status": "ok",
+            "tcp_fallback": false,
+            "transport": "udp",
+            "truncated": false,
+            "udp_truncated": false
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-dns_success"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-dns_success"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "dns_nxdomain",
+      "operation_id": "dns_query",
+      "provenance": {
+        "inputs": "synthetic DNS wire packet at exchange boundary; real lookup/parser; fixed clock yields 0ms",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "body": {
+          "domain": "missing.example",
+          "port": 53,
+          "record_type": "A",
+          "server": "127.0.0.1"
+        },
+        "headers": {
+          "X-Request-ID": "contract-dns_nxdomain"
+        },
+        "method": "POST",
+        "path": "/api/v1/dns-test",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "additional": [],
+            "answers": [],
+            "authoritative": false,
+            "authority": [],
+            "available": false,
+            "checked_at": "2026-10-26T00:00:00+00:00",
+            "counts": {
+              "additional": 0,
+              "answers": 0,
+              "authority": 0,
+              "questions": 1
+            },
+            "debug": [],
+            "domain": "missing.example",
+            "elapsed_ms": 0.0,
+            "port": 53,
+            "rcode": "NXDOMAIN",
+            "rcode_value": 3,
+            "record_type": "A",
+            "recursion_available": true,
+            "responded": true,
+            "results": [],
+            "server": "127.0.0.1",
+            "status": "dns_error",
+            "tcp_fallback": false,
+            "transport": "udp",
+            "truncated": false,
+            "udp_truncated": false
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-dns_nxdomain"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-dns_nxdomain"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "dns_compare_mixed",
+      "operation_id": "dns_compare",
+      "provenance": {
+        "inputs": "two synthetic wire replies: NOERROR and NXDOMAIN; real parallel comparison handler",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "body": {
+          "domain": "example.com",
+          "record_type": "A",
+          "targets": [
+            {
+              "label": "core",
+              "port": 53,
+              "server": "127.0.0.1",
+              "transport": "udp"
+            },
+            {
+              "label": "comparison",
+              "port": 53,
+              "server": "192.0.2.54",
+              "transport": "tcp"
+            }
+          ]
+        },
+        "headers": {
+          "X-Request-ID": "contract-dns_compare_mixed"
+        },
+        "method": "POST",
+        "path": "/api/v1/dns-compare",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "kind": "paopaodns-dns-report",
+            "method": "Small ordinary DNS queries from the Web UI network; caches are not cleared. DNS success does not prove freshness or application connectivity.",
+            "schema_version": 1,
+            "started_utc": "2026-10-26T00:00:00+00:00",
+            "tests": [
+              {
+                "label": "core",
+                "result": {
+                  "additional": [],
+                  "answers": [
+                    {
+                      "class": 1,
+                      "name": "example.com",
+                      "ttl": 60,
+                      "type": "A",
+                      "value": "192.0.2.53"
+                    }
+                  ],
+                  "authoritative": false,
+                  "authority": [],
+                  "available": true,
+                  "checked_at": "2026-10-26T00:00:00+00:00",
+                  "counts": {
+                    "additional": 0,
+                    "answers": 1,
+                    "authority": 0,
+                    "questions": 1
+                  },
+                  "debug": [],
+                  "domain": "example.com",
+                  "elapsed_ms": 0.0,
+                  "port": 53,
+                  "rcode": "NOERROR",
+                  "rcode_value": 0,
+                  "record_type": "A",
+                  "recursion_available": true,
+                  "responded": true,
+                  "results": [
+                    "192.0.2.53"
+                  ],
+                  "server": "127.0.0.1",
+                  "status": "ok",
+                  "tcp_fallback": false,
+                  "transport": "udp",
+                  "truncated": false,
+                  "udp_truncated": false
+                }
+              },
+              {
+                "label": "comparison",
+                "result": {
+                  "additional": [],
+                  "answers": [],
+                  "authoritative": false,
+                  "authority": [],
+                  "available": false,
+                  "checked_at": "2026-10-26T00:00:00+00:00",
+                  "counts": {
+                    "additional": 0,
+                    "answers": 0,
+                    "authority": 0,
+                    "questions": 1
+                  },
+                  "debug": [],
+                  "domain": "example.com",
+                  "elapsed_ms": 0.0,
+                  "port": 53,
+                  "rcode": "NXDOMAIN",
+                  "rcode_value": 3,
+                  "record_type": "A",
+                  "recursion_available": true,
+                  "responded": true,
+                  "results": [],
+                  "server": "192.0.2.54",
+                  "status": "dns_error",
+                  "tcp_fallback": false,
+                  "transport": "tcp",
+                  "truncated": false,
+                  "udp_truncated": false
+                }
+              }
+            ]
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-dns_compare_mixed"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-dns_compare_mixed"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "dns_health",
+      "operation_id": "dns_health",
+      "provenance": {
+        "inputs": "synthetic successful A replies for actual built-in sample domains; real health handler",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-dns_health"
+        },
+        "method": "GET",
+        "path": "/api/v1/health-check",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "pass": true,
+            "port": 53,
+            "server": "127.0.0.1",
+            "tests": {
+              "cn": {
+                "domain": "www.baidu.com",
+                "resolved": true,
+                "result": {
+                  "additional": [],
+                  "answers": [
+                    {
+                      "class": 1,
+                      "name": "www.baidu.com",
+                      "ttl": 60,
+                      "type": "A",
+                      "value": "192.0.2.53"
+                    }
+                  ],
+                  "authoritative": false,
+                  "authority": [],
+                  "available": true,
+                  "checked_at": "2026-10-26T00:00:00+00:00",
+                  "counts": {
+                    "additional": 0,
+                    "answers": 1,
+                    "authority": 0,
+                    "questions": 1
+                  },
+                  "debug": [],
+                  "domain": "www.baidu.com",
+                  "elapsed_ms": 0.0,
+                  "port": 53,
+                  "rcode": "NOERROR",
+                  "rcode_value": 0,
+                  "record_type": "A",
+                  "recursion_available": true,
+                  "responded": true,
+                  "results": [
+                    "192.0.2.53"
+                  ],
+                  "server": "127.0.0.1",
+                  "status": "ok",
+                  "tcp_fallback": false,
+                  "transport": "udp",
+                  "truncated": false,
+                  "udp_truncated": false
+                }
+              },
+              "non_cn": {
+                "domain": "www.google.com",
+                "resolved": true,
+                "result": {
+                  "additional": [],
+                  "answers": [
+                    {
+                      "class": 1,
+                      "name": "www.google.com",
+                      "ttl": 60,
+                      "type": "A",
+                      "value": "192.0.2.53"
+                    }
+                  ],
+                  "authoritative": false,
+                  "authority": [],
+                  "available": true,
+                  "checked_at": "2026-10-26T00:00:00+00:00",
+                  "counts": {
+                    "additional": 0,
+                    "answers": 1,
+                    "authority": 0,
+                    "questions": 1
+                  },
+                  "debug": [],
+                  "domain": "www.google.com",
+                  "elapsed_ms": 0.0,
+                  "port": 53,
+                  "rcode": "NOERROR",
+                  "rcode_value": 0,
+                  "record_type": "A",
+                  "recursion_available": true,
+                  "responded": true,
+                  "results": [
+                    "192.0.2.53"
+                  ],
+                  "server": "127.0.0.1",
+                  "status": "ok",
+                  "tcp_fallback": false,
+                  "transport": "udp",
+                  "truncated": false,
+                  "udp_truncated": false
+                }
+              }
+            }
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-dns_health"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-dns_health"
+        },
+        "status": 200
+      }
+    }
+  ],
+  "format_version": 1,
+  "normalization": {
+    "credentials": "ephemeral test credentials never serialized",
+    "elapsed_ms": "fixed monotonic clock; zero is synthetic",
+    "instance_id": "00000000-0000-4000-8000-000000000001",
+    "network": "no network; documentation IPs and public example domains",
+    "request_ids": "explicit contract-<case id>",
+    "unix_utc_seconds": 1792972800.0
+  }
+}

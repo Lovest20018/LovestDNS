@@ -1,0 +1,61 @@
+{
+  "checked_on": "2026-10-24",
+  "scope": "Source inspection only; no published image or running service verification",
+  "paopaodns": {
+    "repository": "https://github.com/kkkgo/PaoPaoDNS",
+    "archive_commit": "a8da2e62a73026c9594b7edc36447538e51000ee",
+    "archive_sha256": "8ffab34f07594465a3b78a7ab2b14fda9682d881b46a6634aae7acd18eb9543e",
+    "files": {
+      "Dockerfile": {
+        "matches_local": true,
+        "sha256_lf": "2456a4100cfc87bec223c06b6a55f5b6bd89ffe14448dbf539c5f51dc620e3db"
+      },
+      "prebuild-paopaodns/build.sh": {
+        "matches_local": true,
+        "sha256_lf": "0fe800779203847096a2d518287f8044d2ee58974230bff854bea4c48411b556"
+      },
+      "src/build.sh": {
+        "matches_local": true,
+        "sha256_lf": "395456c4e0cd615cfe9f7a86209151b847ad5797042a12d58f100d28fd9cefe5"
+      },
+      "src/init.sh": {
+        "matches_local": true,
+        "sha256_lf": "d177a341ee2717e182d9ac474ac8b16cc9f7d67b5dd4a49c3adc827d36158fb1"
+      },
+      "src/reload.sh": {
+        "matches_local": true,
+        "sha256_lf": "b7b8df706ca8c875bf82e2b61b0956e2894b18722889281c5c3de552ef924134"
+      },
+      "src/watch_list.sh": {
+        "matches_local": true,
+        "sha256_lf": "73b3c1e6f51450891d803fd7071f242f5ac8ef778f5e6d5202fcc271e0b85723"
+      },
+      "src/mosdns.yaml": {
+        "matches_local": true,
+        "sha256_lf": "3454c47126682d077279771e16b51dee17e93889fce136e714d40d1540839fe5"
+      },
+      "src/unbound.conf": {
+        "matches_local": true,
+        "sha256_lf": "29d410221cfb98e6f3bed217d194731a6957f60d0ab4ad7f7a06f71888fd6bd6"
+      },
+      "src/redis.conf": {
+        "matches_local": true,
+        "sha256_lf": "23fc798d2495ca929b9d6b57b004ffc4b4be57880d2d5c5439dc6b359c1959c2"
+      },
+      "src/data_update.sh": {
+        "matches_local": true,
+        "sha256_lf": "360bb111d637d2311f8dc700f5d1908f809f4c042902f8b2b4b293225582411a"
+      },
+      "README.md": {
+        "matches_local": true,
+        "sha256_lf": "ebaa36cdf8f736f58cfcb0b5d60b9e10ad765a0c75ad85851fd3a7c3c66c899c"
+      }
+    }
+  },
+  "mosdns": {
+    "repository": "https://github.com/kkkgo/mosdns",
+    "archive_commit": "7a92c687171e118414a5cc9e77f0d0da8f2a9d76",
+    "archive_sha256": "146ba9cef0314cb34a15c1b35a6df3d3e86f2124baac838a5fb950b2e1eb22da",
+    "image_binary_correspondence": "not verified"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "source_commit": "a8da2e62a73026c9594b7edc36447538e51000ee",
+  "image": "public.ecr.aws/sliamb/paopaodns@sha256:df0f5689934b3ebb757b7bce0590cd27b97ba23173908eb7205587859012e5c4",
+  "platform_manifests": {
+    "amd64": "sha256:3f4ebe5342d4be4e3b6c24e47f4dd3747b9e800abdb54491a4afbced4c927e89",
+    "arm64": "sha256:487344386abbe62b5aa69318641669c5cb38a06a457f5bed126145e776f5f807"
+  },
+  "verified_source_files": {
+    "init.sh": "3a9b200822ff608fc3fb59266f9e81128de5db1e94059fde57afbd8251944882",
+    "watch_list.sh": "73b3c1e6f51450891d803fd7071f242f5ac8ef778f5e6d5202fcc271e0b85723",
+    "reload.sh": "b7b8df706ca8c875bf82e2b61b0956e2894b18722889281c5c3de552ef924134",
+    "unbound.conf": "29d410221cfb98e6f3bed217d194731a6957f60d0ab4ad7f7a06f71888fd6bd6",
+    "mosdns.yaml": "3454c47126682d077279771e16b51dee17e93889fce136e714d40d1540839fe5",
+    "redis.conf": "23fc798d2495ca929b9d6b57b004ffc4b4be57880d2d5c5439dc6b359c1959c2"
+  },
+  "validation": "source inspection; container smoke test required"
+}

@@ -1,0 +1,37 @@
+.build/
+**/__pycache__/
+.pytest_cache/
+.pytest_tmp_review/
+*.pyc
+
+# Local credentials, service state and disposable verification output.
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.key
+*.pem
+*.p12
+*.sqlite*
+*.db
+*.db-*
+*.rdb
+/data/
+/state/
+/runtime/
+/logs/
+*.log
+.venv/
+venv/
+node_modules/
+dist/
+dist-ssr/
+/build/
+coverage/
+.coverage
+**/screenshots/
+*.tsbuildinfo
+
+# The reviewed standalone source checkpoint is the sole committed archive.
+/releases/*
+!/releases/standalone-20261024-source.zip

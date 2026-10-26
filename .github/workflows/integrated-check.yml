@@ -1,0 +1,42 @@
+name: Validate integrated edition (no publication)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'integrated/**'
+      - 'packaging/**'
+      - 'scripts/**'
+      - 'web/**'
+      - 'docs/contracts/**'
+      - 'docker-compose*.yaml'
+      - '.gitignore'
+      - '.gitattributes'
+      - '.dockerignore'
+      - '.github/workflows/web-docker-ghcr.yml'
+      - '.github/workflows/integrated-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/freeze-standalone.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install -r web/backend/requirements.txt -r integrated/tests/requirements.txt
+      - run: python scripts/export-api-contract.py --check
+      - run: python -m pytest integrated/tests scripts/tests -q
+      - run: python -m pytest web/backend/tests -q
+      - run: node --experimental-strip-types --test integrated/frontend/tests/*.test.ts
+      - run: node --experimental-strip-types --test web/tests/*.test.ts
+      - run: docker build -f packaging/integrated/Dockerfile -t paopaodns-suite:test .
+      - run: python scripts/test-integrated-container.py --image paopaodns-suite:test

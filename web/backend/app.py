@@ -14,6 +14,9 @@ import socket
 import struct
 import threading
 import time
+import math
+from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 from flask import Flask, jsonify, request, send_from_directory
 
@@ -38,6 +41,8 @@ WEB_UI_ALLOW_NO_AUTH = os.environ.get("WEB_UI_ALLOW_NO_AUTH", "false").lower() =
 DNS_TEST_SERVER = os.environ.get("DNS_TEST_SERVER", "paopaodns")
 DNS_TEST_PORT = _env_int("DNS_TEST_PORT", 53)
 DNS_TEST_TIMEOUT = _env_float("DNS_TEST_TIMEOUT", 3)
+if not math.isfinite(DNS_TEST_TIMEOUT) or not 0 < DNS_TEST_TIMEOUT <= 10:
+    DNS_TEST_TIMEOUT = 3
 
 # Max upload size: 2 MB
 MAX_CONTENT_LENGTH = 2 * 1024 * 1024
@@ -493,6 +498,8 @@ def _normalize_domain(domain: str) -> tuple[str | None, str]:
 
 
 def _normalize_record_type(record_type: str) -> tuple[str | None, str]:
+    if not isinstance(record_type, str):
+        return None, "Record type must be a string"
     value = (record_type or "A").strip().upper()
     if value not in DNS_RECORD_TYPES:
         return None, f"Unsupported record type: {value}"
@@ -500,6 +507,8 @@ def _normalize_record_type(record_type: str) -> tuple[str | None, str]:
 
 
 def _normalize_dns_server(server: str) -> tuple[str | None, str]:
+    if not isinstance(server, str):
+        return None, "DNS server must be a string"
     value = (server or DNS_TEST_SERVER).strip()
     if not value:
         return None, "DNS server is required"
@@ -509,6 +518,8 @@ def _normalize_dns_server(server: str) -> tuple[str | None, str]:
 
 
 def _normalize_dns_port(port) -> tuple[int | None, str]:
+    if isinstance(port, bool) or (port is not None and not isinstance(port, (int, str))):
+        return None, "Invalid DNS port"
     try:
         value = int(port if port not in (None, "") else DNS_TEST_PORT)
     except (TypeError, ValueError):
@@ -576,7 +587,8 @@ def _read_dns_name(packet: bytes, offset: int, depth: int = 0) -> tuple[str, int
     return ".".join(labels), next_offset
 
 
-def _parse_dns_response(packet: bytes, query_id: int) -> dict:
+def _parse_dns_response(packet: bytes, query_id: int, domain: str | None = None,
+                        record_type: str | None = None) -> dict:
     """Parse enough DNS response data for the diagnostics UI."""
     if len(packet) < 12:
         raise ValueError("DNS response too short")
@@ -584,16 +596,27 @@ def _parse_dns_response(packet: bytes, query_id: int) -> dict:
     response_id, flags, qdcount, ancount, nscount, arcount = struct.unpack("!HHHHHH", packet[:12])
     if response_id != query_id:
         raise ValueError("DNS response ID mismatch")
+    if not flags & 0x8000 or flags & 0x7800:
+        raise ValueError("Not a standard DNS response")
+    if qdcount != 1:
+        raise ValueError("DNS response must contain one matching question")
 
     offset = 12
     for _ in range(qdcount):
-        _, offset = _read_dns_name(packet, offset)
+        question_name, offset = _read_dns_name(packet, offset)
         if offset + 4 > len(packet):
             raise ValueError("DNS question exceeds packet length")
+        question_type, question_class = struct.unpack("!HH", packet[offset:offset + 4])
+        if domain is not None and question_name.lower() != domain.lower():
+            raise ValueError("DNS response question mismatch")
+        if question_class != 1 or (record_type is not None and question_type != DNS_RECORD_TYPES[record_type]):
+            raise ValueError("DNS response question type/class mismatch")
         offset += 4
 
     answers = []
-    for _ in range(ancount):
+    # A truncated UDP packet may end inside a record. Fetch the complete TCP
+    # answer before attempting to decode any partial answer data.
+    for _ in range(0 if flags & 0x0200 else ancount):
         name, offset = _read_dns_name(packet, offset)
         if offset + 10 > len(packet):
             raise ValueError("DNS answer exceeds packet length")
@@ -608,12 +631,16 @@ def _parse_dns_response(packet: bytes, query_id: int) -> dict:
         rdata = packet[rdata_offset:rdata_end]
         record_type = DNS_TYPE_NAMES.get(rtype, f"TYPE{rtype}")
         value = rdata.hex()
-        if rtype == DNS_RECORD_TYPES["A"] and rdlength == 4:
+        if (rtype == 1 and rdlength != 4) or (rtype == 28 and rdlength != 16):
+            raise ValueError("Invalid DNS address record length")
+        if rtype == DNS_RECORD_TYPES["A"]:
             value = socket.inet_ntop(socket.AF_INET, rdata)
-        elif rtype == DNS_RECORD_TYPES["AAAA"] and rdlength == 16:
+        elif rtype == DNS_RECORD_TYPES["AAAA"]:
             value = socket.inet_ntop(socket.AF_INET6, rdata)
         elif rtype in (DNS_RECORD_TYPES["CNAME"], 2, 12):
-            value, _ = _read_dns_name(packet, rdata_offset)
+            value, name_end = _read_dns_name(packet, rdata_offset)
+            if name_end != rdata_end:
+                raise ValueError("Invalid DNS name record length")
         elif rtype == 15 and rdlength >= 3:
             preference = struct.unpack("!H", rdata[:2])[0]
             exchange, _ = _read_dns_name(packet, rdata_offset + 2)
@@ -648,22 +675,82 @@ def _parse_dns_response(packet: bytes, query_id: int) -> dict:
     }
 
 
-def _dns_lookup(domain: str, record_type: str = "A", server: str | None = None, port: int | None = None) -> dict:
-    """Run a small UDP DNS query without shelling out to dig."""
+def _recv_exact(sock, length: int, deadline: float) -> bytes:
+    data = bytearray()
+    while len(data) < length:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("DNS TCP response timed out")
+        sock.settimeout(remaining)
+        block = sock.recv(length - len(data))
+        if not block:
+            raise ValueError("Incomplete DNS TCP response")
+        data.extend(block)
+    return bytes(data)
+
+
+def _exchange_dns(query: bytes, server: str, port: int, tcp: bool = False) -> bytes:
+    """Use connected UDP to verify the peer; bound each transport to a deadline."""
+    sock_type = socket.SOCK_STREAM if tcp else socket.SOCK_DGRAM
+    addresses = socket.getaddrinfo(server, port, socket.AF_UNSPEC, sock_type)
+    deadline = time.monotonic() + DNS_TEST_TIMEOUT
+    last_error = OSError("No DNS server address available")
+    for family, kind, protocol, _, address in addresses:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("DNS query timed out")
+        try:
+            with socket.socket(family, kind, protocol) as sock:
+                sock.settimeout(remaining)
+                sock.connect(address)
+                if tcp:
+                    sock.sendall(struct.pack("!H", len(query)) + query)
+                    length = struct.unpack("!H", _recv_exact(sock, 2, deadline))[0]
+                    return _recv_exact(sock, length, deadline)
+                sock.send(query)
+                return sock.recv(65535)
+        except OSError as exc:
+            last_error = exc
+    raise last_error
+
+
+def _matching_dns_answers(answers: list, domain: str, record_type: str) -> list:
+    """Require the requested IN record on the queried name or its CNAME chain."""
+    name = domain.lower()
+    visited = set()
+    while name not in visited:
+        visited.add(name)
+        owned = [a for a in answers if a["name"].lower() == name and a["class"] == 1]
+        matches = [a for a in owned if a["type"] == record_type]
+        if matches:
+            return matches
+        aliases = [a for a in owned if a["type"] == "CNAME"]
+        if not aliases:
+            break
+        name = aliases[0]["value"].lower()
+    return []
+
+
+def _dns_lookup(domain: str, record_type: str = "A", server: str | None = None,
+                port: int | None = None, transport: str = "udp") -> dict:
+    """Query DNS with TCP fallback; successful means a complete target record."""
     normalized_domain, domain_err = _normalize_domain(domain)
     normalized_type, type_err = _normalize_record_type(record_type)
     normalized_server, server_err = _normalize_dns_server(server or DNS_TEST_SERVER)
     normalized_port, port_err = _normalize_dns_port(port)
     error = domain_err or type_err or server_err or port_err
+    if transport not in ("udp", "tcp"):
+        error = error or "Transport must be udp or tcp"
+    result = {
+        "available": False, "responded": False,
+        "domain": normalized_domain or domain, "record_type": normalized_type or record_type,
+        "server": normalized_server or server, "port": normalized_port or port,
+        "answers": [], "results": [], "transport": transport,
+        "tcp_fallback": False, "udp_truncated": False,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
     if error:
-        return {
-            "available": False,
-            "domain": domain,
-            "record_type": record_type,
-            "server": server or DNS_TEST_SERVER,
-            "port": port or DNS_TEST_PORT,
-            "error": error,
-        }
+        return {**result, "status": "invalid_input", "error": error}
 
     query_id = secrets.randbits(16)
     query = (
@@ -674,41 +761,25 @@ def _dns_lookup(domain: str, record_type: str = "A", server: str | None = None, 
 
     started = time.monotonic()
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-            sock.settimeout(DNS_TEST_TIMEOUT)
-            sock.sendto(query, (normalized_server, normalized_port))
-            response, _ = sock.recvfrom(4096)
-        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
-        parsed = _parse_dns_response(response, query_id)
-        answers = parsed["answers"]
-        matched_values = [
-            answer["value"]
-            for answer in answers
-            if answer["type"] in {normalized_type, "CNAME"}
-        ]
-        return {
-            "available": parsed["rcode_value"] == 0,
-            "domain": normalized_domain,
-            "record_type": normalized_type,
-            "server": normalized_server,
-            "port": normalized_port,
-            "elapsed_ms": elapsed_ms,
-            "results": matched_values,
-            **parsed,
-        }
-    except Exception as e:
-        elapsed_ms = round((time.monotonic() - started) * 1000, 1)
-        return {
-            "available": False,
-            "domain": normalized_domain,
-            "record_type": normalized_type,
-            "server": normalized_server,
-            "port": normalized_port,
-            "elapsed_ms": elapsed_ms,
-            "answers": [],
-            "results": [],
-            "error": str(e),
-        }
+        response = _exchange_dns(query, normalized_server, normalized_port, transport == "tcp")
+        parsed = _parse_dns_response(response, query_id, normalized_domain, normalized_type)
+        result.update(parsed, responded=True)
+        if parsed["truncated"] and transport == "udp":
+            result.update(transport="tcp", tcp_fallback=True, udp_truncated=True)
+            response = _exchange_dns(query, normalized_server, normalized_port, True)
+            parsed = _parse_dns_response(response, query_id, normalized_domain, normalized_type)
+            result.update(parsed)
+        matches = _matching_dns_answers(parsed["answers"], normalized_domain, normalized_type)
+        status = ("incomplete" if parsed["truncated"] else "dns_error" if parsed["rcode_value"] != 0
+                  else "ok" if matches else "no_records")
+        result.update(status=status, available=status == "ok",
+                      results=[answer["value"] for answer in matches])
+    except (OSError, ValueError) as exc:
+        status = ("incomplete" if result["udp_truncated"] else "timeout" if isinstance(exc, TimeoutError)
+                  else "invalid_response" if isinstance(exc, ValueError) else "network_error")
+        result.update(status=status, error=str(exc) or "DNS query timed out")
+    result["elapsed_ms"] = round((time.monotonic() - started) * 1000, 1)
+    return result
 
 
 def _run_health_check(server: str | None = None, port: int | None = None) -> dict:
@@ -730,7 +801,7 @@ def _run_health_check(server: str | None = None, port: int | None = None) -> dic
         result = _dns_lookup(domain, "A", normalized_server, normalized_port)
         tests[category] = {
             "domain": domain,
-            "resolved": bool(result.get("available") and result.get("answers")),
+            "resolved": bool(result.get("available")),
             "result": result,
         }
 
@@ -860,21 +931,73 @@ def api_write_file(filename):
 @app.route("/api/dns-test", methods=["POST"])
 def api_dns_test():
     """Run a DNS lookup against the configured PaoPaoDNS service."""
-    data = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Expected a JSON object"}), 400
     domain = data.get("domain", "")
     record_type = data.get("record_type", "A")
+    # Preserve the original optional-field behavior: empty values mean use the
+    # configured default, while non-empty malformed values are still rejected.
     server = data.get("server") or DNS_TEST_SERVER
     port = data.get("port") or DNS_TEST_PORT
+    transport = data.get("transport", "udp")
 
     normalized_domain, domain_err = _normalize_domain(domain)
     normalized_type, type_err = _normalize_record_type(record_type)
     normalized_server, server_err = _normalize_dns_server(server)
     normalized_port, port_err = _normalize_dns_port(port)
     error = domain_err or type_err or server_err or port_err
+    if transport not in ("udp", "tcp"):
+        error = error or "Transport must be udp or tcp"
     if error:
         return jsonify({"error": error}), 400
 
+    if transport == "tcp":
+        return jsonify(_dns_lookup(normalized_domain, normalized_type, normalized_server, normalized_port, transport))
     return jsonify(_dns_lookup(normalized_domain, normalized_type, normalized_server, normalized_port))
+
+
+@app.route("/api/dns-compare", methods=["POST"])
+def api_dns_compare():
+    """Compare a small set of explicit network endpoints; no Docker access."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Expected a JSON object"}), 400
+    domain, domain_err = _normalize_domain(data.get("domain", ""))
+    record_type, type_err = _normalize_record_type(data.get("record_type", "A"))
+    targets = data.get("targets")
+    if domain_err or type_err:
+        return jsonify({"error": domain_err or type_err}), 400
+    if not isinstance(targets, list) or not 1 <= len(targets) <= 4:
+        return jsonify({"error": "Provide 1 to 4 DNS targets"}), 400
+    normalized = []
+    for target in targets:
+        if not isinstance(target, dict):
+            return jsonify({"error": "Each target must be an object"}), 400
+        label = target.get("label", "DNS")
+        server, server_err = _normalize_dns_server(target.get("server", DNS_TEST_SERVER))
+        port, port_err = _normalize_dns_port(target.get("port"))
+        transport = target.get("transport", "udp")
+        if not isinstance(label, str) or not label.strip() or len(label) > 40 or _has_control_chars(label):
+            return jsonify({"error": "Target label must contain 1 to 40 characters"}), 400
+        if server_err or port_err or transport not in ("udp", "tcp"):
+            return jsonify({"error": server_err or port_err or "Transport must be udp or tcp"}), 400
+        normalized.append((label.strip(), server, port, transport))
+
+    started = datetime.now(timezone.utc).isoformat()
+
+    def lookup(target):
+        label, server, port, transport = target
+        return {"label": label, "result": _dns_lookup(domain, record_type, server, port, transport)}
+
+    with ThreadPoolExecutor(max_workers=len(normalized)) as pool:
+        tests = list(pool.map(lookup, normalized))
+    return jsonify({
+        "schema_version": 1, "kind": "paopaodns-dns-report", "started_utc": started,
+        "method": "Small ordinary DNS queries from the Web UI network; caches are not cleared. "
+                  "DNS success does not prove freshness or application connectivity.",
+        "tests": tests,
+    })
 
 
 @app.route("/api/health-check")

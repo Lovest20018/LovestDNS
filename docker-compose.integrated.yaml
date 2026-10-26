@@ -1,0 +1,33 @@
+services:
+  paopaodns-suite:
+    # Candidate image: build locally until a verified release is published.
+    image: ${PAOPAODNS_SUITE_IMAGE:-paopaodns-suite:0.1.0-dev}
+    build:
+      context: .
+      dockerfile: packaging/integrated/Dockerfile
+    restart: unless-stopped
+    environment:
+      WEB_UI_TOKEN: ${WEB_UI_TOKEN:?set WEB_UI_TOKEN}
+      SUITE_READ_TOKEN: ${SUITE_READ_TOKEN:-}
+      SUITE_INSTANCE_NAME: ${SUITE_INSTANCE_NAME:-PaoPaoDNS}
+      TZ: ${TZ:-Asia/Shanghai}
+      CNAUTO: ${CNAUTO:-yes}
+      CNFALL: ${CNFALL:-yes}
+      IPV6: ${IPV6:-no}
+      CN_TRACKER: ${CN_TRACKER:-yes}
+      USE_MARK_DATA: ${USE_MARK_DATA:-yes}
+      CUSTOM_FORWARD: ${CUSTOM_FORWARD:-}
+      RULES_TTL: ${RULES_TTL:-0}
+      UPDATE: ${UPDATE:-weekly}
+    ports:
+      - "${DNS_BIND_ADDRESS:-0.0.0.0}:${DNS_HOST_PORT:-53}:53/udp"
+      - "${DNS_BIND_ADDRESS:-0.0.0.0}:${DNS_HOST_PORT:-53}:53/tcp"
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_HOST_PORT:-8080}:8080"
+    volumes:
+      - suite-dns-data:/data
+      - suite-state:/var/lib/paopaodns-suite
+    stop_grace_period: 150s
+
+volumes:
+  suite-dns-data:
+  suite-state:

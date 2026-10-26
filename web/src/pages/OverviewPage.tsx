@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store';
 import * as api from '../api';
+import DnsDiagnostics from '../components/DnsDiagnostics';
 import {
   Activity, Shield, Globe, Database,
   RefreshCw, CheckCircle, XCircle, AlertTriangle,
-  FileText, HardDrive, Key, Eye, EyeOff, Search, Play, Server
+  FileText, HardDrive, Key, Eye, EyeOff, ChevronDown
 } from 'lucide-react';
 
 export default function OverviewPage() {
@@ -20,15 +21,6 @@ export default function OverviewPage() {
   const [filesInfo, setFilesInfo] = useState<Record<string, { watched_now: boolean; condition: string }>>({});
   const [tokenInput, setTokenInput] = useState(api.getStoredToken());
   const [tokenVisible, setTokenVisible] = useState(false);
-  const [dnsDomain, setDnsDomain] = useState('www.baidu.com');
-  const [dnsRecordType, setDnsRecordType] = useState<'A' | 'AAAA' | 'CNAME'>('A');
-  const [dnsServer, setDnsServer] = useState('paopaodns');
-  const [dnsPort, setDnsPort] = useState('53');
-  const [dnsResult, setDnsResult] = useState<api.DnsTestResult | null>(null);
-  const [healthResult, setHealthResult] = useState<api.HealthCheckResult | null>(null);
-  const [dnsLoading, setDnsLoading] = useState(false);
-  const [healthLoading, setHealthLoading] = useState(false);
-  const [dnsError, setDnsError] = useState('');
   const loadStatusRef = useRef<() => Promise<void>>(async () => {});
 
   const cnAutoEnabled = envValues.CNAUTO === 'yes';
@@ -72,45 +64,6 @@ export default function OverviewPage() {
   const handleTokenSave = () => {
     api.setToken(tokenInput);
     loadStatus();
-  };
-
-  const parsedDnsPort = () => {
-    const value = Number.parseInt(dnsPort, 10);
-    return Number.isFinite(value) ? value : 53;
-  };
-
-  const handleDnsLookup = async () => {
-    setDnsLoading(true);
-    setDnsError('');
-    try {
-      const result = await api.runDnsTest({
-        domain: dnsDomain,
-        record_type: dnsRecordType,
-        server: dnsServer || undefined,
-        port: parsedDnsPort(),
-      });
-      setDnsResult(result);
-    } catch (e: unknown) {
-      setDnsError(e instanceof Error ? e.message : 'DNS 查询失败');
-    } finally {
-      setDnsLoading(false);
-    }
-  };
-
-  const handleHealthCheck = async () => {
-    setHealthLoading(true);
-    setDnsError('');
-    try {
-      const result = await api.runHealthCheck({
-        server: dnsServer || undefined,
-        port: parsedDnsPort(),
-      });
-      setHealthResult(result);
-    } catch (e: unknown) {
-      setDnsError(e instanceof Error ? e.message : '健康检查失败');
-    } finally {
-      setHealthLoading(false);
-    }
   };
 
   if (loading) {
@@ -200,8 +153,8 @@ export default function OverviewPage() {
     <div>
       <div className="page-header overview-header">
         <div>
-          <h2>概览</h2>
-          <p>PaoPaoDNS /data 目录状态和配置总览</p>
+          <h2>配置与诊断</h2>
+          <p>查看目录权限、配置状态与 DNS 查询结果</p>
         </div>
         <div className="btn-group">
           <button className="btn btn-secondary btn-sm" onClick={loadStatus}>
@@ -247,21 +200,24 @@ export default function OverviewPage() {
             <Key size={18} />
             <strong>Token 认证</strong>
             <span className={`badge ${authEnabled ? 'badge-green' : 'badge-red'}`}>{authEnabled ? '已启用' : '未启用'}</span>
-            <span className="overview-card-note">需要 Token 时在此保存访问凭据</span>
           </div>
-          <div className="overview-token-row">
+          <details className="overview-token-settings">
+            <summary>管理访问凭据 <ChevronDown size={13} /></summary>
+            <div className="overview-token-row">
             <input
               className="form-input"
               type={tokenVisible ? 'text' : 'password'}
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
               placeholder="WEB_UI_TOKEN"
+              aria-label="WebUI 访问 Token"
             />
-            <button className="btn btn-secondary btn-sm" onClick={() => setTokenVisible(!tokenVisible)}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setTokenVisible(!tokenVisible)} aria-label={tokenVisible ? '隐藏 Token' : '显示 Token'}>
               {tokenVisible ? <EyeOff size={14} /> : <Eye size={14} />}
             </button>
             <button className="btn btn-primary btn-sm" onClick={handleTokenSave}>保存</button>
-          </div>
+            </div>
+          </details>
         </div>
       </div>
 
@@ -291,124 +247,7 @@ export default function OverviewPage() {
       </div>
 
       {/* DNS Diagnostics */}
-      <div className="card">
-        <div className="card-title"><Search size={18} /> DNS 诊断</div>
-        <div className="card-desc">对目标 DNS 服务执行 A / AAAA / CNAME 查询和 CN/非 CN 健康检查</div>
-        <div className="dns-diagnostic-grid">
-          <div className="dns-control-panel">
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">域名</label>
-                <input
-                  className="form-input"
-                  value={dnsDomain}
-                  onChange={(e) => setDnsDomain(e.target.value)}
-                  placeholder="www.baidu.com"
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">记录类型</label>
-                <select
-                  className="form-select"
-                  value={dnsRecordType}
-                  onChange={(e) => setDnsRecordType(e.target.value as 'A' | 'AAAA' | 'CNAME')}
-                >
-                  <option value="A">A</option>
-                  <option value="AAAA">AAAA</option>
-                  <option value="CNAME">CNAME</option>
-                </select>
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">DNS 服务</label>
-                <input
-                  className="form-input"
-                  value={dnsServer}
-                  onChange={(e) => setDnsServer(e.target.value)}
-                  placeholder="paopaodns"
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">端口</label>
-                <input
-                  className="form-input"
-                  type="number"
-                  min={1}
-                  max={65535}
-                  value={dnsPort}
-                  onChange={(e) => setDnsPort(e.target.value)}
-                  placeholder="53"
-                />
-              </div>
-            </div>
-            <div className="inline-actions">
-              <button className="btn btn-primary btn-sm" onClick={handleDnsLookup} disabled={dnsLoading}>
-                {dnsLoading ? <RefreshCw size={14} /> : <Search size={14} />} 查询
-              </button>
-              <button className="btn btn-secondary btn-sm" onClick={handleHealthCheck} disabled={healthLoading}>
-                {healthLoading ? <RefreshCw size={14} /> : <Play size={14} />} 健康检查
-              </button>
-              <span className="summary-chip"><Server size={13} /> {dnsServer || 'paopaodns'}:{dnsPort || '53'}</span>
-            </div>
-            {dnsError && (
-              <div className="overview-inline-warning">
-                {dnsError}
-              </div>
-            )}
-          </div>
-
-          <div className="dns-result-panel">
-            {dnsResult ? (
-              <div className="dns-result-block">
-                <div className="dns-result-header">
-                  <span className={`badge ${dnsResult.available ? 'badge-green' : 'badge-red'}`}>
-                    {dnsResult.rcode || (dnsResult.available ? 'OK' : '失败')}
-                  </span>
-                  <span>{dnsResult.domain}</span>
-                  {dnsResult.elapsed_ms !== undefined && <span>{dnsResult.elapsed_ms} ms</span>}
-                </div>
-                {dnsResult.error && <div className="dns-result-error">{dnsResult.error}</div>}
-                <div className="dns-answer-list">
-                  {dnsResult.answers.length > 0 ? dnsResult.answers.map((answer, index) => (
-                    <div className="dns-answer-row" key={`${answer.name}-${answer.type}-${answer.value}-${index}`}>
-                      <span>{answer.type}</span>
-                      <code>{answer.value}</code>
-                      <small>TTL {answer.ttl}</small>
-                    </div>
-                  )) : (
-                    <div className="floating-note">无应答记录</div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="floating-note">尚未执行 DNS 查询</div>
-            )}
-
-            {healthResult && (
-              <div className="dns-health-block">
-                <div className="dns-result-header">
-                  <span className={`badge ${healthResult.pass ? 'badge-green' : 'badge-red'}`}>
-                    {healthResult.pass ? '健康' : '异常'}
-                  </span>
-                  <span>{healthResult.server}:{healthResult.port}</span>
-                </div>
-                <div className="dns-answer-list">
-                  {Object.entries(healthResult.tests).map(([key, item]) => (
-                    <div className="dns-answer-row" key={key}>
-                      <span>{key === 'cn' ? 'CN' : '非 CN'}</span>
-                      <code>{item.domain}</code>
-                      <small style={{ color: item.resolved ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-                        {item.resolved ? '已解析' : '失败'}
-                      </small>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <DnsDiagnostics />
 
       {/* Architecture Diagram */}
       <div className="card">
@@ -458,7 +297,7 @@ export default function OverviewPage() {
       <div className="card">
         <div className="card-title"><FileText size={18} /> /data 文件状态</div>
         <div className="card-desc">显示 /data 目录下各配置文件是否存在及其热重载行为</div>
-        <table className="info-table">
+        <div className="overview-file-table"><table className="info-table">
           <thead>
             <tr><th>文件</th><th>说明</th><th>状态</th><th>重载方式</th></tr>
           </thead>
@@ -517,7 +356,7 @@ export default function OverviewPage() {
               );
             })}
           </tbody>
-        </table>
+        </table></div>
       </div>
 
       {envValues.CUSTOM_FORWARD && (

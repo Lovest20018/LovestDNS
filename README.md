@@ -21,6 +21,11 @@
 - 编辑 `custom_mod.yaml`、`unbound_custom.conf`
 - 生成 docker compose / docker run 部署配置
 - 支持亮色/暗色主题
+- DNS 查询与健康检查，支持 TCP 回退、解析链路对照、诊断报告导入导出
+
+集成版提供面向家庭网络运维平台的版本化 `/api/v1/`，支持实例识别、只读观测 Token、运行指标、DNS 联调、配置历史和 OpenAPI 契约；详见 [集成 API 文档](docs/integration-api.md)。RouterOS 接入建议由独立适配器在服务端完成，暂不让浏览器直接保存主路由凭据。
+
+诊断使用说明和可选宿主机统计采集脚本见 [DNS 诊断与宿主机快照](docs/dns-diagnostics.md)。
 
 ## 界面预览
 

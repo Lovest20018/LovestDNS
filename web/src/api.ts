@@ -92,9 +92,34 @@ export interface DnsTestResult {
   port: number;
   elapsed_ms?: number;
   rcode?: string;
+  status?: DnsStatus;
+  responded?: boolean;
+  transport?: 'udp' | 'tcp';
+  tcp_fallback?: boolean;
+  udp_truncated?: boolean;
+  truncated?: boolean;
+  checked_at?: string;
   answers: DnsAnswer[];
   results: string[];
   error?: string;
+}
+
+export type DnsStatus = 'ok' | 'no_records' | 'dns_error' | 'incomplete' | 'timeout'
+  | 'network_error' | 'invalid_response' | 'invalid_input' | 'probe_error';
+
+export interface DnsTarget {
+  label: string;
+  server: string;
+  port: number;
+  transport?: 'udp' | 'tcp';
+}
+
+export interface DiagnosticReport {
+  schema_version: 1;
+  kind: 'paopaodns-dns-report';
+  started_utc: string;
+  method: string;
+  tests: { label: string; result: DnsTestResult }[];
 }
 
 export interface HealthCheckResult {
@@ -133,8 +158,20 @@ export async function runDnsTest(params: {
   record_type: 'A' | 'AAAA' | 'CNAME';
   server?: string;
   port?: number;
+  transport?: 'udp' | 'tcp';
 }): Promise<DnsTestResult> {
   return apiFetch<DnsTestResult>('/api/dns-test', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function compareDns(params: {
+  domain: string;
+  record_type: 'A' | 'AAAA' | 'CNAME';
+  targets: DnsTarget[];
+}): Promise<DiagnosticReport> {
+  return apiFetch<DiagnosticReport>('/api/dns-compare', {
     method: 'POST',
     body: JSON.stringify(params),
   });

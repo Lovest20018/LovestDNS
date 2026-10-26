@@ -7,6 +7,7 @@ PaoPaoDNS 的 Web 配置管理面板，以 sidecar 容器方式与 PaoPaoDNS 共
 ### 运行时配置管理（读写 /data，保存后自动热重载）
 
 - **概览** — /data 目录状态、鉴权状态、DNS 架构图、文件热重载情况
+- **DNS 诊断** — 目标记录检查、UDP 截断后 TCP 回退、多链路对照、JSON 报告导入导出和宿主机统计快照展示，见 [使用说明](../docs/dns-diagnostics.md)
 - **环境变量** — 查看 custom_env.ini 中的运行时覆盖值
 - **域名列表** — 编辑 force_forward_list.txt / force_dnscrypt_list.txt / force_recurse_list.txt / custom_cn_mark.txt / trackerslist.txt（Tracker 列表仅文本编辑）
 - **TTL 规则** — 编辑 force_ttl_rules.txt
@@ -297,7 +298,7 @@ Web UI 保存后会根据当前配置自动判断并提示热重载状态。由�
 - **写入大小限制** — 单次写入最大 2MB，按文件类型细分
 - **Token 鉴权** — 默认强制认证，仅支持 Bearer token
 - **敏感变量 mask** — 含 TOKEN/PASSWORD/SECRET/KEY 的值在 API 中显示为 `***`
-- **DNS 诊断目标可自定义** — 诊断接口（`/api/dns-test`、`/api/health-check`）允许指定任意 `server:port`，便于对比不同解析器的返回结果。该能力受 Token 鉴权保护，且仅发送 UDP DNS 查询、按 DNS 协议解析响应；请妥善保管 Token 并避免无鉴权暴露
+- **DNS 诊断目标可自定义** — 诊断接口（`/api/dns-test`、`/api/health-check`、`/api/dns-compare`）允许指定任意 `server:port`，便于对比不同解析器的返回结果。该能力受 Token 鉴权保护，仅发送 UDP / TCP DNS 查询并按 DNS 协议解析响应；请妥善保管 Token 并避免无鉴权暴露
 - **127.0.0.1 绑定** — 默认只监听本地，不直接暴露到网络
 
 ## 页面说明
