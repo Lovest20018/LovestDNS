@@ -62,7 +62,7 @@ HTTP 200 表示请求本身完成，不等于 DNS 解析成功。DNS 查询应�
 
 完整参数、响应和错误码以运行实例的 `/api/v1/openapi.json` 为准。OpenAPI 3.1 为每个业务接口定义具体返回结构，并通过真实处理函数响应的 JSON Schema 校验。
 
-供 DNS 管理 固定使用的开发候选 OpenAPI、18 组确定性脱敏样例及源码/契约摘要见 [v1 提供方基线](contracts/v1/README.md)。从仓库根目录运行 `python scripts/export-api-contract.py --check` 可重放真实处理函数并检查漂移，`--write` 用于审阅后重新导出。当前候选为 `0.1.0-dev.dns.20261026.1`；Linux amd64 隔离容器验收已完成，部署地址与剩余范围见 [validation-host 验收记录](verification.md)，仍不是稳定发行。
+供 DNS 管理 固定使用的开发候选 OpenAPI、18 组确定性脱敏样例及源码/契约摘要见 [v1 提供方基线](contracts/v1/README.md)。从仓库根目录运行 `python scripts/export-api-contract.py --check` 可重放真实处理函数并检查漂移，`--write` 用于审阅后重新导出。当前候选为 `0.1.0-dev.dns.20261026.1`；Linux amd64 隔离容器验收已完成，部署地址与剩余范围见 [隔离测试环境 验收记录](verification.md)，仍不是稳定发行。
 
 ## 时间、指标和失败语义
 

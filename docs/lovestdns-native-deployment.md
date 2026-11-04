@@ -2,8 +2,6 @@
 
 当前原生候选面向 **Debian 12/13、Linux amd64、systemd**。DNS 核心、Web、采集器和维护服务由同一个 systemd 服务管理，运行时不需要 Docker。构建机仍使用 Docker 从固定 digest 的上游镜像中提取已校验的核心和模板；安装包携带原始核心二进制、专用 musl 加载器/依赖库及 Python 离线 wheel，不覆盖 Debian 的 libc，也不使用 chroot 或 Alpine 根文件系统。
 
-这是开发候选，现场验收范围见 `verification.md`。1.41 上的测试实例独立使用 DNS `15453`、Web `18123`，不会接管已有 DNS。**88 的替换和 Docker 停用必须等用户确认测试通过，并另行明确通知后才执行。**
-
 ## 发布包安装入口
 
 仓库为 `Lovest20018/LovestDNS`，由原 `PaoPaoDNS` fork 更名。独立 `PaoPaoDNS-WebUI` 仓库不参与本次发布。
@@ -64,8 +62,6 @@ sudo python3 install.py install --config /root/lovestdns-install.env
 
 默认 DNS 为 `0.0.0.0:53/UDP+TCP`，Web 为 `127.0.0.1:8123`。需要局域网访问时，将 `WEB_BIND_ADDRESS` 改为主机内网 IP。新装若端口被占用，会退出并保留现有服务；不会自动停止占用端口的程序。首次安装会通过 apt 补齐 Python venv、inotify、iproute2、procps、xz、CA、bash 等依赖，因此系统依赖安装仍需 Debian 软件源。Python 应用依赖从包内 wheel 离线安装。
 
-Web 使用管理员密码登录，不需要填写 API Token。首次打开登录页时生成一次随机初始密码，仅保存在目标机 `/var/lib/lovestdns/state/admin-password.initial`（root 可读），登录后必须改成自己的密码，最低 8 个字符（最多 256 个字符）。独立实例使用对应状态目录，例如 1.41 测试实例为 `/var/lib/lovestdns-validation/state/admin-password.initial`。初始文件在改密后删除，服务端只保留密码哈希；不要将初始文件下载或提交到仓库。也可在主机直接执行 `sudo lovestdnsctl password` 交互设置或重置密码，原有浏览器会话随之撤销，不需要重启 DNS。
-
 勾选“记住登录状态”最多保留 7 天。网页凭据与运维平台 Token 独立：`WEB_UI_TOKEN` 未指定时仍生成随机值，供需要配置/维护权限的 API 客户端使用；另设不同的 `SUITE_READ_TOKEN` 供观测接入。安装输出只提示配置路径，不输出凭据。
 
 命名测试实例使用：
@@ -93,8 +89,6 @@ sudo lovestdns-validationctl health
 systemd 仅在服务自己的挂载命名空间内将持久化数据映射到 `/data`，并隔离 `/tmp`。不会修改宿主机 `/etc/resolv.conf`；内部 DNSCrypt 与 Unbound 监听回环地址，DNS 对外地址由实例配置决定。Web 不挂 Docker socket。
 
 首次导入使用 `install --import-data /path/to/offline-data-copy`，目标数据目录必须为空。必须是完整、离线或已经一致化的独立副本，不能直接共享旧服务仍在写入的目录。保留原实例的环境变量、完整 `/data`、镜像及回退材料；在新实例中逐项还原业务参数。`redis_dns_v2.rdb` 及 DB 0/1 沿用原上游核心格式，Unbound/MosDNS 的纯内存缓存不会随文件迁移。
-
-1.41 的当前验收使用人工测试配置与 Redis 标记数据，**尚未完成 88 的约 702 MiB 真实 RDB 副本加载验收**；不会为此在 88 上写备份、触发保存、复制目录或停止服务。
 
 Web 编辑的 `custom_env.ini` 用于 DNS 参数与规则变量。原生版禁止其覆盖 PATH、Python/动态加载器变量及服务运行目录、绑定端口、Web 认证等保留变量；这些参数应在 `/etc/lovestdns/lovestdns.env` 中修改，再执行控制命令重启。普通自定义规则变量仍可使用。
 

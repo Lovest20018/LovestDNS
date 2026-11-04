@@ -256,7 +256,7 @@ def build_bundle():
                 "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
                 "runtime_acceptance_evidence": {
                     "tested_runtime_commit": "49b47b5850d91550e27692e8ede337203d491ece",
-                    "report": "verification.md",
+                    "report": "docs/verification.md",
                     "scope": "Recorded isolated container run only; does not certify future runtime changes or a stable release"},
                 "source": source_summary(),
                 "artifacts": {name: {"sha256": sha256(data), "hash_mode": "UTF-8 canonical JSON with LF"}

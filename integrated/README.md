@@ -80,7 +80,7 @@ python scripts/test-integrated-container.py --image lovestdns:test
 
 测试只创建随机命名的临时容器/卷，不映射宿主机 DNS 端口；覆盖两种 CNAUTO 模式、v1 管理/只读权限、实例身份保留、采样新鲜度、UDP/TCP 链路对照、配置历史与恢复、幂等配置应用、停止并恢复 MosDNS、Redis RDB 重建容器后保留，以及 Web 进程重启。RDB 标记保留不等于证明所有历史 DNS 缓存跨版本可命中。
 
-`.github/workflows/integrated-check.yml` 提供相同构建和运行验收，只验证，不推送镜像。Windows 开发电脑没有 Docker；2026-10-26 已通过 Xterminal 在 validation-host 完成 Linux amd64 隔离构建/运行验收并保留开发预览。地址、测试路由修正、失败回退证据及尚未验收范围见 [validation-host 验收记录](../verification.md)，仍不表示稳定发布就绪。
+`.github/workflows/integrated-check.yml` 提供相同构建和运行验收，只验证，不推送镜像。Windows 开发电脑没有 Docker；2026-10-26 已通过 Xterminal 在 隔离测试环境 完成 Linux amd64 隔离构建/运行验收并保留开发预览。地址、测试路由修正、失败回退证据及尚未验收范围见 [隔离测试环境 验收记录](../docs/verification.md)，仍不表示稳定发布就绪。
 
 2026-10-25 本地收尾验证：151 项 Python 测试（分进程运行集成版与独立版套件）、14 项前端测试、TypeScript/构建/ESLint 和独立版冻结校验通过。浏览器实测配置历史、差异、预览文件恢复及链路错误展示。运行验收脚本已补充上述容器场景，但尚未运行；未验证真实核心下的应用/恢复或发布就绪性。
 

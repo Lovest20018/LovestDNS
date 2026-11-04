@@ -68,9 +68,9 @@ docker compose -f docker-compose.integrated.yaml up -d
 - [集成 API 与 DNS 管理 接入](docs/integration-api.md)
 - [API v1 契约与确定性样例](docs/contracts/v1/README.md)
 - [DNS 诊断与宿主机快照](docs/dns-diagnostics.md)
-- [2026-10-26 Linux amd64 隔离容器验收](verification.md)
+- [2026-10-26 Linux amd64 隔离容器验收](docs/verification.md)
 
-已记录的容器验收对应文档中的历史提交，原生测试范围另见 [原生验收记录](verification.md)。尚未完成 PVE 嵌套 Docker、真实生产数据迁移、Debian 12 现场、arm64 和长期负载验收。
+已记录的容器验收对应文档中的历史提交，原生测试范围另见 [原生验收记录](docs/verification.md)。尚未完成 PVE 嵌套 Docker、真实生产数据迁移、Debian 12 现场、arm64 和长期负载验收。
 
 ## 旧独立 WebUI
 

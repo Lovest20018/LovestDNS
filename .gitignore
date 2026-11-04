@@ -35,3 +35,8 @@ coverage/
 # The reviewed standalone source checkpoint is the sole committed archive.
 /releases/*
 !/releases/standalone-20261024-source.zip
+
+# Private deployment evidence stays local.
+.build/
+docs/validation/
+docs/ui-operation-optimization-*.md

@@ -73,7 +73,7 @@ python scripts/export-api-contract.py --write --output .build/DNS 管理-contrac
 - 独立版后端：46 passed；两版前端：14 passed。
 - 集成版 TypeScript/Vite 构建、ESLint：通过；独立版源码冻结：39 文件和原 ZIP SHA-256 通过。
 - 两次导出一致性、对本机凭据/路径隔离、契约漂移非零退出、实例新进程/并发/克隆身份及新鲜度边界已测试。
-- Windows 开发机仍无 Docker CLI；后续通过 Xterminal 在 validation-host 完成了容器构建及隔离运行验收，包括核心监督、CNAUTO 双模式、配置应用/失败回退、RDB 保留、Web 重启和卷身份。明细及剩余范围见 [验收报告](../../verification.md)。未重跑浏览器 UI，DNS 管理 端联调由 DNS 管理 聊天负责。
+- Windows 开发机仍无 Docker CLI；后续通过 Xterminal 在 隔离测试环境 完成了容器构建及隔离运行验收，包括核心监督、CNAUTO 双模式、配置应用/失败回退、RDB 保留、Web 重启和卷身份。明细及剩余范围见 [验收报告](../../verification.md)。未重跑浏览器 UI，DNS 管理 端联调由 DNS 管理 聊天负责。
 
 独立检查点 `standalone-20261024` 的 39 文件、冻结清单和原始 ZIP 保留不变。忽略规则排除凭据、运行数据库、缓存、截图和构建目录；唯一纳入版本控制的 ZIP 是已审阅的独立源码检查点。
 

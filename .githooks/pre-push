@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in refs/heads/*|refs/tags/*) ;; *) echo "Refusing to publish private or backup refs." >&2; exit 1 ;; esac
+  case "$local_sha" in 0000000000000000000000000000000000000000) continue ;; esac
+  python scripts/check-public-privacy.py --history --ref "$local_sha"
+done
