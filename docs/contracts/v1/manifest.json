@@ -34,7 +34,7 @@
       "docker-compose.integrated.yaml": "b40f095e7fe8119b627abd161e1b4d62a8649a27e854978c67ec7813d8e845fb",
       "docker-compose.sidecar.yaml": "2e9bd7a32e43599b9aedbc8bae3ef9e7cd2b93379d642446016940903fc45609",
       "docs/lovestdns-native-deployment.md": "8b7c63f3da60b88a8f8c74eaa3aedefbc7f9051a7cfef444ec11d2b28e7a6417",
-      "install.py": "b1cfab074e3c9a3ceb33e1e84ab8cc77e75d75467839edbf30cf4739bdb64c30",
+      "install.py": "5234c26723ab873671689ea3100a594ed59a3353ec0b13e4907b32973b23af6d",
       "integrated/README.md": "1730bfa3552dc4c5403c5aeccb9c40c080880321ec50381416ac2532c7f8a65a",
       "integrated/backend/api_schema.py": "e612ebc132923fa664c4c8c05d121eb7e3e0dac159aae284c2cd09ff861bbc4c",
       "integrated/backend/api_v1.py": "ffa3da626cb14086927432d1414bb68019cf9f714b122919f8bda52864aca833",
@@ -138,7 +138,7 @@
       "scripts/tests/test_native_package.py": "a1cc07c5a71cb3390da117492af178614161559ffcc06ad1198823a88c7f10da",
       "scripts/tests/test_native_restart.py": "5c5e054ca560305a8d7cb6551ed397001c1daf4292aac42b500e7e2051169d76",
       "scripts/tests/test_prepare_frontend.py": "13079ed056eb4b31d689a05dee31dc15ec766dd8e3a249d4415455e953581754",
-      "scripts/tests/test_release_installer.py": "a1b85a987c357144978338286ca0ab5ecd6838c1b0b2b3daeb996b0b0eee69d2",
+      "scripts/tests/test_release_installer.py": "3fdc1bb6075a050fbc2048d907c210410586f35bde02d5fc2f7448f28e9ea427",
       "scripts/tests/test_standalone_freeze.py": "2b2a3685cd33c8d399cf206845a294cd02e71fcbd9edee720c36c9c94f2d9c4e",
       "web/.gitignore": "fd8372e0e4ef4857a393ad7209d2378addcb2a5eabe65d5dfd039cfb2c6a27b9",
       "web/Dockerfile": "bddd3e36014f94622631a1569b7ecf43a0e840b94bede09d8d597806e1ed313d",
@@ -199,7 +199,7 @@
       "packaging/legacy/web-docker-ghcr.yml.disabled",
       ".github/workflows/native-package.yml"
     ],
-    "sha256": "dbda4702e9fdc77b42a0dd556732c5841aed9fdac4d4080876b262749f9d0706"
+    "sha256": "a44ce4e486903f25d439c42dc7e07f394b36b0290a5e4eaa0de7837b98810027"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

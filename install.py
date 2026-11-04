@@ -26,7 +26,7 @@ def fetch(url, target, limit):
     if parsed.scheme != 'https' or parsed.hostname not in {'api.github.com', 'github.com'}:
         raise ValueError('Release downloads must use GitHub HTTPS')
     request = urllib.request.Request(url, headers={'User-Agent': 'LovestDNS-installer',
-                                                  'Accept': 'application/vnd.github+json'})
+                                                  'Accept': 'application/octet-stream'})
     with urllib.request.urlopen(request, timeout=60) as response, Path(target).open('wb') as output:
         total = 0
         while chunk := response.read(1024 * 1024):
@@ -40,18 +40,11 @@ def download(version, directory):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,119}', version):
         raise ValueError('Invalid release version')
     directory = Path(directory)
-    metadata = directory / 'release.json'
     tag = 'v' + version
-    fetch(f'https://api.github.com/repos/{REPOSITORY}/releases/tags/{tag}', metadata, 2 * 1024 * 1024)
-    release = json.loads(metadata.read_text())
-    if release.get('tag_name') != tag or release.get('draft'):
-        raise ValueError('Unexpected release identity')
-    assets = {item['name']: item['browser_download_url'] for item in release.get('assets', [])}
     base = f'https://github.com/{REPOSITORY}/releases/download/{tag}/'
     for name, limit in ((ASSET, MAX_ARCHIVE), (ASSET + '.sha256', 4096)):
-        if assets.get(name) != base + name:
-            raise ValueError('Missing or unexpected release asset: ' + name)
-        fetch(assets[name], directory / name, limit)
+        # Exact public asset URLs avoid anonymous GitHub API rate limits.
+        fetch(base + name, directory / name, limit)
     checksum = (directory / (ASSET + '.sha256')).read_text().strip()
     match = re.fullmatch(r'([a-f0-9]{64})  ' + re.escape(ASSET), checksum)
     if not match:
@@ -134,7 +127,7 @@ def main():
             if target.exists() or target.with_name(ASSET + '.sha256').exists():
                 raise ValueError('Download target already exists')
             shutil.copyfile(package, target)
-            target.with_name(ASSET + '.sha256').write_text(digest + '  ' + ASSET + '\n')
+            target.with_name(ASSET + '.sha256').write_bytes((digest + '  ' + ASSET + '\n').encode('ascii'))
             print('Verified package: ' + str(target.resolve()))
             return
         command = [sys.executable, str(root / 'install.py'), '--instance', args.instance, 'install']

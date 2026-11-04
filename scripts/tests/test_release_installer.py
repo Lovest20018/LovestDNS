@@ -65,10 +65,22 @@ def test_untrusted_archive_entries_are_rejected_before_extracting(tmp_path, kind
     assert not (tmp_path / 'output').exists()
 
 
-def test_release_metadata_cannot_redirect_to_another_repository(monkeypatch, tmp_path):
+def test_download_urls_are_fixed_to_the_selected_repository_and_exact_tag(monkeypatch, tmp_path):
+    calls = []
+    content = b'native-package-bytes'
+    digest = hashlib.sha256(content).hexdigest()
     def fake_fetch(url, target, limit):
-        Path(target).write_text(json.dumps({'tag_name': 'vtest.1', 'assets': [
-            {'name': installer.ASSET, 'browser_download_url': 'https://github.com/other/repo/releases/download/vtest.1/' + installer.ASSET}]}))
+        calls.append(url)
+        Path(target).write_bytes((digest + '  ' + installer.ASSET + '\n').encode() if url.endswith('.sha256') else content)
     monkeypatch.setattr(installer, 'fetch', fake_fetch)
-    with pytest.raises(ValueError, match='unexpected release asset'):
-        installer.download('test.1', tmp_path)
+    package, actual = installer.download('test.1', tmp_path)
+    base = 'https://github.com/Lovest20018/LovestDNS/releases/download/vtest.1/'
+    assert calls == [base + installer.ASSET, base + installer.ASSET + '.sha256']
+    assert actual == digest and package.read_bytes() == content
+
+
+@pytest.mark.parametrize('version', ['../other', 'other/tag', 'v1?redirect=other', '', 'a' * 121])
+def test_invalid_release_version_never_starts_a_download(monkeypatch, tmp_path, version):
+    monkeypatch.setattr(installer, 'fetch', lambda *args: pytest.fail('Invalid version reached the network'))
+    with pytest.raises(ValueError, match='Invalid release version'):
+        installer.download(version, tmp_path)
