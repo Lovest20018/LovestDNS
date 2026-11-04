@@ -7,7 +7,7 @@
     },
     "samples.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "9d544db0ca60298f77a7ae29fc57736258baea1abb3daa832ac1fcb3724c1e53"
+      "sha256": "eaa8325ee3634be8b175e170f8f0fb4bd95ec5efdae399c7a2ee4720a25db5ee"
     }
   },
   "candidate_version": "0.1.0-dev.lovestdns-native.20261104.11",
@@ -106,7 +106,7 @@
       "integrated/tests/test_dns_wire.py": "41504d34fac43f0a5da4dc03988b14c22d9b004cdad78912e4e6d111c8462a55",
       "integrated/tests/test_integrated_api.py": "5d6a948dd48d4f070a0d5e5bf45267dd39185fb399c34f85daa5fcce45cd6a9f",
       "integrated/tests/test_maintenance.py": "7c813a9c3c5124fcf9c54c1f9f65b2ac140dae857638ae616e5c8243d59cbdb2",
-      "integrated/tests/test_provider_baseline.py": "c29042d26b1b048f0ab9c448bd602fad1b05d4f292fae31ac842268893f3206a",
+      "integrated/tests/test_provider_baseline.py": "d5e147e50a57e573d73ab975ff66fadcb689a54213a0c4b037c9929f9a54a9e4",
       "integrated/tests/test_runtime.py": "6c7de36bc6b4972a932d3f2bb10672f3730664bc15518089426b2fa640533210",
       "integrated/tests/test_runtime_client.py": "09aa3146ec659c92c2468a0934c03f9bdeb009159ecb492b9cf6767fc8d9cb79",
       "packaging/integrated/Dockerfile": "97f3ef626bafc88432bdf5c94923c700d2245349dfc729bd0bc49b4c242ce3c7",
@@ -129,7 +129,7 @@
       "packaging/upstream.lock.json": "ed8474dd382f0641211ea817cdf9979daf94cc841d5dac4d43e1942536dc8149",
       "scripts/build-integrated-ui.py": "34e7d02f5d9447a28eecf8193bdae6f2d0757c24eae512f8df183b9c2890d217",
       "scripts/build-native-package.py": "36e57dc0bc610ab7fd02b594d5ee64921a4a75680c3c234fc44d7d43239d9d2e",
-      "scripts/export-api-contract.py": "b13b7a6d393b8d809a61d7714082983e4cda7d355cf8053409e85784e8353d86",
+      "scripts/export-api-contract.py": "77c6ca563f57e88b35e2a7e851e8b6d1ccc4d99b5207f7de94b0c258fceb9a41",
       "scripts/freeze-standalone.py": "82ce5f8659f11f3cbcaa95b6aa6aaf1799f20ab4f2aba2ec942b8e4c920ac1ec",
       "scripts/paopaodns-health-snapshot.py": "6772c67f5d4e14de6e4a35527cc8e979ac62af590ee5f9a54d105228edfa95c2",
       "scripts/test-integrated-container.py": "385444773d5b8b772eb5460e275ecc8a76d8b63befc3addd8c9aba7c520a968e",
@@ -199,7 +199,7 @@
       "packaging/legacy/web-docker-ghcr.yml.disabled",
       ".github/workflows/native-package.yml"
     ],
-    "sha256": "8525d932f066a367b545cbeac7b7d8cf9cf03954eacb05944988b6f20c8bdd95"
+    "sha256": "dbda4702e9fdc77b42a0dd556732c5841aed9fdac4d4080876b262749f9d0706"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

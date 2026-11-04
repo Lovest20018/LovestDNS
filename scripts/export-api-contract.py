@@ -1,5 +1,6 @@
 """Export/check the v1 provider baseline without network or a running service."""
 import argparse
+import builtins
 from contextlib import ExitStack
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -70,6 +71,18 @@ def dns_packet(query, server, port, tcp=False):
 def collect_samples(server, stack, temp):
     from api_v1 import LOGGER
     from runtime.observer import rate
+
+    # Production runs on Linux. Keep synthetic configuration bytes identical
+    # when replaying the real write handler on Windows; revision/ETag hash raw
+    # bytes, so the host's automatic text newline translation is observable.
+    real_open = builtins.open
+
+    def fixture_open(file, mode='r', *args, **kwargs):
+        if mode == 'w' and isinstance(file, (str, os.PathLike)) and Path(file).parent == temp / 'data':
+            kwargs['newline'] = '\n'
+        return real_open(file, mode, *args, **kwargs)
+
+    stack.enter_context(patch('builtins.open', fixture_open))
 
     # Patch only environment/I/O boundaries. Every saved response runs through
     # Flask routing, authentication, envelope creation and the actual handler.
@@ -189,6 +202,7 @@ def collect_samples(server, stack, temp):
                                         "request_ids": "explicit contract-<case id>",
                                         "elapsed_ms": "fixed monotonic clock; zero is synthetic",
                                         "network": "no network; documentation IPs and public example domains",
+                                        "configuration_bytes": "temporary UTF-8 files use LF on every host, matching Linux production writes",
                                         "credentials": "ephemeral test credentials never serialized"}, "cases": cases}
 
 

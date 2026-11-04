@@ -929,7 +929,7 @@
             "message": "File saved successfully",
             "requires_reload": false,
             "requires_restart": true,
-            "revision": "bbd7eec3c771f2f55897e4326fd540a709f63b42511a2fc7c8a9d7370978b328",
+            "revision": "650b2ec2c9a61c81280356b482a6d067545ee0d6a47286774a734361fd09aeac",
             "verified": false,
             "watched_now": false
           },
@@ -940,7 +940,7 @@
         },
         "headers": {
           "Cache-Control": "no-store",
-          "ETag": "\"bbd7eec3c771f2f55897e4326fd540a709f63b42511a2fc7c8a9d7370978b328\"",
+          "ETag": "\"650b2ec2c9a61c81280356b482a6d067545ee0d6a47286774a734361fd09aeac\"",
           "X-Request-ID": "contract-config_create"
         },
         "status": 200
@@ -971,7 +971,7 @@
             "filename": "custom_env.ini",
             "requires_reload": false,
             "requires_restart": true,
-            "revision": "bbd7eec3c771f2f55897e4326fd540a709f63b42511a2fc7c8a9d7370978b328",
+            "revision": "650b2ec2c9a61c81280356b482a6d067545ee0d6a47286774a734361fd09aeac",
             "verified": false,
             "watched_now": false
           },
@@ -982,7 +982,7 @@
         },
         "headers": {
           "Cache-Control": "no-store",
-          "ETag": "\"bbd7eec3c771f2f55897e4326fd540a709f63b42511a2fc7c8a9d7370978b328\"",
+          "ETag": "\"650b2ec2c9a61c81280356b482a6d067545ee0d6a47286774a734361fd09aeac\"",
           "X-Request-ID": "contract-config_read"
         },
         "status": 200
@@ -1474,6 +1474,7 @@
   ],
   "format_version": 1,
   "normalization": {
+    "configuration_bytes": "temporary UTF-8 files use LF on every host, matching Linux production writes",
     "credentials": "ephemeral test credentials never serialized",
     "elapsed_ms": "fixed monotonic clock; zero is synthetic",
     "instance_id": "00000000-0000-4000-8000-000000000001",

@@ -1,5 +1,6 @@
 """Consumer-facing frozen fixtures must stay tied to actual provider behavior."""
 from copy import deepcopy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -49,6 +50,15 @@ def test_check_command_detects_drift_without_rewriting_files(tmp_path):
                             capture_output=True, text=True, timeout=30)
     assert result.returncode != 0 and "samples.json" in result.stderr
     assert path.read_bytes() == before
+
+
+def test_sample_config_revisions_hash_the_documented_utf8_bytes_on_every_host():
+    samples = json.loads(export['build_bundle']()['samples.json'])
+    cases = {case['id']: case for case in samples['cases']}
+    expected = hashlib.sha256(cases['config_create']['request']['body']['content'].encode('utf-8')).hexdigest()
+    for name in ('config_create', 'config_read'):
+        assert cases[name]['response']['body']['data']['revision'] == expected
+        assert cases[name]['response']['headers']['ETag'] == '"' + expected + '"'
 
 
 def test_shared_samples_preserve_hnm_semantics():
