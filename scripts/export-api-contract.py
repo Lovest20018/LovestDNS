@@ -19,11 +19,14 @@ OUTPUT = ROOT / "docs/contracts/v1"
 NOW = 1792972800.0  # Fixed Unix UTC seconds: 2026-10-26T00:00:00Z.
 IDENTITY = "00000000-0000-4000-8000-000000000001"
 EXCLUDED = {"node_modules", "dist", "dist-ssr", "__pycache__", ".pytest_cache", ".vite"}
-SOURCE_DIRS = ("integrated", "packaging/integrated", "scripts", "web")
-SOURCE_ROOT_FILES = (".gitignore", ".gitattributes", ".dockerignore", "docker-compose.integrated.yaml",
+SOURCE_DIRS = ("integrated", "packaging/integrated", "packaging/native", "scripts", "web")
+SOURCE_ROOT_FILES = (".gitignore", ".gitattributes", ".dockerignore", "install.py", ".env.integrated.example", ".env.native.example", "docker-compose.integrated.yaml",
                      ".github/workflows/integrated-check.yml", "packaging/upstream.lock.json",
+                     "packaging/native/requirements.lock.txt",
+                     "docs/lovestdns-native-deployment.md",
                      "packaging/standalone.freeze.json", "docker-compose-web.yaml",
-                     "docker-compose.sidecar.yaml", ".github/workflows/web-docker-ghcr.yml")
+                     "docker-compose.sidecar.yaml", "packaging/legacy/web-docker-ghcr.yml.disabled",
+                     ".github/workflows/native-package.yml")
 TEXT_SUFFIXES = {".py", ".ts", ".tsx", ".css", ".json", ".html", ".md", ".yaml", ".yml", ".svg"}
 
 
@@ -72,6 +75,7 @@ def collect_samples(server, stack, temp):
     # Flask routing, authentication, envelope creation and the actual handler.
     for target, name, value in (
         (server, "STATE_DIR", temp / "state"), (server, "RUN_DIR", temp / "run"),
+        (server, "history", server.History(temp / "state")),
         (server.base, "DATA_DIR", str(temp / "data")),
         (server.base, "WEB_UI_TOKEN", "contract-test-admin"),
         (server.base, "WEB_UI_ALLOW_NO_AUTH", False), (server.base, "datetime", FixedDatetime),
@@ -108,6 +112,8 @@ def collect_samples(server, stack, temp):
             headers = {"X-Request-ID": request_id}
             if role == "observer":
                 headers["Authorization"] = "Bearer contract-test-observer"
+            elif role == "admin":
+                headers["Authorization"] = "Bearer contract-test-admin"
             response = client.open("/api/v1" + path, method=method, headers=headers,
                                    **({"json": body} if body is not None else {}))
             if response.status_code != status:
@@ -122,6 +128,8 @@ def collect_samples(server, stack, temp):
                           "response": {"status": response.status_code,
                                        "headers": {key: response.headers[key] for key in ("X-Request-ID", "Cache-Control")},
                                        "body": response.get_json()}})
+            if response.headers.get('ETag'):
+                cases[-1]['response']['headers']['ETag'] = response.headers['ETag']
 
         capture("observer_instance", "/instance", "instance", scenario="new temporary state volume; fixed UUID generator")
         capture("observer_capabilities", "/capabilities", "capabilities", scenario="collector and manager available; public upstream lock metadata")
@@ -149,6 +157,21 @@ def collect_samples(server, stack, temp):
             capture(operation + "_unavailable", "/" + operation, operation, status=503, scenario="collector I/O failure substituted at snapshot boundary")
         capture("unauthorized", "/instance", "instance", role="anonymous", status=401, scenario="no Authorization header")
         capture("forbidden_config", "/file/custom_env.ini", "file_read", status=403, scenario="observer credential; real config-read authorization guard")
+        (temp / 'data').mkdir(parents=True, exist_ok=True)
+        capture('config_create', '/file/custom_env.ini', 'file_write', method='PUT', role='admin',
+                body={'content': 'CNAUTO="yes"\n', 'expected_revision': 'missing'},
+                scenario='new temporary configuration file; real history, write lock and missing-file condition')
+        capture('config_read', '/file/custom_env.ini', 'file_read', role='admin',
+                scenario='temporary saved file; raw-byte SHA-256 revision and strong ETag')
+        capture('config_conflict', '/file/custom_env.ini', 'file_write', method='PUT', role='admin', status=412,
+                body={'content': 'CNAUTO="no"\n', 'expected_revision': 'missing'},
+                scenario='stale missing-file condition; real locked write rejects overwrite')
+        with patch.object(server.runtime_client, 'manager_request', return_value={
+            'files': [{'filename': 'custom_env.ini', 'revision': sha256(b'CNAUTO="yes"\n'),
+                       'state': 'unknown', 'recorded_revision': None, 'recorded_at': None, 'action': None, 'verified': False}],
+            'sampled_at': NOW, 'scope': 'synthetic manager state; no successful action receipt', 'verified': False}):
+            capture('config_state_unknown', '/config/state', 'config_state', role='admin',
+                    scenario='synthetic manager I/O; real administrator-only state handler')
         for case_id, domain in (("dns_success", "example.com"), ("dns_nxdomain", "missing.example")):
             capture(case_id, "/dns-test", "dns_query", method="POST",
                     body={"domain": domain, "record_type": "A", "server": "127.0.0.1", "port": 53},

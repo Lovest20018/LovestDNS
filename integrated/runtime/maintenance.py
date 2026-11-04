@@ -87,9 +87,10 @@ class CoreActions:
         query_id = int.from_bytes(os.urandom(2), "big")
         question = b"\x11suite-ready-check\x07invalid\x00" + struct.pack("!HH", 1, 1)
         query = struct.pack("!HHHHHH", query_id, 0x0100, 1, 0, 0, 0) + question
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+        address = os.environ.get("DNS_TEST_SERVER", "127.0.0.1")
+        with socket.socket(socket.AF_INET6 if ':' in address else socket.AF_INET, socket.SOCK_DGRAM) as sock:
             sock.settimeout(4)
-            sock.connect(("127.0.0.1", 53))
+            sock.connect((address, int(os.environ.get("SUITE_DNS_PORT", "53"))))
             sock.send(query)
             response = sock.recv(65535)
         if len(response) < 12 or response[:2] != query[:2] or not response[2] & 0x80:
@@ -105,6 +106,8 @@ class CoreActions:
             planned = prepare(self.data, self.temporary / "mosdns_base.yaml", env)
             if planned["sha256"] != expected:
                 raise ValueError("配置或引用文件已改变，请重新预览后再应用")
+            from runtime.config_state import inputs, record
+            recorded_inputs = inputs(self.data)
             states = self.states()
             if any(states.get(name, {}).get("statename") != "RUNNING" for name in ("mosdns", "watcher")):
                 raise ValueError("MosDNS 或监听器未正常运行，请先检查核心状态")
@@ -139,6 +142,7 @@ class CoreActions:
                 self.control("start", "watcher")
                 watcher_stopped = False
                 self.wait_running("watcher")
+                record(self, "apply_custom_mod", recorded_inputs)
                 result = {"input_sha256": expected, "runtime_sha256": hashlib.sha256(fresh["candidate"].encode()).hexdigest(),
                           "state": "applied_unverified", "verified": False, "probe": probe,
                           "message": "配置已加载，服务已响应；请查询目标域名验证各条规则"}
@@ -185,47 +189,55 @@ class CoreActions:
 
     def save_snapshot(self):
         with maintenance_lock(self.state):
-            self.environment()
-            before_process = self.states().get("redis", {})
-            if before_process.get("statename") != "RUNNING":
-                raise ValueError("Redis 未运行")
-            before = redis_stats()
-            if before.get("loading") != 0 or before.get("rdb_bgsave_in_progress") != 0:
-                raise ValueError("Redis 正在加载或保存，请稍后重试")
-            last_save = before.get("rdb_last_save_time")
-            if not isinstance(last_save, int) or last_save > time.time() + 2:
-                raise ValueError("Redis 快照时间不可比较")
-            # Ensure LASTSAVE can prove a new snapshot even when two requests
-            # occur in one second; total task time remains bounded.
-            while time.time() <= last_save + 1:
-                time.sleep(0.1)
-            started = time.time()
-            self.bgsave()
-            deadline = time.monotonic() + 60
-            while time.monotonic() < deadline:
-                info = redis_stats()
-                current = self.states().get("redis", {})
-                if current != before_process:
-                    raise ValueError("Redis 在快照期间重启，无法确认保存结果")
-                if info.get("rdb_bgsave_in_progress") == 0:
-                    if info.get("rdb_last_bgsave_status") != "ok":
-                        raise ValueError("Redis 后台保存失败")
-                    saved = info.get("rdb_last_save_time", 0)
-                    if saved > last_save and saved >= int(started):
-                        path = self.data / "redis_dns_v2.rdb"
-                        if path.is_symlink() or not path.is_file() or path.stat().st_size < 9:
-                            raise ValueError("快照报告成功，但默认 RDB 文件不可验证；请检查自定义 Redis 路径")
-                        with path.open("rb") as stream:
-                            header = stream.read(9)
-                        if not header.startswith(b"REDIS") or not header[5:].isdigit():
-                            raise ValueError("RDB 文件头无效")
-                        return {"state": "saved", "saved_at": saved, "bytes": path.stat().st_size,
-                                "changes_after_save": info.get("rdb_changes_since_last_save"),
-                                "message": "Redis 快照已保存；仅覆盖 Redis 持久化数据，不包含其他内存缓存或查询历史"}
-                time.sleep(0.5)
-            raise ValueError("等待 Redis 后台保存超时；保存可能继续进行，请检查持久化状态")
+            return self.save_snapshot_unlocked()
+
+    def save_snapshot_unlocked(self):
+        self.environment()
+        before_process = self.states().get("redis", {})
+        if before_process.get("statename") != "RUNNING":
+            raise ValueError("Redis 未运行")
+        before = redis_stats()
+        if before.get("loading") != 0 or before.get("rdb_bgsave_in_progress") != 0:
+            raise ValueError("Redis 正在加载或保存，请稍后重试")
+        last_save = before.get("rdb_last_save_time")
+        if not isinstance(last_save, int) or last_save > time.time() + 2:
+            raise ValueError("Redis 快照时间不可比较")
+        # Ensure LASTSAVE can prove a new snapshot even when two requests
+        # occur in one second; total task time remains bounded.
+        while time.time() <= last_save + 1:
+            time.sleep(0.1)
+        started = time.time()
+        self.bgsave()
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            info = redis_stats()
+            current = self.states().get("redis", {})
+            if current != before_process:
+                raise ValueError("Redis 在快照期间重启，无法确认保存结果")
+            if info.get("rdb_bgsave_in_progress") == 0:
+                if info.get("rdb_last_bgsave_status") != "ok":
+                    raise ValueError("Redis 后台保存失败")
+                saved = info.get("rdb_last_save_time", 0)
+                if saved > last_save and saved >= int(started):
+                    path = self.data / "redis_dns_v2.rdb"
+                    if path.is_symlink() or not path.is_file() or path.stat().st_size < 9:
+                        raise ValueError("快照报告成功，但默认 RDB 文件不可验证；请检查自定义 Redis 路径")
+                    with path.open("rb") as stream:
+                        header = stream.read(9)
+                    if not header.startswith(b"REDIS") or not header[5:].isdigit():
+                        raise ValueError("RDB 文件头无效")
+                    return {"state": "saved", "saved_at": saved, "bytes": path.stat().st_size,
+                            "changes_after_save": info.get("rdb_changes_since_last_save"),
+                            "message": "Redis 快照已保存；仅覆盖 Redis 持久化数据，不包含其他内存缓存或查询历史"}
+            time.sleep(0.5)
+        raise ValueError("等待 Redis 后台保存超时；保存可能继续进行，请检查持久化状态")
 
     def execute(self, task):
+        if task["action"] == "restart_dns_core":
+            if os.environ.get("LOVESTDNS_SYSTEMD") != "1":
+                raise ValueError("网页重启仅适用于原生服务")
+            from native.restart import restart
+            return restart(self)
         if task["action"] == "apply_custom_mod":
             return self.apply(task["expected_sha256"])
         if task["action"] == "save_redis_snapshot":

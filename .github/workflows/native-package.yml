@@ -1,0 +1,36 @@
+name: Build Debian native package
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m venv .build/native-tools
+      - run: .build/native-tools/bin/python -m pip install -r web/backend/requirements.txt -r integrated/tests/requirements.txt
+      - run: .build/native-tools/bin/python -m pytest integrated/tests scripts/tests -q
+      - run: .build/native-tools/bin/python scripts/export-api-contract.py --check
+      - run: python scripts/build-integrated-ui.py
+      - run: .build/native-tools/bin/python scripts/build-native-package.py --frontend-dist .build/integrated-web/dist --output .build/lovestdns-native-debian-amd64.tar.gz
+      - name: Verify distributable through the production installer
+        shell: bash
+        run: |
+          digest=$(cut -d ' ' -f 1 .build/lovestdns-native-debian-amd64.tar.gz.sha256)
+          python install.py --package .build/lovestdns-native-debian-amd64.tar.gz --sha256 "$digest" --download-only .build/verified-native
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lovestdns-native-debian-amd64
+          path: .build/verified-native/*
+          if-no-files-found: error

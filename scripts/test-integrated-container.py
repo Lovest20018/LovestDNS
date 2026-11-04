@@ -18,7 +18,7 @@ def docker(*args, check=True):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image", default="paopaodns-suite:test")
+    parser.add_argument("--image", default="lovestdns:test")
     args = parser.parse_args()
     suffix = uuid.uuid4().hex[:10]
     name = f"suite-test-{suffix}"

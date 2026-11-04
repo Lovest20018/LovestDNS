@@ -51,3 +51,13 @@ def test_archive_bytes_remain_frozen(checkout):
     archive.write_bytes(archive.read_bytes() + b"changed")
     result = verify(checkout)
     assert result.returncode != 0 and "archive checksum changed" in result.stderr
+
+
+def test_archived_workflow_remains_frozen_without_running_as_ci(checkout):
+    archived = checkout / 'packaging/legacy/web-docker-ghcr.yml.disabled'
+    archived.parent.mkdir()
+    (checkout / '.github/workflows/web-docker-ghcr.yml').rename(archived)
+    assert verify(checkout).returncode == 0
+    archived.write_bytes(archived.read_bytes() + b'changed\n')
+    result = verify(checkout)
+    assert result.returncode != 0 and '.github/workflows/web-docker-ghcr.yml' in result.stderr

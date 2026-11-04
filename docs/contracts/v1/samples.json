@@ -1,6 +1,6 @@
 {
   "api_version": "1",
-  "candidate_version": "0.1.0-dev.dns.20261026.1",
+  "candidate_version": "0.1.0-dev.lovestdns-native.20261104.11",
   "cases": [
     {
       "id": "observer_instance",
@@ -25,7 +25,7 @@
             "id": "00000000-0000-4000-8000-000000000001",
             "kind": "paopaodns",
             "name": "Contract DNS",
-            "version": "0.1.0-dev.dns.20261026.1"
+            "version": "0.1.0-dev.lovestdns-native.20261104.11"
           },
           "meta": {
             "api_version": "1",
@@ -64,6 +64,7 @@
               "image": "public.ecr.aws/sliamb/paopaodns@sha256:df0f5689934b3ebb757b7bce0590cd27b97ba23173908eb7205587859012e5c4",
               "source_commit": "a8da2e62a73026c9594b7edc36447538e51000ee"
             },
+            "deployment": "container",
             "dns_defaults": {
               "port": 53,
               "server": "127.0.0.1"
@@ -72,10 +73,13 @@
             "features": {
               "cache_flush": false,
               "client_policies": false,
+              "conditional_config_write": false,
               "config_apply": false,
               "config_history": false,
+              "config_state": false,
               "dns_debug": true,
               "redis_snapshot": false,
+              "restart_dns_core": false,
               "runtime_snapshot": true
             },
             "instance_id": "00000000-0000-4000-8000-000000000001",
@@ -99,7 +103,7 @@
               "HTTPS"
             ],
             "runtime_error": null,
-            "version": "0.1.0-dev.dns.20261026.1"
+            "version": "0.1.0-dev.lovestdns-native.20261104.11"
           },
           "meta": {
             "api_version": "1",
@@ -707,6 +711,7 @@
               "image": "public.ecr.aws/sliamb/paopaodns@sha256:df0f5689934b3ebb757b7bce0590cd27b97ba23173908eb7205587859012e5c4",
               "source_commit": "a8da2e62a73026c9594b7edc36447538e51000ee"
             },
+            "deployment": "container",
             "dns_defaults": {
               "port": 53,
               "server": "127.0.0.1"
@@ -715,10 +720,13 @@
             "features": {
               "cache_flush": false,
               "client_policies": false,
+              "conditional_config_write": false,
               "config_apply": false,
               "config_history": false,
+              "config_state": false,
               "dns_debug": true,
               "redis_snapshot": false,
+              "restart_dns_core": false,
               "runtime_snapshot": false
             },
             "instance_id": "00000000-0000-4000-8000-000000000001",
@@ -742,7 +750,7 @@
               "HTTPS"
             ],
             "runtime_error": "collector unavailable in test scenario",
-            "version": "0.1.0-dev.dns.20261026.1"
+            "version": "0.1.0-dev.lovestdns-native.20261104.11"
           },
           "meta": {
             "api_version": "1",
@@ -844,7 +852,7 @@
         "body": {
           "error": {
             "code": "UNAUTHORIZED",
-            "message": "请提供有效的 Bearer Token"
+            "message": "请先登录，或提供有效的 API Token"
           },
           "meta": {
             "api_version": "1",
@@ -890,6 +898,178 @@
           "X-Request-ID": "contract-forbidden_config"
         },
         "status": 403
+      }
+    },
+    {
+      "id": "config_create",
+      "operation_id": "file_write",
+      "provenance": {
+        "inputs": "new temporary configuration file; real history, write lock and missing-file condition",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "body": {
+          "content": "CNAUTO=\"yes\"\n",
+          "expected_revision": "missing"
+        },
+        "headers": {
+          "X-Request-ID": "contract-config_create"
+        },
+        "method": "PUT",
+        "path": "/api/v1/file/custom_env.ini",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "auto_reload": false,
+            "condition": "保存后请到配置中心重启 DNS 核心，重新生成初始化配置",
+            "filename": "custom_env.ini",
+            "message": "File saved successfully",
+            "requires_reload": false,
+            "requires_restart": true,
+            "revision": "bbd7eec3c771f2f55897e4326fd540a709f63b42511a2fc7c8a9d7370978b328",
+            "verified": false,
+            "watched_now": false
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-config_create"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "ETag": "\"bbd7eec3c771f2f55897e4326fd540a709f63b42511a2fc7c8a9d7370978b328\"",
+          "X-Request-ID": "contract-config_create"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "config_read",
+      "operation_id": "file_read",
+      "provenance": {
+        "inputs": "temporary saved file; raw-byte SHA-256 revision and strong ETag",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-config_read"
+        },
+        "method": "GET",
+        "path": "/api/v1/file/custom_env.ini",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "auto_reload": false,
+            "condition": "保存后请到配置中心重启 DNS 核心，重新生成初始化配置",
+            "content": "CNAUTO=\"yes\"\n",
+            "filename": "custom_env.ini",
+            "requires_reload": false,
+            "requires_restart": true,
+            "revision": "bbd7eec3c771f2f55897e4326fd540a709f63b42511a2fc7c8a9d7370978b328",
+            "verified": false,
+            "watched_now": false
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-config_read"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "ETag": "\"bbd7eec3c771f2f55897e4326fd540a709f63b42511a2fc7c8a9d7370978b328\"",
+          "X-Request-ID": "contract-config_read"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "config_conflict",
+      "operation_id": "file_write",
+      "provenance": {
+        "inputs": "stale missing-file condition; real locked write rejects overwrite",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "body": {
+          "content": "CNAUTO=\"no\"\n",
+          "expected_revision": "missing"
+        },
+        "headers": {
+          "X-Request-ID": "contract-config_conflict"
+        },
+        "method": "PUT",
+        "path": "/api/v1/file/custom_env.ini",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "PRECONDITION_FAILED",
+            "message": "文件已被其他页面或工具修改，当前草稿已保留。请复制或下载草稿，再重新读取并合并。"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-config_conflict"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-config_conflict"
+        },
+        "status": 412
+      }
+    },
+    {
+      "id": "config_state_unknown",
+      "operation_id": "config_state",
+      "provenance": {
+        "inputs": "synthetic manager I/O; real administrator-only state handler",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-config_state_unknown"
+        },
+        "method": "GET",
+        "path": "/api/v1/config/state",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "files": [
+              {
+                "action": null,
+                "filename": "custom_env.ini",
+                "recorded_at": null,
+                "recorded_revision": null,
+                "revision": "650b2ec2c9a61c81280356b482a6d067545ee0d6a47286774a734361fd09aeac",
+                "state": "unknown",
+                "verified": false
+              }
+            ],
+            "sampled_at": 1792972800.0,
+            "scope": "synthetic manager state; no successful action receipt",
+            "verified": false
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-config_state_unknown"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-config_state_unknown"
+        },
+        "status": 200
       }
     },
     {

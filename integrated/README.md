@@ -1,6 +1,8 @@
-# PaoPaoDNS 集成版开发说明
+# LovestDNS 集成版开发说明
 
-当前版本：`0.1.0-dev.dns.20261026.1`，dns P0 开发候选基线。尚未发布镜像；固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)。
+当前版本：`0.1.0-dev.lovestdns-native.20261104.11`，LovestDNS 开发候选。可独立运行，不依赖 DNS 管理。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md) 与 Docker 集成版；原生安装包通过 GitHub 预发布版本提供，Docker 镜像仍从源码构建。固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)。源码分区见 [结构说明](../docs/project-layout.md)。
+
+家庭网络运维平台统一使用名称 **DNS 管理**。旧候选的版本号、镜像和容器标识保留 `dns`，用于对应已有契约和验收证据。API `kind`、报告类型、数据文件名和内部运行路径沿用原值，保持兼容。
 
 独立 WebUI 已固定为 `standalone-20261024` 源码检查点。集成版通过独立后端和前端覆盖层复用该检查点；构建在临时目录中组装，不修改 `web/`。
 
@@ -13,11 +15,12 @@
 - 集成版 DNS 查询支持 A、AAAA、CNAME、NS、MX、TXT、SRV、PTR、SVCB、HTTPS，读取 PaoPaoDNS Additional TXT 诊断标记。SVCB/HTTPS 参数当前按编号和十六进制展示。
 - 保存配置时记录历史，保留最多 20 个版本/文件，并设置总内容容量上限。支持预览与单文件恢复，恢复仍执行内容校验。
 - 核心日志限量读取及 Token 脱敏；未启用完整查询日志。
+- Web 以管理员密码登录并可记住会话；首页以配置为主，诊断和运行指标保留为本地排障入口。初始密码及重置方式见原生部署说明。
 - `/api/v1/` 提供版本化集成接口，支持实例识别、能力发现、只读观测 Token、请求编号、OpenAPI 契约和外部 DNS 联调；接口说明见 [集成 API](../docs/integration-api.md)。
 - 首次接入保留已知用户输入的副本，不执行上游删除底层配置的初始化步骤；保持 `redis_dns_v2.rdb` 和逻辑 DB 0/1。
 - 缓存预算考虑 cgroup 内存上限并预留面板运行空间。
 
-`config_apply` 与 `redis_snapshot` 按实际运行模式和维护服务就绪状态返回；配置中心可预览并应用 custom_mod，系统页可提交受控 Redis 后台快照。初始化环境变量和 Unbound 模板修改仍需按提示重启容器。保存、恢复和任务完成不声称已经验证每条规则生效。
+`config_apply` 与 `redis_snapshot` 按实际运行模式和维护服务就绪状态返回；配置中心可预览并应用 custom_mod，系统页可提交受控 Redis 后台快照。初始化环境变量和 Unbound 模板修改仍需按提示重启服务。保存、恢复和任务完成不声称已经验证每条规则生效。能力接口新增 `deployment=native/container` 和实际 DNS 查询端口，原生版 Web 使用同一套管理接口。
 
 本项目收敛为 DNS 专用管理面板与稳定 API：配置中心提供历史/差异/恢复，诊断页提供查询、最多四条链路对照及 JSON 报告导入导出。ROS 接入、整网看板、长期历史、设备清单和统一告警由独立家庭运维平台负责。`cache_flush`、`client_policies` 仍未开放，MosDNS 入口总 QPS 和完整查询日志尚未实现。
 
@@ -27,19 +30,22 @@
 python scripts/freeze-standalone.py
 ```
 
-检查点清单位于 `packaging/standalone.freeze.json`，原始源码 ZIP 位于 `releases/standalone-20261024-source.zip`。清单对文本按 LF 计算哈希，允许 Windows/Linux 的换行差异；ZIP 另有原始字节 SHA-256。这是源码检查点，尚未创建发布标签或推送代码。
+检查点清单位于 `packaging/standalone.freeze.json`，原始源码 ZIP 位于 `releases/standalone-20261024-source.zip`。清单对文本按 LF 计算哈希，允许 Windows/Linux 的换行差异；ZIP 另有原始字节 SHA-256。旧 WebUI 工作流原样归档到 `packaging/legacy/web-docker-ghcr.yml.disabled`，冻结校验仍使用原逻辑路径；新仓库不会执行或发布旧 WebUI 镜像。
 
 ## 构建与启动
 
 在具备 Docker 的 Linux 主机上，从仓库根目录执行：
 
 ```sh
-export WEB_UI_TOKEN=$(openssl rand -hex 32)
+cp .env.integrated.example .env
+# 生成随机 Token 并填入 .env 的 WEB_UI_TOKEN；按需修改端口和数据目录
+openssl rand -hex 32
+nano .env
 docker compose -f docker-compose.integrated.yaml build
 docker compose -f docker-compose.integrated.yaml up -d
 ```
 
-访问 `http://127.0.0.1:8080`。默认新建独立 DNS 数据卷和面板状态卷，不自动接管已有 PaoPaoDNS 数据。DNS 使用宿主机 53/TCP、53/UDP；Web 默认仅绑定回环地址，均可通过 Compose 变量调整。
+访问 `http://127.0.0.1:8080`。默认新建独立 DNS 数据卷和面板状态卷，不自动接管已有 PaoPaoDNS 数据。DNS 使用宿主机 53/TCP、53/UDP；Web 默认仅绑定回环地址，均可通过 Compose 变量调整。`DNS_DATA_DIR` 和 `DNS_STATE_DIR` 可改为宿主机绝对路径；已有 Compose 的项目名和卷名保持不变，避免意外改用空卷。
 
 开发验证可先设置 `DNS_HOST_PORT=1053`、`WEB_HOST_PORT=18080`，避免占用现有端口。容器健康状态目前检查核心进程及采集结果，不能替代真实域名解析验证。
 
@@ -51,7 +57,7 @@ docker compose -f docker-compose.integrated.yaml up -d
 
 本版会在独立状态卷中保存一份已知配置输入的初始副本。它不是完整数据备份：不复制 Redis RDB、大型数据文件或任意引用目录。原有底层模板原样保留；仅在生成的运行配置中增加本地统计接口。
 
-RDB 文件保持原位；本版没有改动 Redis/Unbound 二进制，但依旧需要针对旧部署的实际版本验证读取与缓存命中。内存缓存无法完整迁移，过去未记录的查询历史也无法从 RDB 恢复。升级失败时使用原镜像和原始备份回退。
+RDB 文件保持原位；本版没有改动 Redis/Unbound 二进制，但依旧需要针对旧部署的实际版本验证读取与缓存命中。2026-11-04 已只读确认 source-host 的镜像 digest、Redis 7.2.5 和 Unbound 1.21.1 与当前核心相同，尚未执行真实数据迁移。内存缓存无法完整迁移，过去未记录的查询历史也无法从 RDB 恢复。升级失败时使用原镜像和原始备份回退。
 
 ## 本地开发与检查
 
@@ -68,8 +74,8 @@ python scripts/build-integrated-ui.py --reuse-dependencies
 有 Docker 时执行隔离验收：
 
 ```sh
-docker build -f packaging/integrated/Dockerfile -t paopaodns-suite:test .
-python scripts/test-integrated-container.py --image paopaodns-suite:test
+docker build -f packaging/integrated/Dockerfile -t lovestdns:test .
+python scripts/test-integrated-container.py --image lovestdns:test
 ```
 
 测试只创建随机命名的临时容器/卷，不映射宿主机 DNS 端口；覆盖两种 CNAUTO 模式、v1 管理/只读权限、实例身份保留、采样新鲜度、UDP/TCP 链路对照、配置历史与恢复、幂等配置应用、停止并恢复 MosDNS、Redis RDB 重建容器后保留，以及 Web 进程重启。RDB 标记保留不等于证明所有历史 DNS 缓存跨版本可命中。

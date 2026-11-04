@@ -93,7 +93,7 @@ export default function SuiteOverview() {
   };
 
   return <div className="suite-overview">
-    <div className="page-header page-header-row"><div><h2>PaoPaoDNS 集成版</h2>
+    <div className="page-header page-header-row"><div><h2>LovestDNS</h2>
       <p>核心运行状态、缓存统计与配置历史</p></div>
       <button className="btn btn-secondary btn-sm" onClick={() => void refresh()}><RefreshCw size={14} />刷新</button></div>
     <div className="card suite-access"><Shield size={18} /><label htmlFor="suite-token">管理 Token</label>
@@ -129,7 +129,7 @@ export default function SuiteOverview() {
         <form className="suite-query" onSubmit={(e) => { e.preventDefault(); void runQuery(); }}>
           <input aria-label="查询域名" className="form-input" value={domain} onChange={(e) => setDomain(e.target.value)} />
           <select aria-label="记录类型" className="form-select" value={record} onChange={(e) => setRecord(e.target.value)}>{RECORDS.map((type) => <option key={type}>{type}</option>)}</select>
-          <input aria-label="容器内部 DNS 端口" className="form-input suite-port" type="number" min={1} max={65535} value={dnsPort} onChange={(e) => { portEdited.current = true; setDnsPort(e.target.value); }} />
+          <input aria-label="DNS 服务端口" className="form-input suite-port" type="number" min={1} max={65535} value={dnsPort} onChange={(e) => { portEdited.current = true; setDnsPort(e.target.value); }} />
           <button className="btn btn-primary" disabled={busy}>{busy ? '查询中…' : '查询'}</button></form>
         {queryError && <p role="alert">{queryError}</p>}
         {query && <><p>{query.rcode ?? query.status} · {query.elapsed_ms ?? '—'} ms · {query.transport?.toUpperCase()}</p>

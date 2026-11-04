@@ -22,6 +22,11 @@ class Manager:
         operation = request["operation"]
         if operation == "submit" and set(request) == {"operation", "task"}:
             validate_submission(request["task"])
+            if request["task"]["action"] == "restart_dns_core" and os.environ.get("LOVESTDNS_SYSTEMD") != "1":
+                raise ValueError("网页重启仅适用于原生服务")
+            previous = self.store.previous_submission(request["task"])
+            if previous:
+                return {"task": previous}
             self.actions.environment()
             task = self.store.submit(request["task"])
             self.wakeup.set()
@@ -32,7 +37,12 @@ class Manager:
             return {"task": self.store.get(request["task"])}
         if operation == "capabilities" and set(request) == {"operation"}:
             env = self.actions.environment()
-            return {"schema_version": 1, "apply_custom_mod": env.get("CNAUTO") != "no", "save_redis_snapshot": True}
+            return {"schema_version": 1, "apply_custom_mod": env.get("CNAUTO") != "no", "save_redis_snapshot": True,
+                    "restart_dns_core": os.environ.get("LOVESTDNS_SYSTEMD") == "1"}
+        if operation == "config_state" and set(request) == {"operation"}:
+            from runtime.config_state import status
+            with maintenance_lock(self.actions.state):
+                return status(self.actions)
         if operation == "plan" and set(request) == {"operation"}:
             with maintenance_lock(self.actions.state):
                 return self.actions.plan()

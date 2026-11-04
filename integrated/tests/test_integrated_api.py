@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import struct
 
 import pytest
@@ -36,6 +37,29 @@ def test_missing_runtime_disables_runtime_feature(client, monkeypatch):
     assert result["features"]["runtime_snapshot"] is False
     assert result["features"]["config_apply"] is False
     assert client[0].get("/api/runtime", headers=AUTH).status_code == 503
+
+
+def test_status_keeps_saved_overrides_distinct_from_running_environment(client):
+    api, data, _ = client
+    server.RUN_DIR.mkdir()
+    (server.RUN_DIR / 'core-env.json').write_text(json.dumps({'CNAUTO': 'yes', 'IPV6': 'raw', 'UPDATE': 'weekly', 'PRIVATE_TOKEN': 'never-expose'}))
+    (data / 'custom_env.ini').write_text('CNAUTO="no"\nIPV6="no"\n')
+    status = api.get('/api/status', headers=AUTH).get_json()
+    assert status['env'] == {'CNAUTO': 'yes', 'IPV6': 'raw', 'UPDATE': 'weekly'}
+    assert api.get('/api/env', headers=AUTH).get_json()['CNAUTO'] == 'no'
+    result = api.put('/api/file/custom_env.ini', headers=AUTH, json={'content': 'CNAUTO="no"\n'}).get_json()
+    assert result['requires_restart'] is True and result['verified'] is False
+    assert result['watched_now'] is False
+
+
+def test_bootstrap_logs_redact_sensitive_values_from_captured_runtime(client):
+    api, _, state = client
+    server.RUN_DIR.mkdir()
+    (server.RUN_DIR / 'core-env.json').write_text('{"CUSTOM_TOKEN":"core-secret-value"}')
+    (state / 'logs').mkdir(parents=True)
+    (state / 'logs/bootstrap.log').write_text('initializing core-secret-value\n')
+    result = api.get('/api/core-logs/bootstrap', headers=AUTH).get_json()
+    assert result['lines'] == ['initializing ***']
 
 
 def test_history_records_original_save_and_validated_restore(client):

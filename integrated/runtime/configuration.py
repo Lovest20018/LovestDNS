@@ -255,9 +255,12 @@ def prepare(data_dir, template_path, boot_environment):
     raw_env = read_bounded(data_dir / "custom_env.ini", 256 * 1024)
     env = dict(boot_environment)
     values = overrides(raw_env)
+    if boot_environment.get('LOVESTDNS_SYSTEMD') == '1':
+        from native.environment import validate
+        validate(values)
     for key in TEMPLATE_ENV:
         if key in values and values[key] != boot_environment.get(key):
-            raise ValueError(f"{key} 已改变，需重启容器重新生成模板后再应用")
+            raise ValueError(f"{key} 已改变，需重启 DNS 服务重新生成模板后再应用")
     env.update(values)
     # Normalize checkout line endings before locating the generated-config
     # anchors. Windows fixtures and edited templates may contain CRLF even

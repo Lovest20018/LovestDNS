@@ -7,7 +7,7 @@ import sqlite3
 import time
 import uuid
 
-ACTIONS = {"apply_custom_mod", "save_redis_snapshot"}
+ACTIONS = {"apply_custom_mod", "save_redis_snapshot", "restart_dns_core"}
 ID = re.compile(r"^[a-f0-9]{32}$")
 TERMINAL = {"succeeded", "failed", "interrupted"}
 
@@ -24,7 +24,7 @@ def validate_submission(payload):
         if not isinstance(checksum, str) or not re.fullmatch(r"[a-f0-9]{64}", checksum):
             raise ValueError("请先预览当前配置")
     elif checksum is not None:
-        raise ValueError("快照任务不接受配置参数")
+        raise ValueError("此任务不接受配置参数")
 
 
 class TaskStore:
@@ -80,6 +80,14 @@ class TaskStore:
                        (task, payload["request_id"], payload["action"], payload["expected_sha256"], "queued", now, now))
             db.execute("DELETE FROM tasks WHERE id IN (SELECT id FROM tasks WHERE state NOT IN ('queued','running') ORDER BY created DESC LIMIT -1 OFFSET 99)")
             return self.value(db.execute("SELECT * FROM tasks WHERE id=?", (task,)).fetchone())
+
+    def previous_submission(self, payload):
+        validate_submission(payload)
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM tasks WHERE request_id=?", (payload["request_id"],)).fetchone()
+            if row and (row["action"] != payload["action"] or row["expected_sha256"] != payload["expected_sha256"]):
+                raise ValueError("同一 request_id 不能用于不同任务")
+            return self.value(row)
 
     def recover(self):
         with self.connect() as db:

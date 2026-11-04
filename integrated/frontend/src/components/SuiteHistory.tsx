@@ -20,6 +20,7 @@ export default function SuiteHistory() {
 function FileHistory({ file }: { file: string }) {
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [current, setCurrent] = useState('');
+  const [currentRevision, setCurrentRevision] = useState<string | undefined>();
   const [preview, setPreview] = useState<{ revision: number; content: string } | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
@@ -30,9 +31,9 @@ function FileHistory({ file }: { file: string }) {
   const load = useCallback(async (signal: AbortSignal) => {
     const [history, actual] = await Promise.all([
       suiteFetch<{ revisions: Revision[] }>(`/api/v1/history/${file}`, { signal }),
-      suiteFetch<FileContent>(`/api/v1/file/${file}`, { signal }).catch((e) => { if (e instanceof ApiError && e.status === 404) return { content: '' }; throw e; }),
+      suiteFetch<FileContent>(`/api/v1/file/${file}`, { signal }).catch((e) => { if (e instanceof ApiError && e.status === 404) return { content: '', revision: 'missing' }; throw e; }),
     ]);
-    if (!signal.aborted) { setRevisions(history.revisions); setCurrent(actual.content); }
+    if (!signal.aborted) { setRevisions(history.revisions); setCurrent(actual.content); setCurrentRevision(actual.revision); }
   }, [file]);
   useEffect(() => {
     const abort = new AbortController(); controller.current = abort;
@@ -54,7 +55,7 @@ function FileHistory({ file }: { file: string }) {
     const signal = controller.current!.signal;
     setBusy(true); setError(''); setConfirm(false);
     try {
-      const result = await suiteFetch<SaveResult>(`/api/v1/history/${file}/${preview.revision}/restore`, { method: 'POST', signal });
+      const result = await suiteFetch<SaveResult>(`/api/v1/history/${file}/${preview.revision}/restore`, { method: 'POST', signal, body: JSON.stringify({ expected_revision: currentRevision }) });
       if (signal.aborted) return;
       setNotice(`${result.message}。${result.condition}。尚未验证每条规则已生效。`);
       setPreview(null); await load(signal);

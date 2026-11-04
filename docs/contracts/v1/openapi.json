@@ -92,6 +92,12 @@
           "core": {
             "$ref": "#/components/schemas/CoreBuild"
           },
+          "deployment": {
+            "enum": [
+              "native",
+              "container"
+            ]
+          },
           "dns_defaults": {
             "properties": {
               "port": {
@@ -264,6 +270,103 @@
           "pid",
           "start",
           "exitstatus"
+        ],
+        "type": "object"
+      },
+      "ConfigState": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ConfigStateRow"
+            },
+            "type": "array"
+          },
+          "sampled_at": {
+            "description": "Unix UTC 时间戳，单位秒，可含小数",
+            "type": "number"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "verified": {
+            "const": false
+          }
+        },
+        "required": [
+          "files",
+          "sampled_at",
+          "scope",
+          "verified"
+        ],
+        "type": "object"
+      },
+      "ConfigStateResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ConfigState"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "type": "object"
+      },
+      "ConfigStateRow": {
+        "properties": {
+          "action": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "filename": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "recorded_revision": {
+            "anyOf": [
+              {
+                "pattern": "^(?:[a-f0-9]{64}|missing)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision": {
+            "pattern": "^(?:[a-f0-9]{64}|missing)$",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "unknown",
+              "recorded",
+              "changed"
+            ]
+          },
+          "verified": {
+            "const": false
+          }
+        },
+        "required": [
+          "filename",
+          "revision",
+          "state",
+          "recorded_revision",
+          "recorded_at",
+          "action",
+          "verified"
         ],
         "type": "object"
       },
@@ -624,6 +727,7 @@
                   "NOT_FOUND",
                   "METHOD_NOT_ALLOWED",
                   "CONFLICT",
+                  "PRECONDITION_FAILED",
                   "PAYLOAD_TOO_LARGE",
                   "UNSUPPORTED_MEDIA_TYPE",
                   "UNAVAILABLE",
@@ -672,6 +776,10 @@
           "requires_restart": {
             "type": "boolean"
           },
+          "revision": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
           "verified": {
             "const": false,
             "type": "boolean"
@@ -681,6 +789,7 @@
           }
         },
         "required": [
+          "revision",
           "filename",
           "content",
           "auto_reload",
@@ -1383,6 +1492,10 @@
           "requires_restart": {
             "type": "boolean"
           },
+          "revision": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
           "verified": {
             "const": false,
             "type": "boolean"
@@ -1392,6 +1505,7 @@
           }
         },
         "required": [
+          "revision",
           "filename",
           "message",
           "auto_reload",
@@ -1543,7 +1657,8 @@
           "action": {
             "enum": [
               "apply_custom_mod",
-              "save_redis_snapshot"
+              "save_redis_snapshot",
+              "restart_dns_core"
             ]
           },
           "created": {
@@ -1695,6 +1810,7 @@
           "state": {
             "enum": [
               "applied_unverified",
+              "restarted_unverified",
               "saved"
             ]
           },
@@ -1711,11 +1827,12 @@
           "action": {
             "enum": [
               "apply_custom_mod",
-              "save_redis_snapshot"
+              "save_redis_snapshot",
+              "restart_dns_core"
             ]
           },
           "expected_sha256": {
-            "description": "应用时为预览 sha256，快照必须为 null；不是文件保存的并发版本检查",
+            "description": "应用时为预览 sha256，快照和重启必须为 null；不是文件保存的并发版本检查",
             "pattern": "^[a-f0-9]{64}$",
             "type": [
               "string",
@@ -1775,8 +1892,8 @@
   },
   "info": {
     "description": "DNS 专用接口。Unix 时间戳单位秒；interval_seconds 为目标采集周期，window_seconds 为实际比较窗口。过期数据返回 503。详见 docs/integration-api.md。",
-    "title": "PaoPaoDNS Integration API",
-    "version": "0.1.0-dev.dns.20261026.1"
+    "title": "LovestDNS Integration API",
+    "version": "0.1.0-dev.lovestdns-native.20261104.11"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1948,6 +2065,30 @@
               }
             },
             "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -2255,6 +2396,30 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
           "413": {
             "content": {
               "application/json": {
@@ -2358,6 +2523,321 @@
           }
         ],
         "summary": "预览当前配置生成结果与输入指纹",
+        "x-allowed-roles": [
+          "admin"
+        ]
+      }
+    },
+    "/config/state": {
+      "get": {
+        "description": "仅管理 Token",
+        "operationId": "config_state",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Request-ID",
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{8,64}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigStateResponse"
+                }
+              }
+            },
+            "description": "DNS 查询完成请检查 available/status；任务完成不代表规则已验证",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "输入无效",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "未认证",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "权限不足",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "对象不存在或已过保留期",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "方法不支持",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "内容过大",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "内容类型无效",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "服务异常",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "UNAVAILABLE：采集/维护服务不可用；STALE_DATA：样本年龄大于 25 秒、未来时间或无效时间戳。无 data 字段。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerToken": []
+          }
+        ],
+        "summary": "读取持久应用记录与当前配置版本",
         "x-allowed-roles": [
           "admin"
         ]
@@ -2539,6 +3019,30 @@
               }
             },
             "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -2840,6 +3344,30 @@
               }
             },
             "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3157,6 +3685,30 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
           "413": {
             "content": {
               "application/json": {
@@ -3449,6 +4001,30 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
           "413": {
             "content": {
               "application/json": {
@@ -3596,6 +4172,13 @@
                   "type": "string"
                 }
               },
+              "ETag": {
+                "description": "当前文件原始字节的强版本",
+                "schema": {
+                  "pattern": "^\"[a-f0-9]{64}\"$",
+                  "type": "string"
+                }
+              },
               "X-Request-ID": {
                 "schema": {
                   "pattern": "^[A-Za-z0-9_-]{8,64}$",
@@ -3733,6 +4316,30 @@
               }
             },
             "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3874,6 +4481,39 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "description": "单个引号包围的强SHA-256版本；在共享写锁内检查",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "仅当文件不存在时创建",
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "const": "*"
+            }
+          },
+          {
+            "description": "单个读取时返回的强 ETag；与正文条件同时传入时必须一致",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "pattern": "^\"[a-f0-9]{64}\"$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "仅创建尚不存在的文件；不可与 If-Match 同用",
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "const": "*"
+            }
           }
         ],
         "requestBody": {
@@ -3882,6 +4522,10 @@
               "schema": {
                 "properties": {
                   "content": {
+                    "type": "string"
+                  },
+                  "expected_revision": {
+                    "pattern": "^(?:[a-f0-9]{64}|missing)$",
                     "type": "string"
                   }
                 },
@@ -3908,6 +4552,13 @@
               "Cache-Control": {
                 "schema": {
                   "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "当前文件原始字节的强版本",
+                "schema": {
+                  "pattern": "^\"[a-f0-9]{64}\"$",
                   "type": "string"
                 }
               },
@@ -4048,6 +4699,30 @@
               }
             },
             "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -4370,6 +5045,30 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
           "413": {
             "content": {
               "application/json": {
@@ -4655,6 +5354,30 @@
               }
             },
             "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -4978,6 +5701,30 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
           "413": {
             "content": {
               "application/json": {
@@ -5115,8 +5862,58 @@
               "minimum": 0,
               "type": "integer"
             }
+          },
+          {
+            "description": "单个引号包围的强SHA-256版本；在共享写锁内检查",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "仅当文件不存在时创建",
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "const": "*"
+            }
+          },
+          {
+            "description": "单个读取时返回的强 ETag；与正文条件同时传入时必须一致",
+            "in": "header",
+            "name": "If-Match",
+            "schema": {
+              "pattern": "^\"[a-f0-9]{64}\"$",
+              "type": "string"
+            }
+          },
+          {
+            "description": "仅创建尚不存在的文件；不可与 If-Match 同用",
+            "in": "header",
+            "name": "If-None-Match",
+            "schema": {
+              "const": "*"
+            }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "expected_revision": {
+                    "pattern": "^(?:[a-f0-9]{64}|missing)$",
+                    "type": "string"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
         "responses": {
           "200": {
             "content": {
@@ -5131,6 +5928,13 @@
               "Cache-Control": {
                 "schema": {
                   "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "当前文件原始字节的强版本",
+                "schema": {
+                  "pattern": "^\"[a-f0-9]{64}\"$",
                   "type": "string"
                 }
               },
@@ -5271,6 +6075,30 @@
               }
             },
             "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -5577,6 +6405,30 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
           "413": {
             "content": {
               "application/json": {
@@ -5854,6 +6706,30 @@
               }
             },
             "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -6168,6 +7044,30 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
           "413": {
             "content": {
               "application/json": {
@@ -6467,6 +7367,30 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
           "413": {
             "content": {
               "application/json": {
@@ -6743,6 +7667,30 @@
               }
             },
             "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -7050,6 +7998,30 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
           "413": {
             "content": {
               "application/json": {
@@ -7342,6 +8314,30 @@
               }
             }
           },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
           "413": {
             "content": {
               "application/json": {
@@ -7619,6 +8615,30 @@
               }
             },
             "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
             "headers": {
               "Cache-Control": {
                 "schema": {

@@ -2,6 +2,8 @@ name: Validate integrated edition (no publication)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   pull_request:
     paths:
       - 'integrated/**'
@@ -13,7 +15,10 @@ on:
       - '.gitignore'
       - '.gitattributes'
       - '.dockerignore'
-      - '.github/workflows/web-docker-ghcr.yml'
+      - '.env.integrated.example'
+      - '.env.native.example'
+      - 'install.py'
+      - '.github/workflows/native-package.yml'
       - '.github/workflows/integrated-check.yml'
 
 permissions:
@@ -38,5 +43,5 @@ jobs:
       - run: python -m pytest web/backend/tests -q
       - run: node --experimental-strip-types --test integrated/frontend/tests/*.test.ts
       - run: node --experimental-strip-types --test web/tests/*.test.ts
-      - run: docker build -f packaging/integrated/Dockerfile -t paopaodns-suite:test .
-      - run: python scripts/test-integrated-container.py --image paopaodns-suite:test
+      - run: docker build -f packaging/integrated/Dockerfile -t lovestdns:test .
+      - run: python scripts/test-integrated-container.py --image lovestdns:test

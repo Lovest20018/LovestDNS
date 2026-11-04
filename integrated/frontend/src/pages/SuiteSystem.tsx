@@ -6,7 +6,7 @@ import SuiteMaintenance from '../components/SuiteMaintenance';
 import { Empty, Notice, Permission, Section } from '../components/SuiteUI';
 import './SuitePage.css';
 
-const COMPONENTS = ['mosdns', 'unbound-raw', 'unbound-forward', 'redis', 'dnscrypt', 'dnscrypt-socks', 'watcher'];
+const COMPONENTS = ['bootstrap', 'mosdns', 'unbound-raw', 'unbound-forward', 'redis', 'dnscrypt', 'dnscrypt-socks', 'watcher', 'manager', 'observer', 'cron', 'updater'];
 export default function SuiteSystem() {
   const { caps, runtime } = useSuite();
   const [component, setComponent] = useState(COMPONENTS[0]);
@@ -19,6 +19,7 @@ export default function SuiteSystem() {
     finally { setBusy(false); }
   };
   return <div className="suite-page"><Permission allowed={caps.permissions.maintain} kind="maintain">
+    <div className="suite-local-links"><a className="btn btn-secondary btn-sm" href="#/deploy">服务信息与主机命令</a><a className="btn btn-secondary btn-sm" href="#/monitoring">运行指标</a></div>
     <SuiteMaintenance caps={caps} runtime={runtime} />
     <Section title="组件日志" subtitle="最近 200 行，后端会脱敏 Token 和敏感环境变量" icon={ScrollText}>
       <div className="suite-query-form"><label>组件<select aria-label="日志组件" className="form-select" disabled={busy} value={component} onChange={(e) => { setComponent(e.target.value); setLogs(''); }}>{COMPONENTS.map((name) => <option key={name}>{name}</option>)}</select></label><button className="btn btn-secondary" disabled={busy} onClick={() => void loadLogs()}><ScrollText size={16} />{busy ? '读取中…' : '读取日志'}</button></div>

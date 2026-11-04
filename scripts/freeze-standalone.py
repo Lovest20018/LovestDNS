@@ -8,13 +8,21 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 LOCK = ROOT / "packaging/standalone.freeze.json"
 EXCLUDED = {"node_modules", "dist", "__pycache__", ".pytest_cache", ".vite"}
+ARCHIVED_WORKFLOW = "packaging/legacy/web-docker-ghcr.yml.disabled"
+
+
+def checkpoint_path(name):
+    path = ROOT / name
+    if name == ".github/workflows/web-docker-ghcr.yml" and not path.exists():
+        return ROOT / ARCHIVED_WORKFLOW
+    return path
 
 
 def source_files():
     paths = [p for p in (ROOT / "web").rglob("*") if p.is_file()
              and not EXCLUDED.intersection(p.relative_to(ROOT).parts)]
-    paths += [ROOT / p for p in ("docker-compose-web.yaml", "docker-compose.sidecar.yaml",
-                                ".github/workflows/web-docker-ghcr.yml")]
+    paths += [checkpoint_path(p) for p in ("docker-compose-web.yaml", "docker-compose.sidecar.yaml",
+                                          ".github/workflows/web-docker-ghcr.yml")]
     return sorted(paths)
 
 
@@ -34,7 +42,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--create", action="store_true")
     args = parser.parse_args()
-    current = {p.relative_to(ROOT).as_posix(): source_digest(p) for p in source_files()}
+    current = {(p.relative_to(ROOT).as_posix() if p != ROOT / ARCHIVED_WORKFLOW else
+                ".github/workflows/web-docker-ghcr.yml"): source_digest(p) for p in source_files()}
     if args.create:
         if LOCK.exists():
             raise SystemExit("Checkpoint already exists; refusing to replace it")
@@ -42,7 +51,7 @@ def main():
         archive.parent.mkdir(exist_ok=True)
         with zipfile.ZipFile(archive, "x", zipfile.ZIP_DEFLATED) as output:
             for name in current:
-                output.write(ROOT / name, name)
+                output.write(checkpoint_path(name), name)
         LOCK.parent.mkdir(exist_ok=True)
         LOCK.write_text(json.dumps({"checkpoint": "standalone-20261024", "release": False,
                                     "source_hash_mode": "text-lf",
@@ -65,7 +74,7 @@ def main():
             if set(source.namelist()) != set(lock["files"]):
                 raise SystemExit("Standalone checkpoint archive file list changed")
             changed = [name for name in changed if name not in current or name not in lock["files"]
-                       or (ROOT / name).read_bytes().replace(b"\r\n", b"\n")
+                       or checkpoint_path(name).read_bytes().replace(b"\r\n", b"\n")
                        != source.read(name).replace(b"\r\n", b"\n")]
         if changed:
             raise SystemExit("Standalone checkpoint changed: " + ", ".join(changed))

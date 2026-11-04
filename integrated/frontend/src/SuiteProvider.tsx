@@ -9,7 +9,9 @@ import { useStore } from './store';
 import type { SystemStatus } from './api';
 
 export default function SuiteProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState(() => { try { return localStorage.getItem('paopaodns-token') ?? ''; } catch { return ''; } });
+  const [runningEnv, setRunningEnv] = useState<Record<string, string> | null>(null);
+  const [statusError, setStatusError] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const [caps, setCaps] = useState<Capabilities | null>(null);
   const [runtime, setRuntime] = useState<RuntimeSnapshot | null>(null);
   const [samples, setSamples] = useState<TrendSample[]>([]);
@@ -20,11 +22,13 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
   const generation = useRef(0);
   const inFlight = useRef(false);
   const request = useRef<AbortController | null>(null);
-  const loadedStatus = useRef(false);
+
+  useEffect(() => () => { generation.current++; request.current?.abort(); request.current = null; inFlight.current = false; }, []);
 
   const refresh = useCallback(async () => {
     if (inFlight.current) return;
     inFlight.current = true;
+    setRefreshing(true);
     const abort = new AbortController();
     request.current = abort;
     const options = { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15000)]) };
@@ -34,13 +38,13 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
       if (current !== generation.current) return;
       setCaps(capabilities); setError('');
       useStore.getState().setConnected(true);
-      if (!loadedStatus.current && capabilities.permissions.configure) {
+      if (capabilities.permissions.configure) {
         try {
           const status = await suiteFetch<SystemStatus>('/api/v1/status', options);
           if (current !== generation.current) return;
+          setRunningEnv(status.env); setStatusError('');
           useStore.getState().setEnvValues(status.env); useStore.getState().setFilesExist(status.files);
-          loadedStatus.current = true;
-        } catch { /* Editors display their own file errors; monitoring can still work. */ }
+        } catch (e) { if (current === generation.current) { setRunningEnv(null); setStatusError(errorText(e)); } }
       }
       try {
         const sample = await suiteFetch<RuntimeSnapshot>('/api/v1/runtime', options);
@@ -56,12 +60,12 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
       }
     } catch (e) {
       if (current !== generation.current) return;
-      setCaps(null); setRuntime(null); setError(errorText(e));
+      setRuntime(null); setRunningEnv(null); setStatusError(errorText(e)); setError(errorText(e));
       setSamples((old) => appendTrend(old, null, Date.now() / 1000));
       useStore.getState().setConnected(false);
     } finally {
       if (request.current === abort) { inFlight.current = false; request.current = null; }
-      if (current === generation.current) setLoading(false);
+      if (current === generation.current) { setLoading(false); setRefreshing(false); }
     }
   }, []);
 
@@ -74,7 +78,7 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
     };
     void poll();
     return () => { stopped = true; clearTimeout(timer); };
-  }, [refresh, token, paused]);
+  }, [refresh, paused]);
 
   useEffect(() => {
     if (!runtime) return;
@@ -86,14 +90,5 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [runtime]);
 
-  const connect = (next: string) => {
-    try { localStorage.setItem('paopaodns-token', next); }
-    catch { setError('浏览器无法保存连接凭据'); return; }
-    generation.current++; loadedStatus.current = false;
-    request.current?.abort(); request.current = null; inFlight.current = false;
-    setCaps(null); setRuntime(null); setSamples([]); setError(''); setRuntimeError(''); setLoading(true);
-    if (next === token) void refresh();
-    else setToken(next);
-  };
-  return <SuiteContext.Provider value={{ caps, runtime, samples, loading, error, runtimeError, paused, refresh, connect, setPaused }}>{children}</SuiteContext.Provider>;
+  return <SuiteContext.Provider value={{ runningEnv, statusError, refreshing, caps, runtime, samples, loading, error, runtimeError, paused, refresh, setPaused }}>{children}</SuiteContext.Provider>;
 }

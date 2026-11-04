@@ -4,8 +4,9 @@ import type { TrendSample } from './trend';
 
 export interface SuiteState {
   caps: Capabilities | null; runtime: RuntimeSnapshot | null; samples: TrendSample[];
+  runningEnv: Record<string, string> | null; statusError: string; refreshing: boolean;
   loading: boolean; error: string; runtimeError: string; paused: boolean;
-  refresh: () => Promise<void>; connect: (token: string) => void; setPaused: (paused: boolean) => void;
+  refresh: () => Promise<void>; setPaused: (paused: boolean) => void;
 }
 export const SuiteContext = createContext<SuiteState | null>(null);
 export function useSuite() {

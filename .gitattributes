@@ -1,3 +1,5 @@
- text eol=lf
+* text=auto eol=lf
+*.sh text eol=lf
+*.disabled text eol=lf
 # Contract artifact hashes are portable raw-byte hashes across Git checkouts.
 docs/contracts/v1/*.json text eol=lf

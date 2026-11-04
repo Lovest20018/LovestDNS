@@ -11,6 +11,7 @@ import uuid
 
 from flask import Blueprint, g, jsonify, request
 from werkzeug.exceptions import HTTPException
+from browser_auth import current_session, csrf_valid, WRITE_METHODS
 
 
 # Only these operations are exposed to the external observer credential.
@@ -23,7 +24,7 @@ LOGGER.setLevel(logging.INFO)
 LOGGER.propagate = False
 ERROR_CODES = {400: "INVALID_ARGUMENT", 401: "UNAUTHORIZED", 403: "FORBIDDEN",
                404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED", 409: "CONFLICT",
-               413: "PAYLOAD_TOO_LARGE", 415: "UNSUPPORTED_MEDIA_TYPE", 503: "UNAVAILABLE"}
+               412: "PRECONDITION_FAILED", 413: "PAYLOAD_TOO_LARGE", 415: "UNSUPPORTED_MEDIA_TYPE", 503: "UNAVAILABLE"}
 
 # Each endpoint delegates directly to the existing handler. Validation, locks,
 # config history and task idempotency consequently have one implementation.
@@ -35,6 +36,7 @@ OPERATIONS = [
     ("/dns-test", "POST", "dns_query", "api_dns_test", "查询 DNS 记录与诊断标记"),
     ("/dns-compare", "POST", "dns_compare", "api_dns_compare", "并行对照最多四条 DNS 链路"),
     ("/health-check", "GET", "dns_health", "api_health_check", "执行两个样本域名的 DNS 检查"),
+    ("/config/state", "GET", "config_state", "configuration_state", "读取持久应用记录与当前配置版本"),
     ("/config/apply-plan", "GET", "apply_plan", "apply_plan", "预览当前配置生成结果与输入指纹"),
     ("/maintenance/tasks", "GET", "task_list", "maintenance_tasks", "读取最近维护任务"),
     ("/maintenance/tasks/<task_id>", "GET", "task_read", "maintenance_task", "按任务编号查询状态与结果"),
@@ -103,7 +105,10 @@ def register(server):
         if response.status_code >= 400:
             message = body.get("error", response.status) if isinstance(body, dict) else response.status
             return error(response.status_code, str(message))
-        return jsonify({"data": body, "meta": meta()}), response.status_code
+        wrapped = jsonify({"data": body, "meta": meta()})
+        if response.headers.get('ETag'):
+            wrapped.headers['ETag'] = response.headers['ETag']
+        return wrapped, response.status_code
 
     original_auth = base.auth_middleware
 
@@ -124,10 +129,16 @@ def register(server):
             g.api_role = "admin"
         elif matches(read_token):
             g.api_role = "observer"
+        elif not auth and (session := current_session(server.STATE_DIR)):
+            if session["initial"]:
+                return error(403, "请先修改初始管理员密码")
+            if request.method in WRITE_METHODS and not csrf_valid(session):
+                return error(403, "登录校验已失效，请刷新页面")
+            g.api_role = "admin"
         elif not base.WEB_UI_TOKEN and base.WEB_UI_ALLOW_NO_AUTH and not token:
             g.api_role = "admin"
         else:
-            return error(401, "请提供有效的 Bearer Token")
+            return error(401, "请先登录，或提供有效的 API Token")
         operation = (request.endpoint or "").removeprefix("v1.")
         if not (request.endpoint or "").startswith("v1."):
             if request.routing_exception and request.routing_exception.code == 405:
@@ -183,7 +194,7 @@ def register(server):
     @api.get("/instance")
     def instance():
         return jsonify({"data": {"id": instance_identity(server.STATE_DIR),
-                                 "name": os.environ.get("SUITE_INSTANCE_NAME", "PaoPaoDNS"),
+                                 "name": os.environ.get("SUITE_INSTANCE_NAME", "LovestDNS"),
                                  "kind": "paopaodns", "edition": "integrated", "version": server.VERSION},
                         "meta": meta()})
 
@@ -192,13 +203,14 @@ def register(server):
         value = app.make_response(server.capabilities()).get_json()
         observer = g.api_role == "observer"
         value.update({"instance_id": instance_identity(server.STATE_DIR), "api_version": "1",
-                      "name": os.environ.get("SUITE_INSTANCE_NAME", "PaoPaoDNS"),
+                      "name": os.environ.get("SUITE_INSTANCE_NAME", "LovestDNS"),
                       "access_role": g.api_role, "record_types": list(server.RECORD_TYPES),
                       "permissions": {"observe": True, "diagnose": True,
                                       "configure": not observer, "maintain": not observer}})
         if observer:
             value["features"] = {**value["features"], "config_history": False,
-                                 "config_apply": False, "redis_snapshot": False}
+                                 "config_apply": False, "redis_snapshot": False, "restart_dns_core": False,
+                                 "conditional_config_write": False, "config_state": False}
         return jsonify({"data": value, "meta": meta()})
 
     @api.get("/runtime")

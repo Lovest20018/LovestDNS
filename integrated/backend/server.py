@@ -4,22 +4,23 @@ import os
 from pathlib import Path
 import sqlite3
 
-from flask import jsonify, request
+from flask import jsonify, request, g
 import app as base
 from dns_wire import RECORD_TYPES, TYPE_NAMES, parse_response
 from history import History
 import runtime_client
+from config_versions import revision as file_revision, expected_revision, check_revision
 from runtime.locking import MaintenanceBusy, maintenance_lock
 from runtime.tasks import validate_submission
 
 app = base.app
 if os.environ.get("SUITE_DIST_DIR"):
     app.static_folder = os.environ["SUITE_DIST_DIR"]
-VERSION = "0.1.0-dev.dns.20261026.1"
+VERSION = "0.1.0-dev.lovestdns-native.20261104.11"
 STATE_DIR = Path(os.environ.get("SUITE_STATE_DIR", "/var/lib/paopaodns-suite"))
 RUN_DIR = Path(os.environ.get("SUITE_RUN_DIR", "/run/paopaodns-suite"))
 history = History(STATE_DIR)
-base.DNS_TEST_SERVER = "127.0.0.1"
+base.DNS_TEST_SERVER = os.environ.get("DNS_TEST_SERVER", "127.0.0.1")
 base.DNS_RECORD_TYPES = RECORD_TYPES
 base.DNS_TYPE_NAMES = TYPE_NAMES
 base._parse_dns_response = lambda packet, query_id, domain=None, record_type=None: parse_response(
@@ -55,14 +56,23 @@ def _write_with_history(filename, content):
             path = base._safe_path(filename)
             if path is None or Path(path).is_symlink():
                 return False, "File not allowed"
+            before = None
             if Path(path).exists():
-                if Path(path).stat().st_size > base.FILE_SIZE_LIMITS.get(filename, base.FILE_SIZE_LIMITS["_default"]):
+                limit = base.FILE_SIZE_LIMITS.get(filename, base.FILE_SIZE_LIMITS["_default"])
+                if Path(path).stat().st_size > limit:
                     return False, "Existing configuration exceeds history size limit"
-                history.record(db, filename, Path(path).read_bytes(), "before_save")
+                with Path(path).open('rb') as source:
+                    before = source.read(limit + 1)
+                if len(before) > limit:
+                    return False, "Existing configuration exceeds history size limit"
+            check_revision(expected_revision(), before)
+            if before is not None:
+                history.record(db, filename, before, "before_save")
             success, error = _original_write(filename, content)
             if success:
                 history.record(db, filename, content.encode("utf-8"), "saved")
                 history.prune(db)
+                g.saved_revision = file_revision(Path(path).read_bytes())
             return success, error
     except (OSError, ValueError, sqlite3.Error) as exc:
         return False, f"Configuration history unavailable: {exc}"
@@ -74,7 +84,10 @@ base._atomic_write = historized_write
 def boot_env():
     try:
         values = json.loads((RUN_DIR / "core-env.json").read_text())
-        return {key: values[key] for key in base.RUNTIME_ENV_KEYS | {"DNSPORT"} if key in values}
+        visible = base.RUNTIME_ENV_KEYS | {"DNSPORT", "DNS_SERVERNAME", "UPDATE", "SERVER_IP", "SOCKS5",
+            "EXPIRED_FLUSH", "CUSTOM_FORWARD_TTL", "AUTO_FORWARD", "AUTO_FORWARD_CHECK", "USE_HOSTS",
+            "HTTP_FILE", "SHUFFLE", "ADDINFO", "SAFEMODE", "QUERY_TIME"}
+        return {key: values[key] for key in visible if key in values and isinstance(values[key], str)}
     except (OSError, ValueError):
         return {}
 
@@ -83,10 +96,13 @@ def reload_info(filename, env=None):
     env = boot_env()
     if filename == "unbound_custom.conf":
         return {"auto_reload": False, "requires_reload": False, "requires_restart": True,
-                "watched_now": False, "condition": "需重启集成容器重新生成 Unbound 配置", "verified": False}
+                "watched_now": False, "condition": "需重启 DNS 服务重新生成 Unbound 配置", "verified": False}
     if filename == "custom_mod.yaml":
         return {"auto_reload": False, "requires_reload": True, "requires_restart": False,
-                "watched_now": False, "condition": "保存后请到配置历史与应用预览并应用，再查询目标域名验证规则", "verified": False}
+                "watched_now": False, "condition": "保存后请到配置中心预览并应用，再查询目标域名验证规则", "verified": False}
+    if filename == "custom_env.ini":
+        return {"auto_reload": False, "requires_reload": False, "requires_restart": True,
+                "watched_now": False, "condition": "保存后请到配置中心重启 DNS 核心，重新生成初始化配置", "verified": False}
     enabled = env.get("CNAUTO") != "no" and bool(env)
     conditions = base.CONDITIONAL_AUTO_RELOAD.get(filename, {})
     for key, expected in conditions.items():
@@ -106,6 +122,7 @@ def reload_info(filename, env=None):
 
 
 base._file_reload_info = reload_info
+base._runtime_env = boot_env
 
 
 def build_info():
@@ -120,19 +137,57 @@ def capabilities():
     current = runtime_client.snapshot()
     available = current.get("schema_version") == 1
     env = boot_env()
-    raw_port = env.get("DNSPORT", "53") if env.get("CNAUTO") == "no" else "53"
+    raw_port = os.environ.get("SUITE_DNS_PORT") or (env.get("DNSPORT", "53") if env.get("CNAUTO") == "no" else "53")
     port = int(raw_port) if raw_port.isdigit() and 0 < int(raw_port) < 65536 else 53
     try:
         management = runtime_client.manager_request("capabilities")
     except (RuntimeError, ValueError):
         management = {}
     return jsonify({"edition": "integrated", "version": VERSION, "core": build_info(),
-        "dns_defaults": {"server": "127.0.0.1", "port": port},
+        "deployment": "native" if os.environ.get("LOVESTDNS_SYSTEMD") == "1" else "container",
+        "dns_defaults": {"server": base.DNS_TEST_SERVER, "port": port},
         "features": {"dns_debug": True, "config_history": True,
                      "runtime_snapshot": available, "config_apply": management.get("apply_custom_mod") is True,
                      "redis_snapshot": management.get("save_redis_snapshot") is True,
+                     "restart_dns_core": management.get("restart_dns_core") is True,
+                     "conditional_config_write": True, "config_state": True,
                      "cache_flush": False, "client_policies": False},
         "runtime_error": current.get("error")})
+
+
+def api_read_file(filename):
+    path = base._safe_path(filename)
+    if path is None:
+        return jsonify({'error': 'File not allowed'}), 403
+    try:
+        with maintenance_lock(STATE_DIR):
+            target = Path(path)
+            if not target.exists():
+                return jsonify({'error': 'File not found', 'revision': 'missing'}), 404
+            limit = base.FILE_SIZE_LIMITS.get(filename, base.FILE_SIZE_LIMITS['_default'])
+            if target.stat().st_size > limit:
+                return jsonify({'error': 'File too large'}), 413
+            data = target.read_bytes()
+            if len(data) > limit:
+                return jsonify({'error': 'File too large'}), 413
+            response = jsonify({'filename': filename, 'content': data.decode('utf-8', errors='replace').replace('\r\n', '\n'),
+                                'revision': file_revision(data), **reload_info(filename)})
+            response.set_etag(file_revision(data))
+            return response
+    except MaintenanceBusy as exc:
+        return jsonify({'error': str(exc)}), 409
+    except OSError:
+        return jsonify({'error': 'Failed to read file'}), 503
+
+
+@app.get('/api/config/state')
+def configuration_state():
+    try:
+        return jsonify(runtime_client.manager_request('config_state'))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 409
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc)}), 503
 
 
 @app.get("/api/config/apply-plan")
@@ -236,7 +291,7 @@ def restore_history(filename, revision):
 
 @app.get("/api/core-logs/<component>")
 def core_logs(component):
-    if component not in {"mosdns", "unbound-raw", "unbound-forward", "redis", "dnscrypt", "dnscrypt-socks", "watcher"}:
+    if component not in {"mosdns", "unbound-raw", "unbound-forward", "redis", "dnscrypt", "dnscrypt-socks", "watcher", "bootstrap", "manager", "observer", "cron", "updater"}:
         return jsonify({"error": "Unknown component"}), 404
     try:
         with (STATE_DIR / "logs" / f"{component}.log").open("rb") as source:
@@ -247,15 +302,35 @@ def core_logs(component):
             if start:
                 data = data.partition("\n")[2]
         # Upstream logs may include environment diagnostics in custom deployments.
-        for key, value in os.environ.items():
-            if value and len(value) >= 4 and base.SENSITIVE_KEY_PATTERNS.search(key):
+        sensitive = dict(os.environ)
+        for filename in ("core-env.json", "mosdns-env.json"):
+            try:
+                sensitive.update(json.loads((RUN_DIR / filename).read_text()))
+            except (OSError, ValueError):
+                pass
+        for key, value in sensitive.items():
+            if isinstance(value, str) and len(value) >= 4 and base.SENSITIVE_KEY_PATTERNS.search(key):
                 data = data.replace(value, "***")
         return jsonify({"component": component, "lines": data.splitlines()[-200:]})
     except OSError:
         return jsonify({"component": component, "lines": [], "error": "日志尚不可用"})
 
 
+@app.after_request
+def saved_file_revision(response):
+    if response.status_code < 300 and hasattr(g, 'saved_revision'):
+        response.set_etag(g.saved_revision)
+        body = response.get_json(silent=True)
+        if isinstance(body, dict):
+            target = body.get('data', body)
+            target['revision'] = g.saved_revision
+            response.set_data(app.json.dumps(body))
+    return response
+
+
 # Keep standalone sources frozen; the versioned API uses the same handlers.
 import sys
 from api_v1 import register
 register(sys.modules[__name__])
+from browser_auth import register as register_browser_auth
+register_browser_auth(sys.modules[__name__])

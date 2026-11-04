@@ -22,7 +22,7 @@ def sample_age(value, now=None):
 def manager_request(operation, task=None):
     if not hasattr(socket, "AF_UNIX"):
         raise RuntimeError("本平台没有本地 Unix socket，维护服务不可用")
-    if operation not in {"capabilities", "plan", "tasks", "task", "submit"}:
+    if operation not in {"capabilities", "plan", "tasks", "task", "submit", "config_state"}:
         raise ValueError("Unsupported manager request")
     payload = {"operation": operation}
     if operation in {"submit", "task"}:
