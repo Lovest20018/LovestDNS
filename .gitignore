@@ -40,8 +40,3 @@ coverage/
 .build/
 docs/validation/
 docs/ui-operation-optimization-*.md
-
-# Private deployment evidence stays local.
-.build/
-docs/validation/
-docs/ui-operation-optimization-*.md

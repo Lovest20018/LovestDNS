@@ -29,7 +29,7 @@
       ".gitattributes": "140eb6a5d5787877a4c65b9a4752fc52a54a5561159025fcc39f6ccfe92746ca",
       ".github/workflows/integrated-check.yml": "2764d2a94399581c422476fd435ee6feb19a5e70eb89e4a957668bcbf7ec6bbe",
       ".github/workflows/native-package.yml": "cd249e81b86a5aa55a61541a398787cb3a940ff372a51df3882a2bf4a7eb2892",
-      ".gitignore": "17e96ae6cf5604a634d8a95a56f4ba8596acb6ce99af2ef6855930cfde84c098",
+      ".gitignore": "333e282e8709a0a18f8618dc283ef9a78a4b6593d4581a86c8afa727000eaed4",
       "docker-compose-web.yaml": "0409bc4340124407c7a72fdb01a352f8ef74347e5470af9ae1d21e020d5d7214",
       "docker-compose.integrated.yaml": "b40f095e7fe8119b627abd161e1b4d62a8649a27e854978c67ec7813d8e845fb",
       "docker-compose.sidecar.yaml": "2e9bd7a32e43599b9aedbc8bae3ef9e7cd2b93379d642446016940903fc45609",
@@ -200,7 +200,7 @@
       "packaging/legacy/web-docker-ghcr.yml.disabled",
       ".github/workflows/native-package.yml"
     ],
-    "sha256": "5557338344570d41d016e5f5e0c1f385dddaa5b6c3e85f2ba3566edb1a32fbbf"
+    "sha256": "be23658b7e6810cf973deb3ed7619b812c983d2a962ffbe4d79715865bc2d751"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",
