@@ -2,6 +2,8 @@
 
 2026-11-12。阶段候选为 `0.1.0-dev.lovestdns-native.20261112.home2.1`。
 
+更新：本轮已完成干净公开历史整理、最终发行包核验及 Pre-release 发布，见 [home2.1 公开发行记录](native-home21-release-2026-11-12.md)及[正式发行页](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261112.home2.1)。最终公开归档摘要与本记录中的原验收包摘要不同；本页保留最初阶段评估和发布前检查过程，发行资产以公开发行记录和 Release 校验文件为准。
+
 本轮已形成可交付的 Debian amd64 原生预发布候选：选定组件、新控制台、配置工作流和安装来源记录进入同一个经过验收的包。建议以“组件更新与新控制台”发布 Pre-release，面向家用及小规模试用；稳定版、默认全面升级及性能提升宣传暂不批准。
 
 ## 已完成的组件工作
