@@ -1,10 +1,22 @@
+import { useState } from 'react';
 import { useSuite } from '../suiteContext';
 import type { SaveResult } from '../api';
+import SuiteMaintenance from './SuiteMaintenance';
+import ConfigVerification from './ConfigVerification';
+import '../pages/HomeWorkflow.css';
 
 export default function ConfigFeedback({ saved, dirty, file, result }: { saved: boolean; dirty: boolean; file: string; result?: SaveResult }) {
-  const { caps } = useSuite();
-  const native = caps?.deployment === 'native';
+  const { caps, runtime } = useSuite();
+  const [expanded, setExpanded] = useState<boolean | null>(null);
+  const open = expanded ?? saved;
   const restart = result?.requires_restart || ['custom_env.ini', 'unbound_custom.conf'].includes(file);
   const apply = result?.requires_reload || file === 'custom_mod.yaml';
-  return <div className="suite-editor-next" role="status">{dirty ? <span>{file} · 有未保存修改</span> : saved ? <><span>{file} · 文件已保存，解析效果尚未验证。</span>{restart ? <a href={native ? "#/" : "#/deploy"}>下一步：{native ? "重启 DNS 核心" : "查看主机应用说明"}</a> : apply ? <a href="#/">下一步：预览并应用自定义规则</a> : <span>按保存结果确认文件监听条件。</span>}<a href="#/diagnostics">查询目标域名验证</a></> : <span>保存配置后，按结果提示应用并查询目标域名验证。</span>}</div>;
+  return <details className="suite-config-workflow" open={open} onToggle={(event) => setExpanded(event.currentTarget.open)}>
+    <summary>{dirty ? '有未保存修改 · 应用与查询验证' : saved ? '已保存 · 继续应用与查询验证' : '应用与查询验证'}</summary>
+    {open && <><p className="suite-note"><code>{file}</code> · {restart ? '需要重新生成运行配置。' : apply ? '预览并应用自定义规则。' : result?.condition ?? '根据核心启动配置判断自动加载条件；加载结果需查询核对。'}</p>
+      {caps?.permissions.maintain && (restart || apply) && <SuiteMaintenance caps={caps} runtime={runtime} mode="config" configAction={restart ? 'restart' : 'apply'} />}
+      <ConfigVerification file={file} />
+      <a href="#/system?tab=apply">配置历史与维护日志</a>
+    </>}
+  </details>;
 }

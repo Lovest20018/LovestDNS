@@ -25,7 +25,7 @@ def patch_init(text):
     # below intact while reserving memory for the web and collector processes.
     a = text.index("if grep -q 'MemAvailable' /proc/meminfo; then")
     b = text.index('\nprefPC=1', a)
-    text = text[:a] + 'MEMSIZE=$(/opt/venv/bin/python -m runtime.resources)\n' + text[b:]
+    text = text[:a] + 'MEMSIZE=$(/opt/venv/bin/python -m runtime.resources) || exit 1\n' + text[b:]
     a = text.index('redis-server /tmp/redis.conf\n')
     b = text.index('\nsed "s/{CORES}', a)
     text = text[:a] + f'{PY} capture-env\n{CTL} start redis || exit 1\n{PY} wait-redis || exit 1\n' + text[b:]

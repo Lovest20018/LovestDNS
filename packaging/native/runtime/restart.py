@@ -1,12 +1,12 @@
 """Restart only the fixed DNS components; keep Web, collector and task worker alive."""
-import json
 import time
 import xmlrpc.client
 
 from native.environment import validate
 from runtime.component import read_overrides
 from runtime.locking import maintenance_lock
-from runtime.maintenance import ActionFailed, atomic_file
+from runtime.maintenance import ActionFailed
+from native.backup import create as create_runtime_backup
 from runtime.observer import UnixTransport, UnixHTTPConnection
 
 ORDER = ('redis', 'dnscrypt', 'dnscrypt-socks', 'unbound-forward', 'unbound-raw', 'mosdns', 'cron', 'watcher', 'updater')
@@ -51,23 +51,7 @@ def restart(core):
             raise ValueError('核心正在初始化，请稍后重试')
         if before.get('redis', {}).get('statename') != 'RUNNING':
             raise ValueError('Redis 未运行，请先在主机检查服务')
-        # Snapshot every regular runtime file; sockets and directories are not copied.
-        paths = [p for p in core.temporary.iterdir() if p.is_file() and not p.is_symlink()]
-        paths += [core.run / name for name in ('core-env.json', 'mosdns-env.json')]
-        resolver = core.data / 'dnscrypt-resolvers'
-        paths += [resolver / name for name in ('dnscrypt.toml', 'dnscrypt_socks.toml')]
-        files, total = {}, 0
-        for path in paths:
-            if not path.exists():
-                continue
-            if path.is_symlink() or not path.is_file() or path.stat().st_size > 32 * 1024 * 1024:
-                raise ValueError('运行配置过大或包含链接，请通过主机维护命令重启')
-            total += path.stat().st_size
-            if total > 128 * 1024 * 1024:
-                raise ValueError('运行配置备份超过限制，请通过主机维护命令重启')
-            files[path] = path.read_bytes()
-        atomic_file(core.state / 'last-runtime-before-restart.json',
-                    json.dumps({str(p): data.hex() for p, data in files.items()}).encode())
+        backup = create_runtime_backup(core)
         # A verified BGSAVE happens before any service is stopped. Redis is stopped
         # last and started first, retaining both databases across mode changes.
         core.save_snapshot_unlocked()
@@ -102,9 +86,8 @@ def restart(core):
             rollback = {'attempted': changed, 'runtime_restored': False, 'service_running': False}
             try:
                 stop(core)
-                for path, data in files.items():
-                    atomic_file(path, data)
-                if core.run / 'mosdns-env.json' not in files:
+                backup.restore()
+                if core.run / 'mosdns-env.json' not in backup.paths:
                     (core.run / 'mosdns-env.json').unlink(missing_ok=True)
                 rollback['runtime_restored'] = True
                 for name in ORDER:

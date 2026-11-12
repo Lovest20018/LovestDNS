@@ -73,9 +73,9 @@ def scan(refs, history=False, staged=False):
     if history:
         for ref in refs:
             metadata = git('log', ref, '--format=%B%n%an <%ae>%n%cn <%ce>')
-            for label, pattern in PATTERNS.items():
-                if pattern.search(metadata):
-                    findings.append(('commit metadata', label))
+            findings.extend(inspect('commit metadata', metadata))
+            if git('cat-file', '-t', ref).strip() == b'tag':
+                findings.extend(inspect('tag metadata', git('cat-file', 'tag', ref)))
             # Only objects reachable from the refs being published are scanned.
             for line in git('rev-list', '--objects', ref).splitlines():
                 sha, _, name = line.partition(b' ')

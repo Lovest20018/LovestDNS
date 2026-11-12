@@ -124,9 +124,27 @@
             },
             "type": "object"
           },
+          "installation": {
+            "$ref": "#/components/schemas/Installation"
+          },
           "instance_id": {
             "format": "uuid",
             "type": "string"
+          },
+          "maintenance": {
+            "properties": {
+              "available": {
+                "type": "boolean"
+              },
+              "phase": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "available",
+              "phase"
+            ],
+            "type": "object"
           },
           "name": {
             "type": "string"
@@ -153,6 +171,9 @@
               "maintain"
             ],
             "type": "object"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/Provenance"
           },
           "record_types": {
             "items": {
@@ -372,6 +393,39 @@
       },
       "CoreBuild": {
         "properties": {
+          "components": {
+            "anyOf": [
+              {
+                "type": "null"
+              },
+              {
+                "properties": {
+                  "lock_sha256": {
+                    "pattern": "^[a-f0-9]{64}$",
+                    "type": "string"
+                  },
+                  "selected": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "versions": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "selected",
+                  "versions",
+                  "lock_sha256"
+                ],
+                "type": "object"
+              }
+            ]
+          },
           "image": {
             "type": "string"
           },
@@ -443,6 +497,116 @@
         "required": [
           "data",
           "meta"
+        ],
+        "type": "object"
+      },
+      "DnsListenerEndpoint": {
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "family": {
+            "enum": [
+              4,
+              6
+            ]
+          },
+          "port": {
+            "maximum": 65535,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "transport": {
+            "enum": [
+              "udp",
+              "tcp"
+            ]
+          },
+          "wildcard": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address",
+          "port",
+          "transport",
+          "family",
+          "wildcard"
+        ],
+        "type": "object"
+      },
+      "DnsListenerProcess": {
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/DnsListenerEndpoint"
+            },
+            "type": "array"
+          },
+          "pid": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reason": {
+            "enum": [
+              null,
+              "not_running",
+              "unconfirmed"
+            ]
+          },
+          "start_ticks": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "endpoints"
+        ],
+        "type": "object"
+      },
+      "DnsListeners": {
+        "properties": {
+          "client_path_verified": {
+            "const": false
+          },
+          "entry_component": {
+            "enum": [
+              null,
+              "mosdns",
+              "unbound-raw"
+            ]
+          },
+          "listeners": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DnsListenerProcess"
+            },
+            "type": "object"
+          },
+          "mode": {
+            "enum": [
+              "automatic",
+              "manual",
+              "unknown"
+            ]
+          },
+          "scope": {
+            "const": "service_network_namespace"
+          },
+          "source": {
+            "const": "linux_process_sockets"
+          }
+        },
+        "required": [
+          "source",
+          "scope",
+          "mode",
+          "entry_component",
+          "client_path_verified",
+          "listeners"
         ],
         "type": "object"
       },
@@ -724,6 +888,7 @@
                   "INVALID_ARGUMENT",
                   "UNAUTHORIZED",
                   "FORBIDDEN",
+                  "API_DISABLED",
                   "NOT_FOUND",
                   "METHOD_NOT_ALLOWED",
                   "CONFLICT",
@@ -731,6 +896,7 @@
                   "PAYLOAD_TOO_LARGE",
                   "UNSUPPORTED_MEDIA_TYPE",
                   "UNAVAILABLE",
+                  "SAVE_UNCONFIRMED",
                   "STALE_DATA",
                   "INTERNAL_ERROR"
                 ],
@@ -833,6 +999,339 @@
         ],
         "type": "object"
       },
+      "GatewayConfig": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "has_token": {
+            "type": "boolean"
+          },
+          "instance_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "type": "string"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "enabled",
+          "has_token"
+        ],
+        "type": "object"
+      },
+      "GatewayConfigResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GatewayConfig"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "type": "object"
+      },
+      "GatewayConnections": {
+        "properties": {
+          "complete_history": {
+            "const": false
+          },
+          "filter_scope": {
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "client": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "destination": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "domain": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "view": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "view",
+          "scope",
+          "filter_scope",
+          "complete_history"
+        ],
+        "type": "object"
+      },
+      "GatewayConnectionsResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GatewayConnections"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "type": "object"
+      },
+      "GatewayFakeIP": {
+        "properties": {
+          "cidr": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "domain": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fakeip": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fetched_at": {
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "historical_ownership_verified": {
+            "type": "boolean"
+          },
+          "sampled_at": {
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "validity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "GatewayFakeIPResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GatewayFakeIP"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "type": "object"
+      },
+      "GatewaySummary": {
+        "properties": {
+          "features": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "type": "object"
+          },
+          "fetched_at": {
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "freshness": {
+            "properties": {
+              "age_seconds": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "max_age_seconds": {
+                "minimum": 0,
+                "type": "number"
+              },
+              "stale": {
+                "type": "boolean"
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "instance": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "version": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runtime": {
+            "properties": {
+              "core_responding": {
+                "type": "boolean"
+              },
+              "forwarding_verified": {
+                "type": "boolean"
+              },
+              "outbound_reachable": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [],
+            "type": "object"
+          },
+          "sampled_at": {
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "instance",
+          "features",
+          "mode",
+          "runtime",
+          "freshness"
+        ],
+        "type": "object"
+      },
+      "GatewaySummaryResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GatewaySummary"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "type": "object"
+      },
       "History": {
         "properties": {
           "filename": {
@@ -864,6 +1363,105 @@
         "required": [
           "data",
           "meta"
+        ],
+        "type": "object"
+      },
+      "Installation": {
+        "properties": {
+          "config_file": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "control_command": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "data_dir": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/InstallationReceipt"
+          },
+          "release_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "service_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "enum": [
+              "unavailable",
+              "native_service_environment"
+            ]
+          },
+          "state_dir": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "source",
+          "service_name",
+          "control_command",
+          "config_file",
+          "data_dir",
+          "state_dir",
+          "release_path",
+          "receipt"
+        ],
+        "type": "object"
+      },
+      "InstallationReceipt": {
+        "properties": {
+          "archive_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "installed_at": {
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "manifest_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "enum": [
+              "missing",
+              "mismatch",
+              "recorded"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "archive_sha256",
+          "manifest_sha256",
+          "installed_at"
         ],
         "type": "object"
       },
@@ -1195,6 +1793,119 @@
         ],
         "type": "object"
       },
+      "Provenance": {
+        "properties": {
+          "application": {
+            "properties": {
+              "method": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_commit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_sha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "source_commit",
+              "source_sha256",
+              "method"
+            ],
+            "type": "object"
+          },
+          "base_package": {
+            "properties": {
+              "archive_sha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "version": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "version",
+              "archive_sha256"
+            ],
+            "type": "object"
+          },
+          "frontend": {
+            "properties": {
+              "dependency_mode": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "manifest_sha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_commit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_sha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "working_tree_modified": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "source_commit",
+              "source_sha256",
+              "manifest_sha256",
+              "dependency_mode",
+              "working_tree_modified"
+            ],
+            "type": "object"
+          },
+          "process_files_verified": {
+            "const": false
+          },
+          "source": {
+            "const": "installed_metadata"
+          }
+        },
+        "required": [
+          "source",
+          "application",
+          "frontend",
+          "base_package",
+          "process_files_verified"
+        ],
+        "type": "object"
+      },
       "Query": {
         "properties": {
           "domain": {
@@ -1415,6 +2126,9 @@
           },
           "core_healthy": {
             "type": "boolean"
+          },
+          "dns": {
+            "$ref": "#/components/schemas/DnsListeners"
           },
           "freshness": {
             "$ref": "#/components/schemas/Freshness"
@@ -1887,13 +2601,18 @@
       "BearerToken": {
         "scheme": "bearer",
         "type": "http"
+      },
+      "BrowserSession": {
+        "in": "cookie",
+        "name": "lovestdns_session",
+        "type": "apiKey"
       }
     }
   },
   "info": {
     "description": "DNS 专用接口。Unix 时间戳单位秒；interval_seconds 为目标采集周期，window_seconds 为实际比较窗口。过期数据返回 503。详见 docs/integration-api.md。",
     "title": "LovestDNS Integration API",
-    "version": "0.1.0-dev.lovestdns-native.20261104.11"
+    "version": "0.1.0-dev.lovestdns-native.20261112.home2.1"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1992,7 +2711,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -2308,7 +3027,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -2623,7 +3342,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -2946,7 +3665,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3271,7 +3990,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3597,7 +4316,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -3913,7 +4632,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -4243,7 +4962,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -4626,7 +5345,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -4846,6 +5565,1359 @@
         ]
       }
     },
+    "/gateway/config": {
+      "delete": {
+        "description": "Browser administrator session only; writes require CSRF. Optional, no background polling.",
+        "operationId": "gateway_disconnect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "expected_revision": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "expected_revision"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayConfigResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BrowserSession": []
+          }
+        ],
+        "x-allowed-roles": [
+          "browser_admin"
+        ]
+      },
+      "get": {
+        "description": "Browser administrator session only; writes require CSRF. Optional, no background polling.",
+        "operationId": "gateway_config",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayConfigResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BrowserSession": []
+          }
+        ],
+        "x-allowed-roles": [
+          "browser_admin"
+        ]
+      },
+      "put": {
+        "description": "Browser administrator session only; writes require CSRF. Optional, no background polling.",
+        "operationId": "gateway_save",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "expected_revision": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string",
+                    "writeOnly": true
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url",
+                  "expected_revision"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayConfigResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BrowserSession": []
+          }
+        ],
+        "x-allowed-roles": [
+          "browser_admin"
+        ]
+      }
+    },
+    "/gateway/connections": {
+      "get": {
+        "description": "Browser administrator session only; writes require CSRF. Optional, no background polling.",
+        "operationId": "gateway_connections",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayConnectionsResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BrowserSession": []
+          }
+        ],
+        "x-allowed-roles": [
+          "browser_admin"
+        ]
+      }
+    },
+    "/gateway/fakeip": {
+      "get": {
+        "description": "Browser administrator session only; writes require CSRF. Optional, no background polling.",
+        "operationId": "gateway_fakeip",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayFakeIPResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BrowserSession": []
+          }
+        ],
+        "x-allowed-roles": [
+          "browser_admin"
+        ]
+      }
+    },
+    "/gateway/summary": {
+      "get": {
+        "description": "Browser administrator session only; writes require CSRF. Optional, no background polling.",
+        "operationId": "gateway_summary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewaySummaryResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BrowserSession": []
+          }
+        ],
+        "x-allowed-roles": [
+          "browser_admin"
+        ]
+      }
+    },
+    "/gateway/test": {
+      "post": {
+        "description": "Browser administrator session only; writes require CSRF. Optional, no background polling.",
+        "operationId": "gateway_test",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "expected_revision": {
+                    "type": "string"
+                  },
+                  "token": {
+                    "type": "string",
+                    "writeOnly": true
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewaySummaryResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request rejected or gateway unavailable",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BrowserSession": []
+          }
+        ],
+        "x-allowed-roles": [
+          "browser_admin"
+        ]
+      }
+    },
     "/health-check": {
       "get": {
         "description": "管理或只读 Token",
@@ -4957,7 +7029,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -5281,7 +7353,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -5613,7 +7685,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -6002,7 +8074,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -6317,7 +8389,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -6633,7 +8705,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -6956,7 +9028,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -7279,7 +9351,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -7594,7 +9666,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -7910,7 +9982,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -8226,7 +10298,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {
@@ -8542,7 +10614,7 @@
                 }
               }
             },
-            "description": "权限不足",
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
             "headers": {
               "Cache-Control": {
                 "schema": {

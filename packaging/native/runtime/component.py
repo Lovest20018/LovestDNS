@@ -25,7 +25,7 @@ def render_mosdns():
     path = Path("/tmp/mosdns.yaml")
     value = path.read_text()
     address = endpoint(os.environ["DNS_BIND_ADDRESS"], os.environ["SUITE_DNS_PORT"])
-    value, count = re.subn(r"(?m)^(\s+listen:)\s+:53\s*$", lambda m: f"{m[1]} {address}", value)
+    value, count = re.subn(r"(?m)^(\s+listen:)\s+:53\s*$", lambda m: f"{m[1]} {json.dumps(address)}", value)
     if count != 2:
         raise ValueError("MosDNS listen template differs from the locked baseline")
     path.write_text(value)
@@ -74,6 +74,7 @@ def prepare_dnscrypt(socks=False):
     if count != 1:
         raise ValueError('DNSCrypt listen template differs from the locked baseline')
     path.write_text(value)
+    shared.preserve_dnscrypt_defaults(path)
 
 
 def update(core, env):

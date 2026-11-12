@@ -6,7 +6,7 @@ LovestDNS 从原 `Lovest20018/PaoPaoDNS` fork 继续发布，更名后的地址�
 
 `integrated/backend/` 负责 Web/API、浏览器认证、配置版本与历史。`integrated/runtime/` 负责观测、维护任务、共享配置生成和应用记录。`integrated/frontend/` 是当前 LovestDNS 界面，在构建时覆盖冻结 WebUI 的对应文件。
 
-`web/` 保留 `standalone-20261024` 原始检查点。它仍提供部分通用代码和依赖清单，因此暂不物理搬迁；新增功能写入 `integrated/`。冻结清单和原 ZIP 不改写，`scripts/freeze-standalone.py` 校验 39 个逻辑文件。唯一移动的旧 CI 文件原样归档到 `packaging/legacy/`，不再作为活动工作流运行。
+`web/` 保留 `standalone-20261024` 原始检查点，继续提供部分通用源代码；LovestDNS 的前端依赖清单和锁文件由 `integrated/frontend/` 单独维护。新增功能写入 `integrated/`。冻结清单和原 ZIP 不改写，`scripts/freeze-standalone.py` 校验 39 个逻辑文件。唯一移动的旧 CI 文件原样归档到 `packaging/legacy/`，不再作为活动工作流运行。
 
 ## 部署与构建
 
@@ -23,4 +23,4 @@ LovestDNS 从原 `Lovest20018/PaoPaoDNS` fork 继续发布，更名后的地址�
 - GitHub Release 使用 `v<版本>` 标签，包含 `lovestdns-native-debian-amd64.tar.gz` 和同名 `.sha256`。候选版本标记为 prerelease；不得把未验收的新构建覆盖为旧候选。
 - `.build/` 和本地 `releases/` 产物不推送 Git，例外仅为原有冻结源码 ZIP。真实配置、密码、Token、数据、RDB、状态、历史、日志和截图不纳入源代码发布。
 
-安装包内 `manifest.json` 记录载荷和原始上游二进制摘要。当前 `.11` 发布复用已在独立 Debian 测试实例验收的原始包，下载入口和仓库整理单独验证，不改包内运行代码。后续构建请按新的源码和文档生成新版本，并重新验收。
+安装包内 `manifest.json` 记录载荷和原始上游二进制摘要。安装入口默认下载已发布的 `.11`；历史控制台候选 `20261109.console4.1` 尚未公开发布，由明确的本地提交构建，使用本地包和摘要部署。其默认包沿用固定上游核心，DNSCrypt 三补丁和 Redis/Unbound 更新继续独立验收。前端构建清单记录该提交、干净工作区状态和源码摘要，包内源码摘要与 API 契约基线一致；原生打包入口拒绝开发依赖复用和来源不符的前端。当前源码候选为 `20261111.home1`，尚未打包或部署；后续变更使用新候选版本，保留既有候选及其验收记录。详见 [源码与版本收口](source-version-closure-2026-11-06.md)。

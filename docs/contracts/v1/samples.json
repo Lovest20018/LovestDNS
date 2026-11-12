@@ -1,6 +1,6 @@
 {
   "api_version": "1",
-  "candidate_version": "0.1.0-dev.lovestdns-native.20261104.11",
+  "candidate_version": "0.1.0-dev.lovestdns-native.20261112.home2.1",
   "cases": [
     {
       "id": "observer_instance",
@@ -25,7 +25,7 @@
             "id": "00000000-0000-4000-8000-000000000001",
             "kind": "paopaodns",
             "name": "Contract DNS",
-            "version": "0.1.0-dev.lovestdns-native.20261104.11"
+            "version": "0.1.0-dev.lovestdns-native.20261112.home2.1"
           },
           "meta": {
             "api_version": "1",
@@ -82,13 +82,52 @@
               "restart_dns_core": false,
               "runtime_snapshot": true
             },
+            "installation": {
+              "config_file": null,
+              "control_command": null,
+              "data_dir": null,
+              "receipt": {
+                "archive_sha256": null,
+                "installed_at": null,
+                "manifest_sha256": null,
+                "status": "missing"
+              },
+              "release_path": null,
+              "service_name": null,
+              "source": "unavailable",
+              "state_dir": null
+            },
             "instance_id": "00000000-0000-4000-8000-000000000001",
+            "maintenance": {
+              "available": true,
+              "phase": "ready"
+            },
             "name": "Contract DNS",
             "permissions": {
               "configure": false,
               "diagnose": true,
               "maintain": false,
               "observe": true
+            },
+            "provenance": {
+              "application": {
+                "method": null,
+                "source_commit": null,
+                "source_sha256": null
+              },
+              "base_package": {
+                "archive_sha256": null,
+                "version": null
+              },
+              "frontend": {
+                "dependency_mode": null,
+                "manifest_sha256": null,
+                "source_commit": null,
+                "source_sha256": null,
+                "working_tree_modified": null
+              },
+              "process_files_verified": false,
+              "source": "installed_metadata"
             },
             "record_types": [
               "A",
@@ -103,7 +142,7 @@
               "HTTPS"
             ],
             "runtime_error": null,
-            "version": "0.1.0-dev.lovestdns-native.20261104.11"
+            "version": "0.1.0-dev.lovestdns-native.20261112.home2.1"
           },
           "meta": {
             "api_version": "1",
@@ -729,13 +768,52 @@
               "restart_dns_core": false,
               "runtime_snapshot": false
             },
+            "installation": {
+              "config_file": null,
+              "control_command": null,
+              "data_dir": null,
+              "receipt": {
+                "archive_sha256": null,
+                "installed_at": null,
+                "manifest_sha256": null,
+                "status": "missing"
+              },
+              "release_path": null,
+              "service_name": null,
+              "source": "unavailable",
+              "state_dir": null
+            },
             "instance_id": "00000000-0000-4000-8000-000000000001",
+            "maintenance": {
+              "available": true,
+              "phase": "ready"
+            },
             "name": "Contract DNS",
             "permissions": {
               "configure": false,
               "diagnose": true,
               "maintain": false,
               "observe": true
+            },
+            "provenance": {
+              "application": {
+                "method": null,
+                "source_commit": null,
+                "source_sha256": null
+              },
+              "base_package": {
+                "archive_sha256": null,
+                "version": null
+              },
+              "frontend": {
+                "dependency_mode": null,
+                "manifest_sha256": null,
+                "source_commit": null,
+                "source_sha256": null,
+                "working_tree_modified": null
+              },
+              "process_files_verified": false,
+              "source": "installed_metadata"
             },
             "record_types": [
               "A",
@@ -750,7 +828,7 @@
               "HTTPS"
             ],
             "runtime_error": "collector unavailable in test scenario",
-            "version": "0.1.0-dev.lovestdns-native.20261104.11"
+            "version": "0.1.0-dev.lovestdns-native.20261112.home2.1"
           },
           "meta": {
             "api_version": "1",
@@ -896,6 +974,40 @@
         "headers": {
           "Cache-Control": "no-store",
           "X-Request-ID": "contract-forbidden_config"
+        },
+        "status": 403
+      }
+    },
+    {
+      "id": "external_api_disabled",
+      "operation_id": "instance",
+      "provenance": {
+        "inputs": "external token access explicitly disabled; real authentication switch",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-external_api_disabled"
+        },
+        "method": "GET",
+        "path": "/api/v1/instance",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "API_DISABLED",
+            "message": "外部 API 已关闭，请在服务信息中开启"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-external_api_disabled"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-external_api_disabled"
         },
         "status": 403
       }
@@ -1469,6 +1581,109 @@
           "X-Request-ID": "contract-dns_health"
         },
         "status": 200
+      }
+    },
+    {
+      "id": "gateway_token_forbidden",
+      "operation_id": "gateway_config",
+      "provenance": {
+        "inputs": "external observer credential cannot access browser-only optional integration",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-gateway_token_forbidden"
+        },
+        "method": "GET",
+        "path": "/api/v1/gateway/config",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "FORBIDDEN",
+            "message": "只读接入不能访问配置、日志或维护任务"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-gateway_token_forbidden"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-gateway_token_forbidden"
+        },
+        "status": 403
+      }
+    },
+    {
+      "id": "gateway_default_off",
+      "operation_id": "gateway_config",
+      "provenance": {
+        "inputs": "ephemeral browser administrator session; no configured gateway and no network requests",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-gateway_default_off"
+        },
+        "method": "GET",
+        "path": "/api/v1/gateway/config",
+        "role": "browser_admin"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "enabled": false,
+            "has_token": false,
+            "revision": "missing"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-gateway_default_off"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-gateway_default_off"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "gateway_disabled_summary",
+      "operation_id": "gateway_summary",
+      "provenance": {
+        "inputs": "optional gateway is disabled; rejects observation without external I/O",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-gateway_disabled_summary"
+        },
+        "method": "GET",
+        "path": "/api/v1/gateway/summary",
+        "role": "browser_admin"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "CONFLICT",
+            "message": "尚未启用网关联动，请前往设置连接"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-gateway_disabled_summary"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-gateway_disabled_summary"
+        },
+        "status": 409
       }
     }
   ],

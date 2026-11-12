@@ -3,8 +3,10 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import shutil
 
 from flask import jsonify, request, g
+from werkzeug.exceptions import Conflict, ServiceUnavailable
 import app as base
 from dns_wire import RECORD_TYPES, TYPE_NAMES, parse_response
 from history import History
@@ -12,20 +14,26 @@ import runtime_client
 from config_versions import revision as file_revision, expected_revision, check_revision
 from runtime.locking import MaintenanceBusy, maintenance_lock
 from runtime.tasks import validate_submission
+from runtime.admission import CapacityBusy, slots
+from installation import read_object, recorded, installation_summary, provenance_summary
 
 app = base.app
 if os.environ.get("SUITE_DIST_DIR"):
     app.static_folder = os.environ["SUITE_DIST_DIR"]
-VERSION = "0.1.0-dev.lovestdns-native.20261104.11"
+VERSION = "0.1.0-dev.lovestdns-native.20261112.home2.1"
 STATE_DIR = Path(os.environ.get("SUITE_STATE_DIR", "/var/lib/paopaodns-suite"))
 RUN_DIR = Path(os.environ.get("SUITE_RUN_DIR", "/run/paopaodns-suite"))
 history = History(STATE_DIR)
+
+
+class SaveUnconfirmed(ServiceUnavailable):
+    api_code = "SAVE_UNCONFIRMED"
+
 base.DNS_TEST_SERVER = os.environ.get("DNS_TEST_SERVER", "127.0.0.1")
 base.DNS_RECORD_TYPES = RECORD_TYPES
 base.DNS_TYPE_NAMES = TYPE_NAMES
 base._parse_dns_response = lambda packet, query_id, domain=None, record_type=None: parse_response(
     packet, query_id, domain, record_type, base._read_dns_name)
-_original_write = base._atomic_write
 _original_path = base._safe_path
 
 
@@ -42,40 +50,134 @@ def safe_path(filename):
 base._safe_path = safe_path
 
 
+def _original_write(filename, content):
+    """Write exact UTF-8 bytes while retaining the upstream inotify contract."""
+    path = base._safe_path(filename)
+    if path is None:
+        return False, "File not allowed"
+    payload = content.encode("utf-8")
+    if len(payload) > base.FILE_SIZE_LIMITS.get(filename, base.FILE_SIZE_LIMITS["_default"]):
+        return False, "Content exceeds size limit"
+    before = _configuration_bytes(filename, path)
+    try:
+        with base.WRITE_LOCKS[filename]:
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            if before is not None:
+                try:
+                    shutil.copyfile(path, str(path) + ".bak")
+                except OSError:
+                    pass  # The durable intent is the authoritative backup.
+            try:
+                with open(path, "wb") as target:
+                    target.write(payload)
+                    target.flush()
+                    os.fsync(target.fileno())
+            except OSError:
+                _restore_failed_write(path, before is not None, before or b"")
+                raise
+        return True, ""
+    except OSError as exc:
+        return False, str(exc)
+
+
 def historized_write(filename, content):
     try:
         with maintenance_lock(STATE_DIR):
             return _write_with_history(filename, content)
     except MaintenanceBusy as exc:
-        return False, str(exc)
+        raise Conflict(str(exc)) from exc
 
 
 def _write_with_history(filename, content):
+    prepared = False
     try:
-        with history.write_lock() as db:
-            path = base._safe_path(filename)
-            if path is None or Path(path).is_symlink():
-                return False, "File not allowed"
-            before = None
-            if Path(path).exists():
-                limit = base.FILE_SIZE_LIMITS.get(filename, base.FILE_SIZE_LIMITS["_default"])
-                if Path(path).stat().st_size > limit:
-                    return False, "Existing configuration exceeds history size limit"
-                with Path(path).open('rb') as source:
-                    before = source.read(limit + 1)
-                if len(before) > limit:
-                    return False, "Existing configuration exceeds history size limit"
-            check_revision(expected_revision(), before)
-            if before is not None:
-                history.record(db, filename, before, "before_save")
-            success, error = _original_write(filename, content)
-            if success:
-                history.record(db, filename, content.encode("utf-8"), "saved")
-                history.prune(db)
-                g.saved_revision = file_revision(Path(path).read_bytes())
-            return success, error
+        path = base._safe_path(filename)
+        if path is None:
+            return False, "File not allowed"
+        before = _configuration_bytes(filename, path)
+        history.complete_write(filename, before)
+        check_revision(expected_revision(), before)
+        history.prepare_write(filename, before, content.encode("utf-8"))
+        prepared = True
+        success, error = _original_write(filename, content)
+        current = _configuration_bytes(filename, path)
+        history.complete_write(filename, current)
+        if (success and current != content.encode('utf-8')) or (not success and current != before):
+            raise SaveUnconfirmed("保存结果待核对：磁盘内容发生变化，候选文件和原版本已保留在历史中，请重新读取并合并")
+        if success:
+            g.saved_revision = file_revision(current)
+        return success, error
     except (OSError, ValueError, sqlite3.Error) as exc:
+        if prepared:
+            raise SaveUnconfirmed("保存结果待核对：文件可能已写入，恢复记录已保留。请重新读取文件和历史后再决定是否重试") from exc
         return False, f"Configuration history unavailable: {exc}"
+
+
+def _configuration_bytes(filename, path):
+    if not Path(path).exists():
+        return None
+    limit = base.FILE_SIZE_LIMITS.get(filename, base.FILE_SIZE_LIMITS["_default"])
+    with Path(path).open("rb") as source:
+        content = source.read(limit + 1)
+    if len(content) > limit:
+        raise ValueError("Existing configuration exceeds history size limit")
+    return content
+
+
+def _restore_failed_write(path, existed_before, original_bytes, read_ok=True):
+    # The frozen writer's truthiness check misses a valid empty original file.
+    if existed_before and read_ok:
+        try:
+            with open(path, "wb") as target:
+                target.write(original_bytes)
+                target.flush()
+                os.fsync(target.fileno())
+            return
+        except OSError:
+            pass
+    _original_restore_failed_write(path, existed_before, original_bytes, read_ok)
+
+
+_original_restore_failed_write = base._restore_failed_write
+base._restore_failed_write = _restore_failed_write
+
+
+def _limited_diagnostic(view):
+    # Both legacy and v1 routes use the same cross-worker admission boundary.
+    def limited(*args, **kwargs):
+        try:
+            with slots(RUN_DIR / 'diagnostic-slots', 2):
+                return view(*args, **kwargs)
+        except CapacityBusy as exc:
+            response = jsonify({'error': str(exc)})
+            response.status_code = 503
+            response.headers['Retry-After'] = '1'
+            return response
+    return limited
+
+
+for _name in ('api_dns_test', 'api_dns_compare', 'api_health_check'):
+    _view = _limited_diagnostic(getattr(base, _name))
+    setattr(base, _name, _view)
+    app.view_functions[_name] = _view
+
+
+@app.before_request
+def recover_configuration_history():
+    # Lazy recovery also works for prefork workers and after a process crash.
+    # The mutation path does this under its own lock immediately before writing.
+    filename = (request.view_args or {}).get("filename")
+    if request.method == "GET" and filename in base.ALLOWED_FILES:
+        path = base._safe_path(filename)
+        if path is not None:
+            try:
+                if history.has_pending(filename):
+                    with maintenance_lock(STATE_DIR):
+                        history.complete_write(filename, _configuration_bytes(filename, path))
+            except MaintenanceBusy as exc:
+                raise Conflict(str(exc)) from exc
+            except (OSError, ValueError, sqlite3.Error) as exc:
+                raise ServiceUnavailable("配置恢复记录暂不可用，请稍后重试") from exc
 
 
 base._atomic_write = historized_write
@@ -126,10 +228,8 @@ base._runtime_env = boot_env
 
 
 def build_info():
-    try:
-        return json.loads(Path(os.environ.get("SUITE_BUILD_INFO", "/opt/suite/build-info.json")).read_text())
-    except (OSError, ValueError):
-        return {"source_commit": "unknown", "image": "unknown"}
+    info = read_object(os.environ.get("SUITE_BUILD_INFO", "/opt/suite/build-info.json"))
+    return {**info, **{key: recorded(info.get(key)) or 'unknown' for key in ('source_commit', 'image')}}
 
 
 @app.get("/api/capabilities")
@@ -143,9 +243,12 @@ def capabilities():
         management = runtime_client.manager_request("capabilities")
     except (RuntimeError, ValueError):
         management = {}
-    return jsonify({"edition": "integrated", "version": VERSION, "core": build_info(),
+    info = build_info()
+    return jsonify({"edition": "integrated", "version": VERSION, "core": info,
+        "installation": installation_summary(), "provenance": provenance_summary(info, app.static_folder),
         "deployment": "native" if os.environ.get("LOVESTDNS_SYSTEMD") == "1" else "container",
         "dns_defaults": {"server": base.DNS_TEST_SERVER, "port": port},
+        "maintenance": management.get('worker', {'available': bool(management), 'phase': 'ready' if management else 'unavailable'}),
         "features": {"dns_debug": True, "config_history": True,
                      "runtime_snapshot": available, "config_apply": management.get("apply_custom_mod") is True,
                      "redis_snapshot": management.get("save_redis_snapshot") is True,

@@ -60,6 +60,54 @@ def test_runtime_and_metrics_contracts_and_stale_data(client, monkeypatch, snaps
         validate(response, 'runtime')
 
 
+def test_runtime_dns_listener_contract_preserves_unknown_and_observer_scope(client, monkeypatch, snapshot):
+    from runtime.dns_listeners import summary
+    snapshot['dns'] = summary({'CNAUTO': 'yes'}, {})
+    snapshot['dns']['listeners']['mosdns'] = {'available': True, 'reason': None, 'pid': 22, 'start_ticks': '100',
+        'endpoints': [{'address': '::', 'port': 15453, 'transport': 'udp', 'family': 6, 'wildcard': True}]}
+    monkeypatch.setattr(server.runtime_client, 'snapshot', lambda: snapshot)
+    monkeypatch.setenv('SUITE_READ_TOKEN', 'listener-observer')
+    response = client[0].get('/api/v1/runtime', headers={'Authorization': 'Bearer listener-observer'})
+    assert response.status_code == 200
+    validate(response, 'runtime')
+    assert response.get_json()['data']['dns']['client_path_verified'] is False
+    assert response.get_json()['data']['dns']['listeners']['unbound-forward']['available'] is False
+
+
+def test_optional_installation_contract_keeps_native_identity_and_provenance_separate(client, monkeypatch, tmp_path):
+    import json
+    monkeypatch.setenv('LOVESTDNS_SYSTEMD', '1')
+    monkeypatch.setenv('LOVESTDNS_HOME', '/opt/lovestdns-validation/current')
+    monkeypatch.setenv('SUITE_READ_TOKEN', 'installation-observer')
+    monkeypatch.setattr(server.app, 'static_folder', str(tmp_path))
+    (tmp_path / 'build-manifest.json').write_text(json.dumps({'source_commit': 'f' * 40,
+        'source_snapshot': {'sha256': 'f' * 64}, 'dependency_mode': 'npm-ci', 'working_tree_modified': False}))
+    monkeypatch.setattr(server, 'build_info', lambda: {'image': 'synthetic-upstream', 'source_commit': 'e' * 40,
+        'native_refresh': {'source_commit': 'a' * 40, 'source_sha256': 'a' * 64}})
+    assert client[0].get('/api/v1/capabilities').status_code == 401
+    response = client[0].get('/api/v1/capabilities', headers={'Authorization': 'Bearer installation-observer'})
+    validate(response, 'capabilities')
+    data = response.get_json()['data']
+    assert data['installation']['control_command'] == '/usr/local/sbin/lovestdns-validationctl'
+    assert data['core']['source_commit'] == 'e' * 40
+    assert data['provenance']['application']['source_commit'] == 'a' * 40
+    assert data['provenance']['frontend']['source_commit'] == 'f' * 40
+    assert data['provenance']['base_package']['archive_sha256'] is None
+    assert data['provenance']['process_files_verified'] is False
+    assert not data['permissions']['maintain']
+
+
+def test_incomplete_core_metadata_keeps_service_information_readable(client, monkeypatch, tmp_path):
+    path = tmp_path / 'build-info.json'
+    path.write_text('{"image": [], "source_commit": 3, "native_refresh": "invalid"}')
+    monkeypatch.setenv('SUITE_BUILD_INFO', str(path))
+    response = client[0].get('/api/v1/capabilities', headers=AUTH)
+    validate(response, 'capabilities')
+    data = response.get_json()['data']
+    assert data['core']['image'] == data['core']['source_commit'] == 'unknown'
+    assert data['provenance']['application']['source_commit'] is None
+
+
 def test_comparison_reasons_do_not_become_healthy_zeroes(client, monkeypatch, snapshot):
     monkeypatch.setattr(server.runtime_client, 'snapshot', lambda: snapshot)
     layer = snapshot['layers']['recursive']
@@ -108,6 +156,7 @@ def test_dns_wire_comparison_and_health_match_the_contract(client, monkeypatch):
 def test_task_lookup_retries_retention_and_recovery(client, monkeypatch, tmp_path):
     core = FakeCore(tmp_path / 'core')
     manager = Manager(core, TaskStore(core.state))
+    monkeypatch.setattr(manager, 'healthy', lambda: True)  # Isolated protocol test; worker is driven explicitly.
     monkeypatch.setattr(server.runtime_client, 'manager_request', lambda op, task=None: manager.dispatch({'operation': op, **({'task': task} if op in {'submit', 'task'} else {})}))
     api = client[0]
     validate(api.get('/api/v1/config/apply-plan', headers=AUTH), 'apply_plan')

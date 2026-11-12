@@ -20,15 +20,16 @@ OUTPUT = ROOT / "docs/contracts/v1"
 NOW = 1792972800.0  # Fixed Unix UTC seconds: 2026-10-26T00:00:00Z.
 IDENTITY = "00000000-0000-4000-8000-000000000001"
 EXCLUDED = {"node_modules", "dist", "dist-ssr", "__pycache__", ".pytest_cache", ".vite"}
-SOURCE_DIRS = ("integrated", "packaging/integrated", "packaging/native", "scripts", "web")
+SOURCE_DIRS = ("integrated", "packaging/integrated", "packaging/native", "packaging/components", "scripts", "web")
 SOURCE_ROOT_FILES = (".gitignore", ".gitattributes", ".dockerignore", "install.py", ".env.integrated.example", ".env.native.example", "docker-compose.integrated.yaml",
                      ".github/workflows/integrated-check.yml", "packaging/upstream.lock.json",
                      "packaging/native/requirements.lock.txt",
                      "docs/lovestdns-native-deployment.md",
                      "packaging/standalone.freeze.json", "docker-compose-web.yaml",
                      "docker-compose.sidecar.yaml", "packaging/legacy/web-docker-ghcr.yml.disabled",
-                     ".github/workflows/native-package.yml")
-TEXT_SUFFIXES = {".py", ".ts", ".tsx", ".css", ".json", ".html", ".md", ".yaml", ".yml", ".svg"}
+                     ".github/workflows/native-package.yml", "packaging/components.lock.json", "packaging/dnscrypt-source.lock.json")
+TEXT_SUFFIXES = {".py", ".ts", ".tsx", ".js", ".mjs", ".css", ".json", ".html", ".md", ".yaml", ".yml", ".svg", ".txt", ".patch"}
+BINARY_SUFFIXES = {".png"}
 
 
 def encode(value):
@@ -44,11 +45,11 @@ def source_summary():
     for directory in SOURCE_DIRS:
         paths.extend(p for p in (ROOT / directory).rglob("*") if p.is_file()
                      and not EXCLUDED.intersection(p.relative_to(ROOT).parts)
-                     and (p.suffix in TEXT_SUFFIXES or p.name in {"Dockerfile", ".gitignore"}))
-    files = {p.relative_to(ROOT).as_posix(): sha256(p.read_bytes().replace(b"\r\n", b"\n"))
+                     and (p.suffix in TEXT_SUFFIXES | BINARY_SUFFIXES or p.name in {"Dockerfile", ".gitignore"}))
+    files = {p.relative_to(ROOT).as_posix(): sha256(p.read_bytes() if p.suffix in BINARY_SUFFIXES else p.read_bytes().replace(b"\r\n", b"\n"))
              for p in sorted(set(paths))}
     return {"sha256": sha256(encode(files)), "files": files,
-            "hash_mode": "SHA-256 of UTF-8 sorted/indented files map with final LF; each source file uses LF-normalized bytes",
+            "hash_mode": "SHA-256 of UTF-8 sorted/indented files map with final LF; text files use LF-normalized bytes and binary files use original bytes",
             "scope": [*SOURCE_DIRS, *SOURCE_ROOT_FILES],
             "commit_lookup": "git log -1 --format=%H -- docs/contracts/v1/manifest.json"}
 
@@ -100,8 +101,11 @@ def collect_samples(server, stack, temp):
     stack.enter_context(patch("api_v1.uuid.uuid4", return_value=uuid.UUID(IDENTITY)))
     stack.enter_context(patch.dict(server.app.config, TESTING=True))
     stack.enter_context(patch.object(server, "boot_env", return_value={"CNAUTO": "yes"}))
+    stack.enter_context(patch('api_v1.external_api_enabled', return_value=True))
     lock = json.loads((ROOT / "packaging/upstream.lock.json").read_text(encoding="utf-8"))
     stack.enter_context(patch.object(server, "build_info", return_value={k: lock[k] for k in ("image", "source_commit")}))
+    stack.enter_context(patch.object(server.app, "_static_folder", str(temp / 'dist')))
+    stack.enter_context(patch.dict(os.environ, {'LOVESTDNS_SYSTEMD': '0'}))
     stack.enter_context(patch.object(server.runtime_client, "manager_request", return_value={
         "apply_custom_mod": True, "save_redis_snapshot": True}))
     counters = {"total.num.queries": 10, "total.num.cachehits": 8, "total.num.cachemiss": 2, "time.up": 100}
@@ -170,6 +174,9 @@ def collect_samples(server, stack, temp):
             capture(operation + "_unavailable", "/" + operation, operation, status=503, scenario="collector I/O failure substituted at snapshot boundary")
         capture("unauthorized", "/instance", "instance", role="anonymous", status=401, scenario="no Authorization header")
         capture("forbidden_config", "/file/custom_env.ini", "file_read", status=403, scenario="observer credential; real config-read authorization guard")
+        with patch('api_v1.external_api_enabled', return_value=False):
+            capture('external_api_disabled', '/instance', 'instance', role='admin', status=403,
+                    scenario='external token access explicitly disabled; real authentication switch')
         (temp / 'data').mkdir(parents=True, exist_ok=True)
         capture('config_create', '/file/custom_env.ini', 'file_write', method='PUT', role='admin',
                 body={'content': 'CNAUTO="yes"\n', 'expected_revision': 'missing'},
@@ -195,6 +202,18 @@ def collect_samples(server, stack, temp):
                     {"label": "comparison", "server": "192.0.2.54", "port": 53, "transport": "tcp"}]},
                 scenario="two synthetic wire replies: NOERROR and NXDOMAIN; real parallel comparison handler")
         capture("dns_health", "/health-check", "dns_health", scenario="synthetic successful A replies for actual built-in sample domains; real health handler")
+        capture('gateway_token_forbidden', '/gateway/config', 'gateway_config', status=403,
+                scenario='external observer credential cannot access browser-only optional integration')
+        from browser_auth import COOKIE, create_session, database, reset_password
+        reset_password(temp / 'state', 'synthetic-browser-contract-password')
+        with database(temp / 'state') as db:
+            cookie, _csrf = create_session(db, False)
+        client.set_cookie(COOKIE, cookie)
+        capture('gateway_default_off', '/gateway/config', 'gateway_config', role='browser_admin',
+                scenario='ephemeral browser administrator session; no configured gateway and no network requests')
+        capture('gateway_disabled_summary', '/gateway/summary', 'gateway_summary', role='browser_admin', status=409,
+                scenario='optional gateway is disabled; rejects observation without external I/O')
+        client.delete_cookie(COOKIE)
         document = client.get("/api/v1/openapi.json", headers={
             "Authorization": "Bearer contract-test-observer", "X-Request-ID": "contract-openapi"}).get_json()
     return document, {"format_version": 1, "api_version": "1", "candidate_version": server.VERSION,
@@ -255,9 +274,9 @@ def build_bundle():
                 "status": "development_candidate", "stable_release": False,
                 "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
                 "runtime_acceptance_evidence": {
-                    "tested_runtime_commit": "49b47b5850d91550e27692e8ede337203d491ece",
+                    "tested_runtime_commit": None,
                     "report": "docs/verification.md",
-                    "scope": "Recorded isolated container run only; does not certify future runtime changes or a stable release"},
+                    "scope": "Historical local evidence is retained privately; public scripts permit independent reproduction and do not certify future changes"},
                 "source": source_summary(),
                 "artifacts": {name: {"sha256": sha256(data), "hash_mode": "UTF-8 canonical JSON with LF"}
                               for name, data in payloads.items()},

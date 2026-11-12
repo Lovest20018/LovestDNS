@@ -3,6 +3,7 @@
 import argparse
 from contextlib import contextmanager
 import hashlib
+import importlib.util
 import ipaddress
 import json
 import os
@@ -200,26 +201,41 @@ def healthy(p, timeout=240):
     if ':' in host:
         host = '[' + host + ']'
     base = f"http://{host}:{config['WEB_HOST_PORT']}"
+    # The host uses the private collector socket and DNS wire directly, so
+    # readiness never requires enabling external token access.
+    spec = importlib.util.spec_from_file_location('native_runtime_probe', p['home'] / 'current/app/backend/runtime_client.py')
+    probe = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(probe)
+    prior_run = os.environ.get('SUITE_RUN_DIR')
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     deadline = time.monotonic() + timeout
     while True:
         try:
-            req = urllib.request.Request(base + '/api/v1/runtime', headers={'Authorization': 'Bearer ' + config['WEB_UI_TOKEN']})
-            with opener.open(req, timeout=5) as response:
-                value = json.load(response)['data']
+            os.environ['SUITE_RUN_DIR'] = str(p['run'])
+            try:
+                value = probe.snapshot()
+            finally:
+                if prior_run is None:
+                    os.environ.pop('SUITE_RUN_DIR', None)
+                else:
+                    os.environ['SUITE_RUN_DIR'] = prior_run
             bootstrap = value.get('components', {}).get('bootstrap', {})
             if bootstrap.get('statename') == 'FATAL' or (bootstrap.get('statename') == 'EXITED' and bootstrap.get('exitstatus', 0)):
                 raise RuntimeError('Native bootstrap failed; inspect the bootstrap component log')
-            if value.get('core_healthy') and value.get('freshness', {}).get('age_seconds', 999) <= 25:
-                # Confirm a real DNS protocol response through the API as well.
-                req = urllib.request.Request(base + '/api/v1/dns-test',
-                    data=json.dumps({'domain': 'lovestdns-ready.invalid', 'record_type': 'A',
-                                     'server': {'0.0.0.0': '127.0.0.1', '::': '::1'}.get(config['DNS_BIND_ADDRESS'], config['DNS_BIND_ADDRESS']),
-                                     'port': int(config['SUITE_DNS_PORT'])}).encode(),
-                    headers={'Authorization': 'Bearer ' + config['WEB_UI_TOKEN'], 'Content-Type': 'application/json'})
-                with opener.open(req, timeout=10) as response:
-                    dns = json.load(response)['data']
-                if dns.get('rcode') is not None:
+            if value.get('core_healthy'):
+                with opener.open(base + '/', timeout=5) as response:
+                    if response.status != 200:
+                        raise ValueError('Web page unavailable')
+                target = {'0.0.0.0': '127.0.0.1', '::': '::1'}.get(config['DNS_BIND_ADDRESS'], config['DNS_BIND_ADDRESS'])
+                query_id = secrets.token_bytes(2)
+                name = b'lovestdns-ready'
+                packet = query_id + bytes.fromhex('01000001000000000000') + bytes([len(name)]) + name + b'\x07invalid\x00\x00\x01\x00\x01'
+                with socket.socket(socket.AF_INET6 if ':' in target else socket.AF_INET, socket.SOCK_DGRAM) as dns:
+                    dns.settimeout(5)
+                    dns.connect((target, int(config['SUITE_DNS_PORT'])))
+                    dns.send(packet)
+                    reply = dns.recv(65535)
+                if len(reply) >= 12 and reply[:2] == query_id and reply[2] & 0x80:
                     return {'core_healthy': True, 'dns_responded': True, 'scope': 'component readiness and protocol response; not every rule or public domain'}
         except (OSError, ValueError, KeyError, urllib.error.HTTPError):
             pass
@@ -278,6 +294,21 @@ def install_lock(p):
         yield
 
 
+def installation_receipt(p, release, archive_sha256=None):
+    """Keep the outer archive digest outside its own payload and bind it to this release."""
+    manifest = (release / 'manifest.json').read_bytes()
+    info = json.loads(manifest)
+    if archive_sha256 is not None and not re.fullmatch(r'[a-f0-9]{64}', archive_sha256):
+        raise ValueError('Invalid installation archive digest')
+    receipts = p['home'] / 'receipts'
+    receipts.mkdir(exist_ok=True, mode=0o700)
+    receipt = {'format_version': 1, 'service_name': p['name'], 'release_path': str(release.resolve()),
+               'version': info['version'], 'manifest_sha256': hashlib.sha256(manifest).hexdigest(),
+               'archive_sha256': archive_sha256, 'installed_at': time.time()}
+    atomic(receipts / (release.name + '.json'), json.dumps(receipt, sort_keys=True) + '\n')
+    return receipt
+
+
 def install(args, package):
     manifest = verify_package(package)
     p = paths(args.instance)
@@ -312,6 +343,7 @@ def install(args, package):
                  '-r', str(release / 'requirements.lock.txt')])
         for name, arguments in (('redis-server', ['--version']), ('unbound', ['-V']), ('mosdns', ['version']), ('dnscrypt-proxy', ['-version'])):
             command([str(release / 'core' / name), *arguments], capture=True)
+        installation_receipt(p, release, getattr(args, 'sha256', None))
         backup = None
         changed = False
         try:
@@ -393,6 +425,7 @@ def main():
             mode.add_argument('--sha256', required=True)
     for name in ('status', 'health', 'start', 'stop', 'restart', 'logs', 'rollback', 'password'):
         commands.add_parser(name)
+    commands.add_parser('api').add_argument('mode', choices=['on', 'off', 'status'])
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error('Run as root or through sudo')
@@ -427,10 +460,11 @@ def main():
             print(json.dumps(healthy(p)))
     elif args.action == 'logs':
         command(['journalctl', '-u', p['name'] + '.service', '-n', '80', '--no-pager'])
-    elif args.action == 'password':
+    elif args.action in {'password', 'api'}:
         current = p['home'] / 'current'
+        options = ['--external-api', args.mode] if args.action == 'api' else []
         command([str(current / 'venv/bin/python'), str(current / 'app/backend/browser_auth.py'),
-                 '--state-dir', str(p['storage'] / 'state')])
+                 '--state-dir', str(p['storage'] / 'state'), *options])
     else:
         if args.action in {'start', 'restart'}:
             command(['systemctl', 'reset-failed', p['name'] + '.service'], check=False, capture=True)

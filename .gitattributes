@@ -3,3 +3,5 @@
 *.disabled text eol=lf
 # Contract artifact hashes are portable raw-byte hashes across Git checkouts.
 docs/contracts/v1/*.json text eol=lf
+# Unified diff context prefixes tab-indented Go lines with a space.
+packaging/components/patches/*.patch whitespace=-space-before-tab

@@ -1,64 +1,15 @@
+import { parseListContent, serializeListContent } from '../domainEditor';
+import type { DomainEntry } from '../domainEditor';
 import EditorToolbar from '../components/EditorToolbar';
-import { useSuite } from '../suiteContext';
-import { preflightSave } from '../configSave';
+import { useSuiteConfig } from '../suiteContext';
 import { useUnsavedChanges } from '../unsaved';
-import ConfigFeedback from '../components/ConfigFeedback';
-import { saveFeedback } from '../saveFeedback';
-import { useState, useEffect, useRef } from 'react';
-import { useStore } from '../store';
-import * as api from '../api';
+import { useFileEditor } from '../useFileEditor';
+import { useState } from 'react';
 import { LIST_FILE_INFO } from '../types';
 import { Plus, X, FileText, Download, Copy, Save, CheckCircle, AlertCircle, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '../hooks';
 
 const PREFIXES = ['domain', 'full', 'regexp', 'keyword'];
-
-interface DomainEntry {
-  id: number;
-  prefix: string;
-  value: string;
-  comment: boolean;
-}
-
-function parseListContent(content: string): DomainEntry[] {
-  const entries: DomainEntry[] = [];
-  let id = 0;
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    if (trimmed.startsWith('#')) {
-      const uncommented = trimmed.replace(/^#+\s*/, '');
-      const match = uncommented.match(/^(domain|full|regexp|keyword):(.+)$/);
-      if (match) {
-        entries.push({ id: id++, prefix: match[1], value: match[2], comment: true });
-      } else if (uncommented) {
-        entries.push({ id: id++, prefix: '__comment__', value: trimmed, comment: true });
-      }
-      continue;
-    }
-    const match = trimmed.match(/^(domain|full|regexp|keyword):(.+)$/);
-    if (match) {
-      entries.push({ id: id++, prefix: match[1], value: match[2], comment: false });
-    } else {
-      entries.push({ id: id++, prefix: 'domain', value: trimmed, comment: false });
-    }
-  }
-  return entries;
-}
-
-function serializeListContent(entries: DomainEntry[]): string {
-  const lines: string[] = [];
-  for (const e of entries) {
-    if (e.prefix === '__comment__') {
-      const text = e.value.trimStart();
-      lines.push(text.startsWith('#') ? e.value : `# ${e.value}`);
-    } else {
-      const line = `${e.prefix}:${e.value}`;
-      lines.push(e.comment ? `# ${line}` : line);
-    }
-  }
-  return lines.join('\n');
-}
 
 const createEntryId = () => Date.now() + Math.random();
 
@@ -75,10 +26,6 @@ const createCommentEntry = (): DomainEntry => ({
   value: '# ',
   comment: true,
 });
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 const ALL_LISTS = [
   ...LIST_FILE_INFO,
@@ -101,107 +48,31 @@ const ALL_LISTS = [
 ];
 
 export default function DomainListPage() {
-  const { error: connectionError } = useSuite();
-  const { setFileContent } = useStore();
-  const { showToast, ToastComponent } = useToast();
-  const loadRequestId = useRef(0);
-  const loadFileRef = useRef<(key: string) => Promise<void>>(async () => {});
-  const [activeTab, setActiveTab] = useState('force_dnscrypt_list');
-  const [editMode, setEditMode] = useState<'visual' | 'text'>('text');
-  const [entries, setEntries] = useState<DomainEntry[]>([]);
-  const [rawContent, setRawContent] = useState('');
-  const [lastLoadedContent, setLastLoadedContent] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(true);
-  const [diskBaseline, setDiskBaseline] = useState<string | null>(null);
-  const [saveResult, setSaveResult] = useState<{ success: boolean; msg: string; result?: api.SaveResult } | null>(null);
+  const [activeTab, setActiveTab] = useState(() => ALL_LISTS.find((list) => list.filename === new URLSearchParams(window.location.hash.split('?')[1]).get('file'))?.key ?? 'force_dnscrypt_list');
+  return <DomainFileEditor key={activeTab} activeTab={activeTab} onSelect={setActiveTab} />;
+}
 
+function DomainFileEditor({ activeTab, onSelect }: { activeTab: string; onSelect: (key: string) => void }) {
+  const { error: connectionError } = useSuiteConfig();
+  const { showToast, ToastComponent } = useToast();
+  const [editMode, setEditMode] = useState<'visual' | 'text'>('text');
   const activeList = ALL_LISTS.find((l) => l.key === activeTab)!;
+  const editor = useFileEditor(activeList.filename, activeList.defaultContent);
+  const { content: rawContent, setContent: setRawContent, busy: saving, result: saveResult } = editor;
+  const loading = !editor.loaded && !editor.error;
+  const loadFailed = !editor.loaded || !!editor.error;
+  const loadFile = () => editor.load(true);
   const isTrackerList = activeTab === 'trackerslist';
+  const entries = isTrackerList ? [] : parseListContent(rawContent);
+  const setEntries = (update: DomainEntry[] | ((old: DomainEntry[]) => DomainEntry[])) => setRawContent(serializeListContent(typeof update === 'function' ? update(entries) : update));
   const ruleCount = entries.filter((entry) => entry.prefix !== '__comment__').length;
   const commentCount = entries.length - ruleCount;
   const disabledRuleCount = entries.filter((entry) => entry.prefix !== '__comment__' && entry.comment).length;
-  const getCurrentContent = () => editMode === 'visual' && !isTrackerList ? serializeListContent(entries) : rawContent;
-  const hasUnsavedChanges = getCurrentContent() !== lastLoadedContent;
+  const getCurrentContent = () => rawContent;
+  const hasUnsavedChanges = editor.dirty;
   useUnsavedChanges(hasUnsavedChanges);
-
-  const loadFile = async (key: string) => {
-    const list = ALL_LISTS.find((l) => l.key === key)!;
-    const requestId = ++loadRequestId.current;
-    setLoading(true);
-    try {
-      const result = await api.readFile(list.filename);
-      const content = result.content || '';
-      if (requestId !== loadRequestId.current) return;
-      setDiskBaseline(content);
-      setLoadFailed(false);
-      setFileContent(key, content);
-      setRawContent(content);
-      setEntries(key === 'trackerslist' ? [] : parseListContent(content));
-      setLastLoadedContent(content);
-    } catch (e: unknown) {
-      const message = getErrorMessage(e);
-      if (requestId !== loadRequestId.current) return;
-      if (message.includes('not found') || message.includes('404')) {
-        setLoadFailed(false);
-        setDiskBaseline(null);
-        // File doesn't exist yet — show default content, allow creation
-        const content = list.defaultContent;
-        setRawContent(content);
-        setEntries(key === 'trackerslist' ? [] : parseListContent(content));
-        setLastLoadedContent(content);
-      } else {
-        setLoadFailed(true);
-        // Server error — show default but warn user
-        const content = list.defaultContent;
-        setRawContent(content);
-        setEntries(key === 'trackerslist' ? [] : parseListContent(content));
-        setLastLoadedContent(content);
-        showToast(`读取 ${list.filename} 失败: ${message}`);
-      }
-    } finally {
-      if (requestId === loadRequestId.current) {
-        setLoading(false);
-      }
-    }
-  };
-  useEffect(() => {
-    loadFileRef.current = loadFile;
-  });
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadFileRef.current(activeTab);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [activeTab]);
-
-  const switchTab = (key: string) => {
-    if (key === activeTab) return;
-    if (hasUnsavedChanges && !window.confirm('当前列表有未保存修改，切换后会丢失这些修改。确定继续？')) {
-      return;
-    }
-    setSaveResult(null);
-    if (key === 'trackerslist') {
-      setEditMode('text');
-    }
-    setActiveTab(key);
-  };
-
-  const switchEditMode = (mode: 'visual' | 'text') => {
-    if (mode === editMode) return;
-    if (mode === 'visual' && isTrackerList) {
-      showToast('trackerslist.txt 是 Tracker URL 列表，仅支持文本编辑，避免改写为 domain: 规则');
-      return;
-    }
-    if (mode === 'visual') {
-      setEntries(parseListContent(rawContent));
-    } else {
-      setRawContent(serializeListContent(entries));
-    }
-    setEditMode(mode);
-  };
+  const switchTab = (key: string) => onSelect(key);
+  const switchEditMode = (mode: 'visual' | 'text') => { if (!isTrackerList || mode === 'text') setEditMode(mode); };
 
   const updateEntry = (id: number, field: keyof DomainEntry, val: string | boolean) => {
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, [field]: val } : e)));
@@ -255,22 +126,8 @@ export default function DomainListPage() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    setSaveResult(null);
-    const content = getCurrentContent();
-    try {
-      const result = await preflightSave(activeList.filename, diskBaseline, content, api.readFile, api.writeFile);
-      setDiskBaseline(content);
-      setFileContent(activeTab, content);
-      setLastLoadedContent(content);
-      const msg = saveFeedback(result);
-      setSaveResult({ success: true, msg, result });
-      showToast('配置已保存；请按生效提示继续');
-    } catch (e: unknown) {
-      setSaveResult({ success: false, msg: getErrorMessage(e) || '保存失败' });
-    } finally {
-      setSaving(false);
-    }
+    const result = await editor.save();
+    if (result?.success) showToast('配置已保存；请按生效提示继续');
   };
 
   const handleCopy = async () => {
@@ -299,26 +156,7 @@ export default function DomainListPage() {
         <p>管理域名分流列表文件。保存后按当前运行参数判断监听条件，再使用查询测试验证。</p>
       </div>
 
-      <div className="card">
-        <div className="card-title"><FileText size={18} /> 匹配优先级</div>
-        <div className="priority-flow">
-          <span className="priority-item" style={{ background: 'rgba(139,92,246,0.15)', color: '#8b5cf6' }}>custom_mod (top)</span>
-          <span className="priority-arrow">&gt;</span>
-          <span className="priority-item" style={{ background: 'rgba(59,130,246,0.15)', color: '#3b82f6' }}>force_forward_list</span>
-          <span className="priority-arrow">&gt;</span>
-          <span className="priority-item" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>force_dnscrypt_list</span>
-          <span className="priority-arrow">&gt;</span>
-          <span className="priority-item" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>force_recurse_list</span>
-          <span className="priority-arrow">&gt;</span>
-          <span className="priority-item" style={{ background: 'rgba(6,182,212,0.15)', color: '#06b6d4' }}>force_ttl_rules</span>
-          <span className="priority-arrow">&gt;</span>
-          <span className="priority-item" style={{ background: 'rgba(139,92,246,0.15)', color: '#8b5cf6' }}>custom_mod (list)</span>
-          <span className="priority-arrow">&gt;</span>
-          <span className="priority-item" style={{ background: 'rgba(107,114,128,0.15)', color: '#6b7280' }}>自动分流</span>
-        </div>
-      </div>
-
-      <div className="tab-bar">
+      <div className="tab-bar suite-file-tabs suite-list-tabs">
         {ALL_LISTS.map((list) => (
           <button
             key={list.key}
@@ -330,7 +168,8 @@ export default function DomainListPage() {
         ))}
       </div>
 
-      <EditorToolbar file={activeList.filename} dirty={hasUnsavedChanges} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} onSave={() => void handleSave()} />
+      <EditorToolbar file={activeList.filename} dirty={hasUnsavedChanges} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} onSave={() => void handleSave()} />
+      {editor.error && <p className="suite-editor-result is-error" role="alert">{editor.error}</p>}
 
       <div className="card">
         <div className="card-title">{activeList.title}</div>
@@ -388,6 +227,7 @@ export default function DomainListPage() {
                     </>
                   )}
                   <div className="domain-row-actions">
+                    {!entry.comment && ['domain', 'full'].includes(entry.prefix) && /^[a-zA-Z0-9][a-zA-Z0-9.-]*$/.test(entry.value.trim()) && <a className="btn btn-secondary btn-sm" href={`#/diagnostics?domain=${encodeURIComponent(entry.value.trim())}`} title="查询当前实例；未保存规则需先保存并按提示应用">查询</a>}
                     <button className="btn btn-secondary btn-sm" onClick={() => moveEntry(entry.id, -1)} disabled={index === 0} title="上移此行"><ArrowUp size={14} /></button>
                     <button className="btn btn-secondary btn-sm" onClick={() => moveEntry(entry.id, 1)} disabled={index === entries.length - 1} title="下移此行"><ArrowDown size={14} /></button>
                     <button className="btn btn-secondary btn-sm" onClick={() => insertDomainAfter(entry.id)} title="在此行后插入域名"><Plus size={14} /> 域名</button>
@@ -403,11 +243,11 @@ export default function DomainListPage() {
             </div>
           </>
         ) : (
-          <textarea className="textarea-code" value={rawContent} onChange={(e) => setRawContent(e.target.value)} rows={15} />
+          <textarea disabled={!editor.loaded} aria-label={activeList.filename + " 文件内容"} className="textarea-code" value={rawContent} onChange={(e) => setRawContent(e.target.value)} rows={15} />
         )}
 
         <div className="suite-editor-actions" style={{ marginTop: 16, borderTop: '1px solid var(--border-color)', paddingTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" disabled={saving || loading || loadFailed || !!connectionError} onClick={handleSave}>
+          <button className="btn btn-primary" disabled={saving || loading || loadFailed || !!connectionError || !hasUnsavedChanges} onClick={handleSave}>
             <Save size={16} /> {saving ? '保存中...' : '保存配置'}
           </button>
           <button className="btn btn-secondary btn-sm" onClick={handleCopy}><Copy size={14} /> 复制</button>
@@ -437,8 +277,26 @@ export default function DomainListPage() {
         </table>
       </div>
 
-      <ConfigFeedback result={saveResult?.result} file={activeList.filename} saved={!!saveResult?.success} dirty={hasUnsavedChanges} />
-      {loadFailed && !loading && <p role="alert">配置尚未成功读取，保存已停用。<button className="btn btn-secondary btn-sm" onClick={() => void loadFile(activeTab)}>重新读取</button></p>}
+      <details className="card suite-editor-help"><summary><FileText size={16} /> 匹配优先级说明</summary>
+        <div className="card-title"><FileText size={18} /> 匹配优先级</div>
+        <div className="priority-flow">
+          <span className="priority-item" style={{ background: 'rgba(139,92,246,0.15)', color: '#8b5cf6' }}>custom_mod (top)</span>
+          <span className="priority-arrow">&gt;</span>
+          <span className="priority-item" style={{ background: 'rgba(59,130,246,0.15)', color: '#3b82f6' }}>force_forward_list</span>
+          <span className="priority-arrow">&gt;</span>
+          <span className="priority-item" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>force_dnscrypt_list</span>
+          <span className="priority-arrow">&gt;</span>
+          <span className="priority-item" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>force_recurse_list</span>
+          <span className="priority-arrow">&gt;</span>
+          <span className="priority-item" style={{ background: 'rgba(6,182,212,0.15)', color: '#06b6d4' }}>force_ttl_rules</span>
+          <span className="priority-arrow">&gt;</span>
+          <span className="priority-item" style={{ background: 'rgba(139,92,246,0.15)', color: '#8b5cf6' }}>custom_mod (list)</span>
+          <span className="priority-arrow">&gt;</span>
+          <span className="priority-item" style={{ background: 'rgba(107,114,128,0.15)', color: '#6b7280' }}>自动分流</span>
+        </div>
+      </details>
+
+      {loadFailed && !loading && <p role="alert">配置尚未成功读取，保存已停用。<button className="btn btn-secondary btn-sm" onClick={() => void loadFile()}>重新读取</button></p>}
       {ToastComponent}
       </fieldset>
     </div>

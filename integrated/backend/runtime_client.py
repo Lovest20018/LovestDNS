@@ -41,6 +41,8 @@ def manager_request(operation, task=None):
         if not isinstance(response, dict) or not isinstance(response.get("ok"), bool):
             raise ValueError("Invalid manager response")
         if not response["ok"]:
+            if response.get("code") == "UNAVAILABLE":
+                raise RuntimeError(str(response.get("error", "维护服务暂不可用"))[:500])
             raise ValueError(str(response.get("error", "维护请求被拒绝"))[:500])
         return response["result"]
     except OSError as exc:

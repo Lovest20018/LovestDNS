@@ -1,0 +1,19 @@
+--- a/dnscrypt-proxy/proxy.go
++++ b/dnscrypt-proxy/proxy.go
+@@ -463,12 +463,14 @@
+ func (proxy *Proxy) udpListener(clientPc *net.UDPConn) {
+ 	defer clientPc.Close()
++	buffer := make([]byte, MaxDNSPacketSize-1)
+ 	for {
+-		buffer := make([]byte, MaxDNSPacketSize-1)
+ 		length, clientAddr, err := clientPc.ReadFrom(buffer)
+ 		if err != nil {
+ 			return
+ 		}
+-		packet := buffer[:length]
++		// Each asynchronous query owns its bytes; keep the large receive
++		// scratch buffer local to this listener instead of allocating it per query.
++		packet := append([]byte(nil), buffer[:length]...)
+ 		if !proxy.clientsCountInc() {
+ 			dlog.Warnf("Too many incoming connections (max=%d)", proxy.maxClients)
+ 			dlog.Debugf("Number of goroutines: %d", runtime.NumGoroutine())

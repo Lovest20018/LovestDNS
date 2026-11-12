@@ -30,7 +30,7 @@ export default function BrowserLogin({ session, loading, error, changePassword, 
     finally { setBusy(false); }
   };
   return <main className="suite-app suite-login">
-    <div className="suite-login-brand"><img src="/lovestdns-icon.svg" alt="" width="48" height="48" /><strong>LovestDNS</strong><span>DNS 管理</span></div>
+    <div className="suite-login-brand"><img src="/lovestdns-icon.svg" alt="" width="48" height="48" /><strong>LovestDNS</strong><span>DNS 管理面板</span></div>
     <section className="suite-login-card">
       <span className="suite-login-symbol"><LockKeyhole size={22} /></span>
       <h1>{changing ? '设置管理员密码' : '登录 DNS 配置台'}</h1>

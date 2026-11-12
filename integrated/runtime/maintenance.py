@@ -99,7 +99,10 @@ class CoreActions:
                 "scope": "仅验证服务响应，不验证规则命中或外部域名解析"}
 
     def apply(self, expected):
-        with maintenance_lock(self.state):
+        # The API worker may have accepted this action just before the automatic
+        # watcher acquires the same guard. Its child reload has a 45s limit;
+        # wait here without extending the short preview/config-write timeouts.
+        with maintenance_lock(self.state, timeout=60):
             env = self.environment()
             if env.get("CNAUTO") == "no":
                 raise ValueError("纯递归模式不支持 custom_mod 应用")
@@ -204,7 +207,10 @@ class CoreActions:
             raise ValueError("Redis 快照时间不可比较")
         # Ensure LASTSAVE can prove a new snapshot even when two requests
         # occur in one second; total task time remains bounded.
+        wait_deadline = time.monotonic() + 5
         while time.time() <= last_save + 1:
+            if time.monotonic() >= wait_deadline:
+                raise ValueError("系统时钟发生变化，无法确认新的快照时间；尚未提交保存请求")
             time.sleep(0.1)
         started = time.time()
         self.bgsave()

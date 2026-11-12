@@ -4,12 +4,25 @@ import { appendTrend, trendSegments } from '../src/trend.ts';
 import { configDiff } from '../src/configDiff.ts';
 import { parseSuiteReport, REPORT_LIMIT } from '../src/reports.ts';
 import type { RuntimeSnapshot } from '../src/suiteApi.ts';
+import { runtimeLifetimeMs } from '../src/runtimeFreshness.ts';
 
 function sample(at: number, comparable = true): RuntimeSnapshot {
   return { schema_version: 1, sampled_at: at, ready: true, core_healthy: true, components: {},
     layers: { recursive: { available: true, comparable, qps: 0, cache_hit_ratio: 0 } },
     redis: { available: true, info: { used_memory: 0 } } };
 }
+
+test('server freshness survives browser clock skew and still expires stale samples', () => {
+  const value = { ...sample(100), freshness: { age_seconds: 3, max_age_seconds: 25 } };
+  assert.equal(runtimeLifetimeMs(value, 250, 0), 21750);
+  assert.equal(runtimeLifetimeMs(value, 250, 9999999999999), 21750);
+  assert.throws(() => runtimeLifetimeMs({ ...value, freshness: { age_seconds: 26, max_age_seconds: 25 } }));
+  assert.throws(() => runtimeLifetimeMs({ ...value, freshness: { age_seconds: -1, max_age_seconds: 25 } }));
+  assert.throws(() => runtimeLifetimeMs({ ...value, freshness: { age_seconds: NaN, max_age_seconds: 25 } }));
+  assert.throws(() => runtimeLifetimeMs(value, 22000));
+  assert.equal(runtimeLifetimeMs({ ...value, freshness: { age_seconds: 3, max_age_seconds: 900 } }, 0), 22000);
+  assert.equal(runtimeLifetimeMs(sample(100), 0, 105000), 20000);
+});
 test('trend preserves real zeroes, rejects counter reset samples, and breaks across missing data', () => {
   let points = appendTrend([], sample(10), 10);
   points = appendTrend(points, sample(15, false), 15);

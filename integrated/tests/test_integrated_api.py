@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import struct
+import sqlite3
 
 import pytest
 import server
@@ -20,6 +21,8 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setattr(server, "history", History(state))
     monkeypatch.setattr(server, "STATE_DIR", state)
     monkeypatch.setattr(server, "RUN_DIR", tmp_path / "run")
+    from browser_auth import set_external_api
+    set_external_api(state, True)  # Existing API tests explicitly opt in.
     server.app.config["TESTING"] = True
     with server.app.test_client() as value:
         yield value, data, state
@@ -37,6 +40,13 @@ def test_missing_runtime_disables_runtime_feature(client, monkeypatch):
     assert result["features"]["runtime_snapshot"] is False
     assert result["features"]["config_apply"] is False
     assert client[0].get("/api/runtime", headers=AUTH).status_code == 503
+
+
+def test_worker_degradation_is_visible_without_marking_dns_failed(client, monkeypatch):
+    monkeypatch.setattr(server.runtime_client, 'manager_request', lambda *args: {'apply_custom_mod': False, 'save_redis_snapshot': False, 'restart_dns_core': False, 'worker': {'available': False, 'phase': 'result_unconfirmed'}})
+    value = client[0].get('/api/v1/capabilities', headers=AUTH).get_json()['data']
+    assert value['maintenance'] == {'available': False, 'phase': 'result_unconfirmed'}
+    assert value['features']['redis_snapshot'] is False
 
 
 def test_status_keeps_saved_overrides_distinct_from_running_environment(client):
@@ -108,6 +118,109 @@ def test_history_failure_prevents_configuration_write(client, monkeypatch):
     response = api.put("/api/file/custom_env.ini", json={"content": 'VALUE="new"\n'}, headers=AUTH)
     assert response.status_code == 500
     assert target.read_text() == 'VALUE="old"\n'
+
+
+@pytest.mark.parametrize("stage", ["record", "prune", "commit"])
+def test_post_write_failure_keeps_durable_recovery(client, monkeypatch, stage):
+    from contextlib import contextmanager
+    api, data, state = client
+    target = data / "custom_env.ini"
+    target.write_bytes(b'VALUE="old"\n')
+    original = getattr(server.history, "write_lock" if stage == "commit" else stage)
+    if stage == "commit":
+        calls = 0
+        @contextmanager
+        def failing_commit():
+            nonlocal calls
+            calls += 1
+            with original() as db:
+                yield db
+                if calls == 3:  # recovery, intent commit, final commit
+                    raise sqlite3.OperationalError("commit failed")
+        monkeypatch.setattr(server.history, "write_lock", failing_commit)
+    else:
+        def fail(*args):
+            raise sqlite3.OperationalError("history full")
+        monkeypatch.setattr(server.history, stage, fail)
+    response = api.put("/api/file/custom_env.ini", json={"content": 'VALUE="new"\n'}, headers=AUTH)
+    assert response.status_code == 503
+    assert target.read_bytes() == b'VALUE="new"\n'
+    with sqlite3.connect(state / "config-history.sqlite") as db:
+        assert db.execute("SELECT COUNT(*) FROM write_intents").fetchone()[0] == 1
+    monkeypatch.setattr(server.history, "write_lock" if stage == "commit" else stage, original)
+    # Reopening history reconciles the persisted file without replaying a write.
+    revisions = api.get("/api/history/custom_env.ini", headers=AUTH).get_json()["revisions"]
+    assert len(revisions) == 2
+    assert target.read_bytes() == b'VALUE="new"\n'
+
+
+def test_interrupted_write_preserves_external_edit_and_candidate(client):
+    api, data, _ = client
+    target = data / "custom_env.ini"
+    server.history.prepare_write("custom_env.ini", b"", b'VALUE="candidate"\n')
+    target.write_bytes(b'VALUE="external"\n')
+    revisions = api.get("/api/history/custom_env.ini", headers=AUTH).get_json()["revisions"]
+    assert {r["reason"] for r in revisions} == {"before_save", "unconfirmed_candidate", "recovered_external"}
+    assert target.read_bytes() == b'VALUE="external"\n'
+
+
+def test_external_reversion_after_save_keeps_unconfirmed_candidate(client, monkeypatch):
+    api, data, _ = client
+    target = data / "custom_env.ini"
+    original, candidate = b'VALUE="old"\n', 'VALUE="candidate"\n'
+    target.write_bytes(original)
+    write = server._original_write
+
+    def write_then_revert(filename, content):
+        result = write(filename, content)
+        assert result[0]
+        target.write_bytes(original)
+        return result
+
+    monkeypatch.setattr(server, '_original_write', write_then_revert)
+    revision = api.get('/api/v1/file/custom_env.ini', headers=AUTH).get_json()['data']['revision']
+    response = api.put('/api/v1/file/custom_env.ini', headers=AUTH,
+                       json={'content': candidate, 'expected_revision': revision})
+    assert response.status_code == 503
+    assert response.get_json()['error']['code'] == 'SAVE_UNCONFIRMED'
+    assert target.read_bytes() == original
+    revisions = api.get('/api/v1/history/custom_env.ini', headers=AUTH).get_json()['data']['revisions']
+    pending = next(row for row in revisions if row['reason'] == 'unconfirmed_candidate')
+    recovered = api.get(f'/api/v1/history/custom_env.ini/{pending["id"]}', headers=AUTH).get_json()['data']
+    assert recovered['content'] == candidate
+    assert not server.history.has_pending('custom_env.ini')
+
+
+@pytest.mark.parametrize('original', [None, b'', b'VALUE="old"\n'])
+def test_lazy_recovery_retains_candidate_when_disk_matches_original(client, original):
+    api, data, _ = client
+    target = data / 'custom_env.ini'
+    if original is not None:
+        target.write_bytes(original)
+    candidate = b'VALUE="candidate"\n'
+    server.history.prepare_write('custom_env.ini', original, candidate)
+    revisions = api.get('/api/v1/history/custom_env.ini', headers=AUTH).get_json()['data']['revisions']
+    pending = next(row for row in revisions if row['reason'] == 'unconfirmed_candidate')
+    assert server.history.read('custom_env.ini', pending['id']) == candidate.decode()
+    assert (target.read_bytes() if target.exists() else None) == original
+    assert not server.history.has_pending('custom_env.ini')
+
+
+def test_failed_write_restores_empty_original(client):
+    target = client[1] / "custom_env.ini"
+    target.write_bytes(b"partial")
+    server.base._restore_failed_write(str(target), True, b"", True)
+    assert target.read_bytes() == b""
+
+
+def test_v1_unconfirmed_save_has_distinct_error_code(client, monkeypatch):
+    def fail(*args):
+        raise sqlite3.OperationalError('full')
+    monkeypatch.setattr(server.history, 'prune', fail)
+    response = client[0].put('/api/v1/file/custom_env.ini', json={'content': 'VALUE="new"\n'}, headers=AUTH)
+    assert response.status_code == 503
+    assert response.get_json()['error']['code'] == 'SAVE_UNCONFIRMED'
+    assert response.headers['X-Request-ID']
 
 
 def test_legacy_file_over_limit_is_not_silently_truncated(client):

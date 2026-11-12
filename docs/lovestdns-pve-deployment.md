@@ -1,12 +1,12 @@
 # LovestDNS：PVE CT 部署与旧数据迁移
 
-本文保留 `0.1.0-dev.lovestdns.20261104.1` 的 **Docker 方案**：PVE → Debian CT → Docker → LovestDNS 集成容器。LovestDNS 可以先于 DNS 管理 独立部署；后续新增的不依赖 Docker 的 systemd 安装包见 [Debian 原生部署](lovestdns-native-deployment.md)。
+本文保留 `0.1.0-dev.lovestdns.20261104.1` 的 **Docker 方案**：PVE → Debian CT → Docker → LovestDNS 集成容器。后续新增的不依赖 Docker 的 systemd 安装包见 [Debian 原生部署](lovestdns-native-deployment.md)。
 
 2026-10-26 已完成历史运行提交的 Linux amd64 隔离容器验收。本次更名不等于已经完成目标 CT 的嵌套 Docker、真实旧数据加载或长期负载验收。先用副本验证，再切换 DNS 客户端。
 
 ## 1. 新建 CT
 
-以下是根据 source-host 当前数据规模给出的起始配置，后续按实际使用量调整：
+以下为一般场景的起始配置，后续按实际使用量调整：
 
 | 项目 | 建议 |
 |---|---|
@@ -64,7 +64,7 @@ DNS_DATA_DIR=/opt/lovestdns/data
 DNS_STATE_DIR=/opt/lovestdns/state
 ```
 
-没有 DNS 管理 时，`SUITE_READ_TOKEN` 可留空；后续需要接入时设置一个与管理 Token 不同的随机值即可。面板默认绑定回环地址，必须明确设置 `WEB_BIND_ADDRESS` 才能从其他电脑访问。
+不使用只读 API 时，`SUITE_READ_TOKEN` 可留空；需要接入时设置一个与管理 Token 不同的随机值即可。面板默认绑定回环地址，必须明确设置 `WEB_BIND_ADDRESS` 才能从其他电脑访问。
 
 `PAOPAODNS_SUITE_IMAGE`、Compose 服务键 `paopaodns-suite`、容器内 `/var/lib/paopaodns-suite` 和原有 named volume 默认名保留兼容。项目对外名称为 LovestDNS，DNS 核心来源仍标明 PaoPaoDNS。已使用集成版 named volume 的部署不要随意更换 Compose 项目名，否则可能创建空的新卷。
 
@@ -96,6 +96,7 @@ DNS_STATE_DIR=/opt/lovestdns/state
 
 ```sh
 docker compose -f docker-compose.integrated.yaml config --quiet
+python3 scripts/build-components.py --output .build/components-bundle
 docker compose -f docker-compose.integrated.yaml build
 docker compose -f docker-compose.integrated.yaml up -d
 docker compose -f docker-compose.integrated.yaml ps
@@ -130,4 +131,4 @@ docker compose -f docker-compose.integrated.yaml exec -T paopaodns-suite redis-c
 
 全部通过后，再将 ROS/DHCP 或客户端 DNS 指向新 CT；保留旧服务与原始备份，观察实际客户端。需要回退时先把客户端 DNS 恢复到旧 IP，再恢复旧镜像与旧备份。不要以 `docker compose down -v` 作为升级或回退步骤，它会删除 named volume。
 
-DNS 管理 上线后只需通过 `/api/v1/` 接入同一实例，DNS 服务不需要因此重新迁移。
+外部客户端可通过 `/api/v1/` 接入同一实例。

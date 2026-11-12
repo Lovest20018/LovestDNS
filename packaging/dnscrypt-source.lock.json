@@ -1,0 +1,26 @@
+{
+  "format_version": 1,
+  "version": "2.1.20",
+  "architecture": "linux/amd64",
+  "source": {
+    "url": "https://codeload.github.com/DNSCrypt/dnscrypt-proxy/tar.gz/refs/tags/2.1.20",
+    "sha256": "2e6adb32e0f91cb755f1d2c060cddcc80ffca6a181bf03c90df22bbade121607"
+  },
+  "toolchain": {
+    "version": "go1.27.3",
+    "url": "https://go.dev/dl/go1.27.3.linux-amd64.tar.gz",
+    "sha256": "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40"
+  },
+  "patches": {
+    "dnscrypt-2.1.20-udp-receive-buffer.patch": "f49d0f518c75fb10baa33501955aec4442482b4630719ee33b9a9160de913367",
+    "dnscrypt-2.1.20-udp-packet-allocation.patch": "26c78595f15be9463e9399ae486c73e1e8116bcab50fe4aa580375431b4c7413",
+    "dnscrypt-2.1.20-cache-shard-digest.patch": "8f514cdc9cb43dc685a9cb72d8c29f74e890666960e0f84bf1e0b6e4fbabe626"
+  },
+  "variants": {
+    "upstream": [],
+    "buffer": ["dnscrypt-2.1.20-udp-receive-buffer.patch"],
+    "udp": ["dnscrypt-2.1.20-udp-receive-buffer.patch", "dnscrypt-2.1.20-udp-packet-allocation.patch"],
+    "cache": ["dnscrypt-2.1.20-cache-shard-digest.patch"],
+    "combined": ["dnscrypt-2.1.20-udp-receive-buffer.patch", "dnscrypt-2.1.20-udp-packet-allocation.patch", "dnscrypt-2.1.20-cache-shard-digest.patch"]
+  }
+}

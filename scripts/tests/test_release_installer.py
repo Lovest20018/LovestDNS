@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tarfile
+from types import SimpleNamespace
 
 import pytest
 
@@ -16,11 +17,13 @@ installer = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(installer)
 
 
-def bundle(tmp_path, extra=None):
+def bundle(tmp_path, extra=None, receipt_capable=False):
     path = tmp_path / 'native.tar.gz'
     content = b'raise SystemExit("test installer must not execute")\n'
     manifest = {'product': 'LovestDNS', 'deployment': 'native', 'architecture': 'amd64', 'version': 'test.1',
                 'files': {'install.py': hashlib.sha256(content).hexdigest()}}
+    if receipt_capable:
+        manifest['installation_receipt_v1'] = True
     with tarfile.open(path, 'w:gz') as archive:
         for name, data in [('lovestdns-test.1/install.py', content),
                            ('lovestdns-test.1/manifest.json', json.dumps(manifest).encode())]:
@@ -42,12 +45,40 @@ def test_download_only_checks_real_archive_without_executing_installer(tmp_path)
     assert (destination / (installer.ASSET + '.sha256')).read_text() == digest + '  ' + installer.ASSET + '\n'
 
 
+@pytest.mark.parametrize('receipt_capable', [False, True])
+def test_verified_archive_reaches_only_supported_installer_receipt_path(tmp_path, monkeypatch, receipt_capable):
+    package, digest = bundle(tmp_path, receipt_capable=receipt_capable)
+    monkeypatch.setattr(installer, 'os', SimpleNamespace(geteuid=lambda: 0))
+    monkeypatch.setattr(installer.sys, 'argv', ['install.py', '--package', str(package), '--sha256', digest,
+                                             '--instance', 'validation'])
+    calls = []
+    monkeypatch.setattr(installer.subprocess, 'run', lambda command, **kwargs: calls.append(command))
+    installer.main()
+    assert len(calls) == 1
+    assert calls[0][2:5] == ['--instance', 'validation', 'upgrade' if receipt_capable else 'install']
+    if receipt_capable:
+        assert calls[0][5:] == [str(package.resolve()), '--sha256', digest]
+    else:
+        assert len(calls[0]) == 5
+
+
 def test_corrupt_package_never_reaches_extraction(tmp_path):
     package, digest = bundle(tmp_path)
     package.write_bytes(package.read_bytes() + b'changed')
     with pytest.raises(ValueError, match='SHA-256 differs'):
         installer.unpack(package, digest, tmp_path / 'output')
     assert not (tmp_path / 'output').exists()
+
+
+def test_debian_12_original_python_without_tar_extraction_filters(monkeypatch, tmp_path):
+    package, digest = bundle(tmp_path)
+    original = tarfile.TarFile.extractall
+    monkeypatch.delattr(tarfile, 'data_filter', raising=False)
+    def legacy_extractall(self, path='.', members=None, *, numeric_owner=False):
+        return original(self, path, members=members, numeric_owner=numeric_owner, filter=lambda member, path: member)
+    monkeypatch.setattr(tarfile.TarFile, 'extractall', legacy_extractall)
+    root = installer.unpack(package, digest, tmp_path / 'output')
+    assert (root / 'install.py').is_file()
 
 
 @pytest.mark.parametrize('kind', ['escape', 'link', 'duplicate', 'device', 'drive', 'normalized_duplicate', 'empty'])

@@ -1,0 +1,13 @@
+--- a/dnscrypt-proxy/setsockopts_linux.go
++++ b/dnscrypt-proxy/setsockopts_linux.go
+@@ -24,6 +24,9 @@
+ 					syscall.IP_PMTUDISC_DONT,
+ 				)
+-				_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUFFORCE, 4096)
++				// Absorb short scheduler pauses without requiring CAP_NET_ADMIN.
++				// The kernel caps this normal request to net.core.rmem_max;
++				// it does not change any system-wide socket limit.
++				_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_RCVBUF, 256*1024)
+ 				_ = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUFFORCE, 4096)
+ 			})
+ 			return nil

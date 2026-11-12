@@ -11,7 +11,7 @@ import uuid
 
 from flask import Blueprint, g, jsonify, request
 from werkzeug.exceptions import HTTPException
-from browser_auth import current_session, csrf_valid, WRITE_METHODS
+from browser_auth import current_session, csrf_valid, external_api_enabled, WRITE_METHODS
 
 
 # Only these operations are exposed to the external observer credential.
@@ -104,7 +104,10 @@ def register(server):
         body = response.get_json()
         if response.status_code >= 400:
             message = body.get("error", response.status) if isinstance(body, dict) else response.status
-            return error(response.status_code, str(message))
+            wrapped = app.make_response(error(response.status_code, str(message)))
+            if response.headers.get('Retry-After'):
+                wrapped.headers['Retry-After'] = response.headers['Retry-After']
+            return wrapped
         wrapped = jsonify({"data": body, "meta": meta()})
         if response.headers.get('ETag'):
             wrapped.headers['ETag'] = response.headers['ETag']
@@ -113,6 +116,11 @@ def register(server):
     original_auth = base.auth_middleware
 
     def authenticate():
+        # The same browser session powers the panel even with token access off.
+        # Apply the switch to legacy routes too; they must not be a bypass.
+        if request.path.startswith('/api/') and not request.path.startswith('/api/v1/'):
+            if not external_api_enabled(server.STATE_DIR):
+                return jsonify({'error': '外部 API 已关闭，请在服务信息中开启'}), 403
         if not request.path.startswith("/api/v1/"):
             return original_auth()
         raw_id = request.headers.get("X-Request-ID", "")
@@ -121,6 +129,9 @@ def register(server):
         auth = request.headers.get("Authorization", "")
         token = auth[7:] if auth.startswith("Bearer ") else ""
         read_token = os.environ.get("SUITE_READ_TOKEN", "")
+
+        if auth and not external_api_enabled(server.STATE_DIR):
+            return error(403, "外部 API 已关闭，请在服务信息中开启", "API_DISABLED")
 
         def matches(expected):
             return bool(expected and token) and hmac.compare_digest(token.encode(), expected.encode())
@@ -135,7 +146,7 @@ def register(server):
             if request.method in WRITE_METHODS and not csrf_valid(session):
                 return error(403, "登录校验已失效，请刷新页面")
             g.api_role = "admin"
-        elif not base.WEB_UI_TOKEN and base.WEB_UI_ALLOW_NO_AUTH and not token:
+        elif not base.WEB_UI_TOKEN and base.WEB_UI_ALLOW_NO_AUTH and not token and external_api_enabled(server.STATE_DIR):
             g.api_role = "admin"
         else:
             return error(401, "请先登录，或提供有效的 API Token")
@@ -165,7 +176,7 @@ def register(server):
 
     @api.errorhandler(HTTPException)
     def http_error(exc):
-        return error(exc.code, exc.description)
+        return error(exc.code, exc.description, getattr(exc, 'api_code', None))
 
     @api.errorhandler(Exception)
     def unexpected_error(exc):
@@ -235,4 +246,6 @@ def register(server):
         from api_schema import openapi_document
         return jsonify(openapi_document(server.VERSION))
 
+    from gateway_integration import register_routes
+    register_routes(api, server, meta)
     app.register_blueprint(api)

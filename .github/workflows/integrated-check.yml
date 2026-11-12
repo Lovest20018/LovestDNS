@@ -41,7 +41,12 @@ jobs:
       - run: python scripts/export-api-contract.py --check
       - run: python -m pytest integrated/tests scripts/tests -q
       - run: python -m pytest web/backend/tests -q
+      - run: python scripts/build-integrated-ui.py
       - run: node --experimental-strip-types --test integrated/frontend/tests/*.test.ts
       - run: node --experimental-strip-types --test web/tests/*.test.ts
+      - run: python scripts/build-components.py --output .build/components-bundle
+      - run: python scripts/extract-component-baseline.py --output .build/core-baseline
+      - run: python scripts/test-cache-compatibility.py --baseline-home .build/core-baseline --bundle .build/components-bundle --work .build/cache-compatibility
+      - run: python scripts/test-dnscrypt-compatibility.py --baseline-home .build/core-baseline --bundle .build/components-bundle --work .build/dnscrypt-compatibility
       - run: docker build -f packaging/integrated/Dockerfile -t lovestdns:test .
       - run: python scripts/test-integrated-container.py --image lovestdns:test

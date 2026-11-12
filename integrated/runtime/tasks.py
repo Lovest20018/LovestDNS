@@ -38,13 +38,18 @@ class TaskStore:
         db.row_factory = sqlite3.Row
         try:
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version not in {0, 1}:
+            if version not in {0, 1, 2}:
                 raise ValueError("不支持的任务记录版本")
             db.execute("""CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, action TEXT NOT NULL,
                 expected_sha256 TEXT, state TEXT NOT NULL, created REAL NOT NULL,
                 updated REAL NOT NULL, result TEXT)""")
-            db.execute("PRAGMA user_version=1")
+            db.execute("""CREATE TABLE IF NOT EXISTS submissions (
+                request_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, created REAL NOT NULL)""")
+            db.execute("CREATE INDEX IF NOT EXISTS submissions_task ON submissions(task_id)")
+            if version < 2:
+                db.execute("INSERT OR IGNORE INTO submissions SELECT request_id,id,created FROM tasks")
+            db.execute("PRAGMA user_version=2")
             db.commit()
             with db:
                 yield db
@@ -64,7 +69,7 @@ class TaskStore:
         validate_submission(payload)
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            existing = db.execute("SELECT * FROM tasks WHERE request_id=?", (payload["request_id"],)).fetchone()
+            existing = self.submission(db, payload["request_id"])
             if existing:
                 if existing["action"] != payload["action"] or existing["expected_sha256"] != payload["expected_sha256"]:
                     raise ValueError("同一 request_id 不能用于不同任务")
@@ -72,27 +77,41 @@ class TaskStore:
             active = db.execute("SELECT * FROM tasks WHERE state IN ('queued','running')").fetchone()
             if active:
                 if active["action"] == payload["action"] and active["expected_sha256"] == payload["expected_sha256"]:
+                    db.execute("INSERT INTO submissions VALUES(?,?,?)", (payload["request_id"], active["id"], time.time()))
                     return self.value(active)
                 raise ValueError("已有维护任务进行中，请等待完成")
             task = uuid.uuid4().hex
             now = time.time()
             db.execute("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,NULL)",
                        (task, payload["request_id"], payload["action"], payload["expected_sha256"], "queued", now, now))
-            db.execute("DELETE FROM tasks WHERE id IN (SELECT id FROM tasks WHERE state NOT IN ('queued','running') ORDER BY created DESC LIMIT -1 OFFSET 99)")
+            db.execute("INSERT INTO submissions VALUES(?,?,?)", (payload["request_id"], task, now))
+            # Keep every alias for at least seven days, including after a task
+            # completes. A lost HTTP response must not cause another execution.
+            db.execute("DELETE FROM submissions WHERE created<? AND task_id IN (SELECT id FROM tasks WHERE state NOT IN ('queued','running'))", (now - 7 * 86400,))
+            db.execute("DELETE FROM tasks WHERE id NOT IN (SELECT task_id FROM submissions) AND id IN (SELECT id FROM tasks WHERE state NOT IN ('queued','running') ORDER BY created DESC LIMIT -1 OFFSET 99)")
             return self.value(db.execute("SELECT * FROM tasks WHERE id=?", (task,)).fetchone())
 
     def previous_submission(self, payload):
         validate_submission(payload)
         with self.connect() as db:
-            row = db.execute("SELECT * FROM tasks WHERE request_id=?", (payload["request_id"],)).fetchone()
+            row = self.submission(db, payload["request_id"])
             if row and (row["action"] != payload["action"] or row["expected_sha256"] != payload["expected_sha256"]):
                 raise ValueError("同一 request_id 不能用于不同任务")
             return self.value(row)
+
+    @staticmethod
+    def submission(db, request_id):
+        return db.execute("SELECT * FROM tasks WHERE request_id=? OR id=(SELECT task_id FROM submissions WHERE request_id=?)", (request_id, request_id)).fetchone()
 
     def recover(self):
         with self.connect() as db:
             db.execute("UPDATE tasks SET state='interrupted', updated=?, result=? WHERE state IN ('running','queued')",
                        (time.time(), json.dumps({"error": "管理进程重启，任务未自动重试；请核对组件和运行配置"}, ensure_ascii=False)))
+
+    def interrupt_unconfirmed_claim(self):
+        with self.connect() as db:
+            db.execute("UPDATE tasks SET state='interrupted', updated=?, result=? WHERE state='running'",
+                       (time.time(), json.dumps({"error": "任务领取结果未确认，执行器未重放动作；请核对组件和运行配置"}, ensure_ascii=False)))
 
     def claim(self):
         with self.connect() as db:

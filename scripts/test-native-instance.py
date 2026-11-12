@@ -35,9 +35,14 @@ def main():
     original_config = dict(config)
     resolver = hashlib.sha256(Path('/etc/resolv.conf').read_bytes()).hexdigest()
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    host = config['WEB_BIND_ADDRESS']
+    host = {'0.0.0.0': '127.0.0.1', '::': '::1'}.get(config['WEB_BIND_ADDRESS'], config['WEB_BIND_ADDRESS'])
+    if ':' in host:
+        host = '[' + host + ']'
     base = f"http://{host}:{config['WEB_HOST_PORT']}"
     original_env = original_mod = None
+    auth_cli = [str(home / 'venv/bin/python'), str(home / 'app/backend/browser_auth.py'),
+                '--state-dir', str(p['storage'] / 'state'), '--external-api']
+    originally_enabled = run([*auth_cli, 'status']).endswith('enabled')
 
     def request(path, body=None, *, observer=False, auth=True, method=None):
         headers = {'Content-Type': 'application/json'}
@@ -92,6 +97,7 @@ def main():
                      'expected_sha256': plan['sha256']}, expected)
 
     try:
+        run([*auth_cli, 'on'])
         restart('no')
         caps = request('/api/v1/capabilities', observer=True)['data']
         assert caps['deployment'] == 'native'
@@ -163,17 +169,19 @@ def main():
         installer.healthy(p)
         print('PASS: collector outage reports unavailable and recovers', flush=True)
     finally:
-        if original_env is not None:
-            request('/api/v1/file/custom_env.ini', {'content': original_env}, method='PUT')
-        if original_mod is not None:
-            request('/api/v1/file/custom_mod.yaml', {'content': original_mod}, method='PUT')
-        # Leave a usable full-featured preview after a successful test; retain
-        # the original tokens, address, ports and limits in either case.
-        installer.write_env(p['config'], {**original_config, 'CNAUTO': 'yes'})
-        run(['systemctl', 'reset-failed', p['name'] + '.service'])
-        run(['systemctl', 'restart', p['name'] + '.service'])
-        installer.healthy(p)
-        assert resolver == hashlib.sha256(Path('/etc/resolv.conf').read_bytes()).hexdigest()
+        try:
+            if original_env is not None:
+                request('/api/v1/file/custom_env.ini', {'content': original_env}, method='PUT')
+            if original_mod is not None:
+                request('/api/v1/file/custom_mod.yaml', {'content': original_mod}, method='PUT')
+            # Leave the preview running with original tokens, ports and limits.
+            installer.write_env(p['config'], {**original_config, 'CNAUTO': 'yes'})
+            run(['systemctl', 'reset-failed', p['name'] + '.service'])
+            run(['systemctl', 'restart', p['name'] + '.service'])
+            installer.healthy(p)
+            assert resolver == hashlib.sha256(Path('/etc/resolv.conf').read_bytes()).hexdigest()
+        finally:
+            run([*auth_cli, 'on' if originally_enabled else 'off'])
     print('Native instance smoke test passed; test preview remains running.', flush=True)
 
 

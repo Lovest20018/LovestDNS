@@ -37,6 +37,5 @@ coverage/
 !/releases/standalone-20261024-source.zip
 
 # Private deployment evidence stays local.
-.build/
 docs/validation/
 docs/ui-operation-optimization-*.md

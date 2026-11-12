@@ -1,0 +1,16 @@
+--- a/vendor/github.com/jedisct1/go-sieve-cache/pkg/sievecache/sharded.go
++++ b/vendor/github.com/jedisct1/go-sieve-cache/pkg/sievecache/sharded.go
+@@ -118,6 +118,13 @@
+ 	var h maphash.Hash
+ 	h.SetSeed(hashSeed)
+ 
++	// Hash DNSCrypt's digest keys directly, before the generic formatting
++	// path, so shard selection does not allocate a textual representation.
++	if digest, ok := any(key).([32]byte); ok {
++		h.Write(digest[:])
++		return int(h.Sum64() % uint64(c.numShards))
++	}
++
+ 	// Use type switch to handle different key types efficiently
+ 	switch k := any(key).(type) {
+ 	case string:

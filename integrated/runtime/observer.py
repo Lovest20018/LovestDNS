@@ -11,6 +11,7 @@ import shutil
 import threading
 import time
 import xmlrpc.client
+from runtime.dns_listeners import summary as dns_listener_summary
 
 RUN_DIR = Path(os.environ.get("SUITE_RUN_DIR", "/run/paopaodns-suite"))
 MAX_RESPONSE = 512 * 1024
@@ -147,6 +148,7 @@ def read_boot_env():
 
 def collect(previous=None):
     now = time.time()
+    sampled_monotonic = time.monotonic()
     env = read_boot_env()
     states = process_status()
     required = ["redis", "unbound-raw", "watcher"]
@@ -155,10 +157,21 @@ def collect(previous=None):
         if re.search(r":\d+$", env.get("SOCKS5", "")):
             required.append("dnscrypt-socks")
     ready = (RUN_DIR / "ready").exists()
+    dns = dns_listener_summary(env, states)
+    # A restart can change the supervisor-to-PID mapping during /proc reads.
+    # Discard only listener evidence if that mapping cannot be reconfirmed.
+    try:
+        confirmed_states = process_status()
+    except (OSError, ValueError, xmlrpc.client.Error):
+        confirmed_states = {}
+    for name, observation in dns['listeners'].items():
+        if observation['available'] and states.get(name) != confirmed_states.get(name):
+            dns['listeners'][name] = {'available': False, 'reason': 'unconfirmed', 'endpoints': []}
     sample = {"schema_version": 1, "sampled_at": now, "interval_seconds": INTERVAL,
               "ready": ready, "core_healthy": ready and all(
                   states.get(name, {}).get("statename") == "RUNNING" for name in required),
-              "components": states, "layers": {}}
+              "components": states, "layers": {}, "dns": dns}
+    sample['_monotonic_at'] = sampled_monotonic
     for layer, component, path in [("recursive", "unbound-raw", "/tmp/uc_raw.sock"),
                                     ("forward", "unbound-forward", "/tmp/uc_forward.sock")]:
         if states.get(component, {}).get("statename") != "RUNNING":
@@ -169,7 +182,7 @@ def collect(previous=None):
             old = (previous or {}).get("layers", {}).get(layer, {})
             old_process = (previous or {}).get("components", {}).get(component)
             sample["layers"][layer] = {"available": True, "counters": counters,
-                **rate(old.get("counters"), counters, now - (previous or {}).get("sampled_at", now),
+                **rate(old.get("counters"), counters, sampled_monotonic - (previous or {}).get("_monotonic_at", sampled_monotonic),
                        old_process == states[component])}
         except (OSError, ValueError) as exc:
             sample["layers"][layer] = {"available": False, "error": str(exc)[:200]}
@@ -212,6 +225,7 @@ class Collector:
 
     def run(self):
         previous = None
+        deadline = time.monotonic()
         while True:
             try:
                 sample = collect(previous)
@@ -220,8 +234,12 @@ class Collector:
                 sample = {"schema_version": 1, "sampled_at": time.time(), "error": str(exc)[:200]}
                 previous = None
             with self.lock:
-                self.snapshot = sample
-            time.sleep(INTERVAL)
+                self.snapshot = {key: value for key, value in sample.items() if not key.startswith('_')}
+            deadline += INTERVAL
+            now = time.monotonic()
+            if deadline < now:
+                deadline = now + INTERVAL  # Skip missed rounds, never catch up in a burst.
+            time.sleep(max(0, deadline - now))
 
 
 def main():

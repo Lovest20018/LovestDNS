@@ -1,69 +1,18 @@
+import { parseCustomEnvDocument, serializeCustomEnvDocument, validateCustomEnvRows } from '../customEnvEditor';
+import type { CustomEnvRow } from '../customEnvEditor';
 import EditorToolbar from '../components/EditorToolbar';
-import { useSuite } from '../suiteContext';
-import { preflightSave } from '../configSave';
+import { useSuiteConfig } from '../suiteContext';
+import { useFileEditor } from '../useFileEditor';
 import { useUnsavedChanges } from '../unsaved';
-import ConfigFeedback from '../components/ConfigFeedback';
-import { saveFeedback } from '../saveFeedback';
-import { useState, useEffect, useRef } from 'react';
-import { useStore } from '../store';
-import * as api from '../api';
+import { useState } from 'react';
 import { useToast } from '../hooks';
-import { generateCustomEnvIni, generateCustomModYaml, copyToClipboard, downloadFile } from '../generators';
+import { copyToClipboard, downloadFile } from '../generators';
 import { Plus, X, Copy, Download, FileCode, FileText, Save, CheckCircle, AlertCircle, RefreshCw, AlertTriangle } from 'lucide-react';
-import type { CustomModZone, CustomModSwap, CustomModHost, CustomEnvEntry } from '../types';
+import type { CustomModZone, CustomModSwap, CustomModHost } from '../types';
 import YAML from 'yaml';
 
 type SubTab = 'custom_env' | 'custom_mod' | 'unbound_custom';
 type CustomEnvEditMode = 'text' | 'visual';
-
-interface CustomEnvParseResult {
-  entries: CustomEnvEntry[];
-  visualSafe: boolean;
-}
-
-const CUSTOM_ENV_VISUAL_HEADER_LINES = new Set([
-  '# Variables configured here',
-  '# Override DNS settings; initialization changes need a service restart.',
-  '# MosDNS reload if Modifying this file.',
-  '# Format: key="value"',
-]);
-
-function parseCustomEnv(content: string): CustomEnvParseResult {
-  const entries: CustomEnvEntry[] = [];
-  let visualSafe = true;
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      continue;
-    }
-    if (trimmed.startsWith('#')) {
-      // Check if it's a commented-out variable
-      const uncommented = trimmed.replace(/^#+\s*/, '');
-      const match = uncommented.match(/^([_a-zA-Z0-9]+)="(.*)"$/);
-      if (match) {
-        // Greedy regex: if value contains inner quotes, round-trip will be lossy
-        if (match[2].includes('"')) {
-          visualSafe = false;
-        }
-        entries.push({ key: match[1], value: match[2], enabled: false });
-      } else if (!CUSTOM_ENV_VISUAL_HEADER_LINES.has(trimmed)) {
-        visualSafe = false;
-      }
-      continue;
-    }
-    const match = trimmed.match(/^([_a-zA-Z0-9]+)="(.*)"$/);
-    if (match) {
-      // Greedy regex: if value contains inner quotes, round-trip will be lossy
-      if (match[2].includes('"')) {
-        visualSafe = false;
-      }
-      entries.push({ key: match[1], value: match[2], enabled: true });
-    } else {
-      visualSafe = false;
-    }
-  }
-  return { entries, visualSafe };
-}
 
 interface CustomModParseResult {
   zones: CustomModZone[];
@@ -91,7 +40,8 @@ function parseCustomModYaml(content: string): CustomModParseResult {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return emptyResult;
 
     const keys = Object.keys(parsed as Record<string, unknown>);
-    const visualSafe = keys.every((key) => CUSTOM_MOD_KEYS.has(key));
+    const allowed: Record<string, string[]> = { Zones: ['zone', 'dns', 'ttl', 'seq', 'socks5'], Swaps: ['env_key', 'cidr_file'], Hosts: ['env_key', 'zone'] };
+    const visualSafe = keys.every((key) => CUSTOM_MOD_KEYS.has(key) && Array.isArray(parsed[key]) && parsed[key].every((item: unknown) => item && typeof item === 'object' && !Array.isArray(item) && Object.entries(item).every(([name, value]) => allowed[key].includes(name) && (name === 'ttl' ? typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 : typeof value === 'string'))));
     if (!visualSafe) return { ...emptyResult, visualSafe: false };
 
     const data = parsed as Record<string, unknown>;
@@ -133,252 +83,74 @@ function parseCustomModYaml(content: string): CustomModParseResult {
 }
 
 export default function AdvancedConfigPage() {
-  const { error: connectionError } = useSuite();
-  const {
-    customEnvEntries, addCustomEnv, removeCustomEnv, updateCustomEnv,
-    setCustomModZones, setCustomModSwaps, setCustomModHosts,
-    customModZones, addCustomModZone, removeCustomModZone, updateCustomModZone,
-    customModSwaps, addCustomModSwap, removeCustomModSwap, updateCustomModSwap,
-    customModHosts, addCustomModHost, removeCustomModHost, updateCustomModHost,
-  } = useStore();
-
+  const { error: connectionError } = useSuiteConfig();
   const { showToast, ToastComponent } = useToast();
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('custom_env');
-  const [customEnvContent, setCustomEnvContent] = useState('');
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>(() => { const file = new URLSearchParams(window.location.hash.split('?')[1]).get('file'); return file === 'custom_mod.yaml' ? 'custom_mod' : file === 'unbound_custom.conf' ? 'unbound_custom' : 'custom_env'; });
+  const envEditor = useFileEditor('custom_env.ini', '', activeSubTab === 'custom_env');
+  const modEditor = useFileEditor('custom_mod.yaml', '', activeSubTab === 'custom_mod');
+  const unboundEditor = useFileEditor('unbound_custom.conf', '', activeSubTab === 'unbound_custom');
+  const editors = { custom_env: envEditor, custom_mod: modEditor, unbound_custom: unboundEditor };
+  const activeEditor = editors[activeSubTab];
+  const customEnvContent = envEditor.content;
+  const setCustomEnvContent = envEditor.setContent;
+  const unboundContent = unboundEditor.content;
+  const setUnboundContent = unboundEditor.setContent;
+  const customModContent = modEditor.content;
+  const customEnvEntries = parseCustomEnvDocument(customEnvContent).entries;
+  const setCustomEnvEntries = (update: CustomEnvRow[] | ((rows: CustomEnvRow[]) => CustomEnvRow[])) => {
+    const rows = typeof update === 'function' ? update(customEnvEntries) : update;
+    setCustomEnvContent(serializeCustomEnvDocument(customEnvContent, rows));
+  };
   const [customEnvEditMode, setCustomEnvEditMode] = useState<CustomEnvEditMode>('text');
-  const [customEnvDirty, setCustomEnvDirty] = useState(false);
-  const [customEnvVisualSafe, setCustomEnvVisualSafe] = useState(true);
-  const [unboundContent, setUnboundContent] = useState('');
-  const [customModContent, setCustomModContent] = useState('');
-  const [customModDirty, setCustomModDirty] = useState(false);
-  const [customModVisualSafe, setCustomModVisualSafe] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saveResult, setSaveResult] = useState<{ success: boolean; msg: string; result?: api.SaveResult } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [diskBaselines, setDiskBaselines] = useState<Record<string, string | null>>({});
-  const [lastSaved, setLastSaved] = useState<Record<string, string>>({});
-  const [loadErrors, setLoadErrors] = useState<Record<string, boolean>>({});
-  const [loadedFromServer, setLoadedFromServer] = useState<Record<SubTab, boolean>>({
-    custom_env: false,
-    custom_mod: false,
-    unbound_custom: false,
-  });
-  const loadFileRef = useRef<(tab: SubTab) => Promise<void>>(async () => {});
-
-  const loadFile = async (tab: SubTab) => {
-    const filename = tab === 'custom_env' ? 'custom_env.ini' : tab === 'custom_mod' ? 'custom_mod.yaml' : 'unbound_custom.conf';
-    setLoading(true);
+  const parsedMod = parseCustomModYaml(customModContent);
+  const { zones: customModZones, swaps: customModSwaps, hosts: customModHosts, visualSafe: customModVisualSafe } = parsedMod;
+  const [validationError, setValidationError] = useState('');
+  const saveResult = validationError ? { success: false, msg: validationError, result: undefined } : activeEditor.result;
+  const saving = activeEditor.busy;
+  const loading = !activeEditor.loaded && !activeEditor.error;
+  const loadFailed = !activeEditor.loaded || !!activeEditor.error;
+  const loadFile = (tab: SubTab) => editors[tab].load(true);
+  const getCustomModOutput = () => customModContent;
+  const getCustomEnvOutput = () => customEnvContent;
+  const switchCustomEnvEditMode = (mode: CustomEnvEditMode) => setCustomEnvEditMode(mode);
+  const addEnvEntry = () => setCustomEnvEntries((rows) => [...rows, { key: '', value: '', enabled: true, sourceLine: null }]);
+  const updateEnvEntry = (index: number, entry: CustomEnvRow) => {
+    if (/[\s="]/.test(entry.key)) { showToast('变量名不能包含空格、等号或引号'); return; }
+    setCustomEnvEntries((rows) => rows.map((row, i) => i === index ? entry : row));
+  };
+  const removeEnvEntry = (index: number) => setCustomEnvEntries((rows) => rows.filter((_, i) => i !== index));
+  const updateCustomEnvText = setCustomEnvContent;
+  const editMod = (section: string, index: number | null, value: Record<string, unknown> | null) => {
+    if (!customModVisualSafe) return;
     try {
-      const result = await api.readFile(filename);
-      const content = result.content || '';
-      setLastSaved((old) => ({ ...old, [tab]: content }));
-      setDiskBaselines((old) => ({ ...old, [tab]: content }));
-      setLoadErrors((old) => ({ ...old, [tab]: false }));
-
-      if (tab === 'unbound_custom') {
-        setUnboundContent(content);
-      } else if (tab === 'custom_mod') {
-        setCustomModContent(content);
-        setCustomModDirty(false);
-        const parsed = parseCustomModYaml(content);
-        setCustomModVisualSafe(parsed.visualSafe);
-        setCustomModZones(parsed.zones);
-        setCustomModSwaps(parsed.swaps);
-        setCustomModHosts(parsed.hosts);
-        if (!parsed.visualSafe) {
-          showToast('custom_mod.yaml 含有暂不支持的结构，已切换为只保留原文保存');
-        }
-      } else {
-        // Parse custom_env.ini into entries
-        const parsed = parseCustomEnv(content);
-        setCustomEnvContent(content);
-        setCustomEnvDirty(false);
-        setCustomEnvVisualSafe(parsed.visualSafe);
-        // Always replace local entries with the file content, even when it is empty.
-        const store = useStore.getState();
-        store.setCustomEnvEntries(parsed.entries);
-        if (!parsed.visualSafe) {
-          showToast('custom_env.ini 含有可视化编辑无法保留的注释或语法，已使用文本编辑保留原文');
-        }
-      }
-      setLoadedFromServer(prev => ({ ...prev, [tab]: true }));
-    } catch (e: unknown) {
-      const message = getErrorMessage(e);
-      setLoadErrors((old) => ({ ...old, [tab]: !message.includes('not found') && !message.includes('404') }));
-      if (message.includes('not found') || message.includes('404')) {
-        setDiskBaselines((old) => ({ ...old, [tab]: null }));
-        setLastSaved((old) => ({ ...old, [tab]: '' }));
-        if (tab === 'unbound_custom') {
-          setUnboundContent('');
-        } else if (tab === 'custom_mod') {
-          setCustomModContent('');
-          setCustomModDirty(false);
-          setCustomModVisualSafe(true);
-          setCustomModZones([]);
-          setCustomModSwaps([]);
-          setCustomModHosts([]);
-        } else {
-          setCustomEnvContent('');
-          setCustomEnvDirty(false);
-          setCustomEnvVisualSafe(true);
-          useStore.getState().setCustomEnvEntries([]);
-        }
-      }
-      if (!message.includes('not found') && !message.includes('404')) {
-        showToast(`读取 ${filename} 失败: ${message}`);
-      }
-      setLoadedFromServer(prev => ({ ...prev, [tab]: true }));
-    } finally {
-      setLoading(false);
-    }
+      const document = YAML.parseDocument(customModContent || '{}');
+      if (!document.has(section)) document.set(section, []);
+      if (index === null) document.addIn([section], value);
+      else if (value === null) document.deleteIn([section, index]);
+      else for (const [key, item] of Object.entries(value)) document.setIn([section, index, key], item);
+      modEditor.setContent(document.toString());
+    } catch { showToast('此 YAML 结构无法安全编辑，请使用文本模式'); }
   };
-
-  useEffect(() => {
-    loadFileRef.current = loadFile;
-  });
-
-  useEffect(() => {
-    if (loadedFromServer[activeSubTab]) return;
-    const timer = window.setTimeout(() => {
-      void loadFileRef.current(activeSubTab);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [activeSubTab, loadedFromServer]);
-
-  const hasCustomModVisualEntries = customModZones.length > 0 || customModSwaps.length > 0 || customModHosts.length > 0;
-  const getCustomModOutput = () => {
-    if (!customModVisualSafe) return customModContent;
-    if (!customModDirty) return customModContent;
-    return hasCustomModVisualEntries ? generateCustomModYaml() : '';
-  };
-
-  const getCustomEnvOutput = () => {
-    if (customEnvEditMode === 'text') return customEnvContent;
-    if (!customEnvDirty) return customEnvContent;
-    return generateCustomEnvIni();
-  };
-
-  const switchCustomEnvEditMode = (mode: CustomEnvEditMode) => {
-    if (mode === customEnvEditMode) return;
-    if (mode === 'visual') {
-      const parsed = parseCustomEnv(customEnvContent);
-      if (!parsed.visualSafe) {
-        setCustomEnvVisualSafe(false);
-        showToast('当前 custom_env.ini 含有可视化编辑无法保留的注释或语法，请使用文本编辑保存原文');
-        return;
-      }
-      const store = useStore.getState();
-      store.setCustomEnvEntries(parsed.entries);
-      setCustomEnvVisualSafe(true);
-    } else {
-      setCustomEnvContent(customEnvDirty ? generateCustomEnvIni() : customEnvContent);
-    }
-    setCustomEnvEditMode(mode);
-  };
-
-  const addEnvEntry = () => {
-    setCustomEnvDirty(true);
-    addCustomEnv({ key: '', value: '', enabled: true });
-  };
-
-  const updateEnvEntry = (index: number, entry: CustomEnvEntry) => {
-    setCustomEnvDirty(true);
-    updateCustomEnv(index, entry);
-  };
-
-  const removeEnvEntry = (index: number) => {
-    setCustomEnvDirty(true);
-    removeCustomEnv(index);
-  };
-
-  const updateCustomEnvText = (content: string) => {
-    setCustomEnvContent(content);
-    setCustomEnvVisualSafe(parseCustomEnv(content).visualSafe);
-  };
-
-  const addZone = () => {
-    setCustomModDirty(true);
-    addCustomModZone({ zone: '', dns: '', ttl: 0, seq: 'top', socks5: 'no' });
-  };
-
-  const updateZone = (index: number, zone: CustomModZone) => {
-    setCustomModDirty(true);
-    updateCustomModZone(index, zone);
-  };
-
-  const removeZone = (index: number) => {
-    setCustomModDirty(true);
-    removeCustomModZone(index);
-  };
-
-  const addSwap = () => {
-    setCustomModDirty(true);
-    addCustomModSwap({ env_key: '', cidr_file: '' });
-  };
-
-  const updateSwap = (index: number, swap: CustomModSwap) => {
-    setCustomModDirty(true);
-    updateCustomModSwap(index, swap);
-  };
-
-  const removeSwap = (index: number) => {
-    setCustomModDirty(true);
-    removeCustomModSwap(index);
-  };
-
-  const addHost = () => {
-    setCustomModDirty(true);
-    addCustomModHost({ env_key: '', zone: '' });
-  };
-
-  const updateHost = (index: number, host: CustomModHost) => {
-    setCustomModDirty(true);
-    updateCustomModHost(index, host);
-  };
-
-  const removeHost = (index: number) => {
-    setCustomModDirty(true);
-    removeCustomModHost(index);
-  };
-
-  const getActiveOutput = (): { filename: string; content: string } => {
-    if (activeSubTab === 'custom_env') {
-      return { filename: 'custom_env.ini', content: getCustomEnvOutput() };
-    }
-    if (activeSubTab === 'custom_mod') {
-      return { filename: 'custom_mod.yaml', content: getCustomModOutput() };
-    }
-    return { filename: 'unbound_custom.conf', content: unboundContent };
-  };
-
-  const tabDirty = { custom_env: !!loadedFromServer.custom_env && getCustomEnvOutput() !== (lastSaved.custom_env ?? ''), custom_mod: !!loadedFromServer.custom_mod && getCustomModOutput() !== (lastSaved.custom_mod ?? ''), unbound_custom: !!loadedFromServer.unbound_custom && unboundContent !== (lastSaved.unbound_custom ?? '') };
+  const addZone = () => editMod('Zones', null, { zone: '', dns: '', ttl: 0, seq: 'top', socks5: 'no' });
+  const updateZone = (i: number, zone: CustomModZone) => editMod('Zones', i, { ...zone });
+  const removeZone = (i: number) => editMod('Zones', i, null);
+  const addSwap = () => editMod('Swaps', null, { env_key: '', cidr_file: '' });
+  const updateSwap = (i: number, swap: CustomModSwap) => editMod('Swaps', i, { ...swap });
+  const removeSwap = (i: number) => editMod('Swaps', i, null);
+  const addHost = () => editMod('Hosts', null, { env_key: '', zone: '' });
+  const updateHost = (i: number, host: CustomModHost) => editMod('Hosts', i, { ...host });
+  const removeHost = (i: number) => editMod('Hosts', i, null);
+  const getActiveOutput = () => ({ filename: { custom_env: 'custom_env.ini', custom_mod: 'custom_mod.yaml', unbound_custom: 'unbound_custom.conf' }[activeSubTab], content: activeEditor.content });
+  const tabDirty = { custom_env: envEditor.dirty, custom_mod: modEditor.dirty, unbound_custom: unboundEditor.dirty };
   const dirty = Object.values(tabDirty).some(Boolean);
-  const loadFailed = !loadedFromServer[activeSubTab] || !!loadErrors[activeSubTab];
-  useUnsavedChanges(dirty);
-
+  useUnsavedChanges(Object.values(tabDirty).some(Boolean));
   const handleSave = async () => {
-    setSaving(true);
-    setSaveResult(null);
+    setValidationError('');
     try {
-      const { filename, content } = getActiveOutput();
-      const result = await preflightSave(filename, diskBaselines[activeSubTab] ?? null, content, api.readFile, api.writeFile);
-      const msg = saveFeedback(result);
-      setDiskBaselines((old) => ({ ...old, [activeSubTab]: content }));
-      setLastSaved((old) => ({ ...old, [activeSubTab]: content }));
-      setSaveResult({ success: true, msg, result });
-      if (activeSubTab === 'custom_mod') {
-        setCustomModContent(content);
-        setCustomModDirty(false);
-      } else if (activeSubTab === 'custom_env') {
-        setCustomEnvContent(content);
-        setCustomEnvDirty(false);
-      }
-      showToast('配置已保存');
-    } catch (e: unknown) {
-      setSaveResult({ success: false, msg: getErrorMessage(e) || '保存失败' });
-    } finally {
-      setSaving(false);
-    }
+      if (activeSubTab === 'custom_env' && customEnvEditMode === 'visual') validateCustomEnvRows(customEnvEntries);
+      const result = await activeEditor.save();
+      if (result?.success) showToast('配置已保存；请按生效提示继续');
+    } catch (e) { setValidationError(getErrorMessage(e)); }
   };
 
   const handleCopyOutput = async () => {
@@ -412,19 +184,20 @@ export default function AdvancedConfigPage() {
         <span className="summary-chip">Hosts {customModHosts.length}</span>
       </div>
 
-      <div className="tab-bar">
-        <button className={`tab-item ${activeSubTab === 'custom_env' ? 'active' : ''}`} onClick={() => { setSaveResult(null); setActiveSubTab('custom_env'); }}>
+      <div className="tab-bar suite-file-tabs">
+        <button className={`tab-item ${activeSubTab === 'custom_env' ? 'active' : ''}`} onClick={() => { setValidationError(''); setActiveSubTab('custom_env'); }}>
           <FileText size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> custom_env.ini
         {tabDirty.custom_env && <span className="suite-draft-dot"> · 未保存</span>}</button>
-        <button className={`tab-item ${activeSubTab === 'custom_mod' ? 'active' : ''}`} onClick={() => { setSaveResult(null); setActiveSubTab('custom_mod'); }}>
+        <button className={`tab-item ${activeSubTab === 'custom_mod' ? 'active' : ''}`} onClick={() => { setValidationError(''); setActiveSubTab('custom_mod'); }}>
           <FileCode size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> custom_mod.yaml
         {tabDirty.custom_mod && <span className="suite-draft-dot"> · 未保存</span>}</button>
-        <button className={`tab-item ${activeSubTab === 'unbound_custom' ? 'active' : ''}`} onClick={() => { setSaveResult(null); setActiveSubTab('unbound_custom'); }}>
+        <button className={`tab-item ${activeSubTab === 'unbound_custom' ? 'active' : ''}`} onClick={() => { setValidationError(''); setActiveSubTab('unbound_custom'); }}>
           <FileCode size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> unbound_custom.conf
         {tabDirty.unbound_custom && <span className="suite-draft-dot"> · 未保存</span>}</button>
       </div>
 
-      <EditorToolbar file={getActiveOutput().filename} dirty={tabDirty[activeSubTab]} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} onSave={() => void handleSave()} />
+      <EditorToolbar file={getActiveOutput().filename} dirty={tabDirty[activeSubTab]} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} onSave={() => void handleSave()} />
+      {activeEditor.error && <p className="suite-editor-result is-error" role="alert">{activeEditor.error}</p>}
 
       {loading && (
         <div className="loading-panel">
@@ -450,29 +223,23 @@ export default function AdvancedConfigPage() {
             <button
               className={`tab-item ${customEnvEditMode === 'visual' ? 'active' : ''}`}
               onClick={() => switchCustomEnvEditMode('visual')}
-              disabled={!customEnvVisualSafe}
-              title={!customEnvVisualSafe ? '当前文件含有可视化编辑无法保留的注释或语法' : undefined}
             >
               可视化编辑
             </button>
           </div>
 
-          {!customEnvVisualSafe && (
-            <div className="card-desc" style={{ marginBottom: 16, color: 'var(--accent-amber)' }}>
-              当前 custom_env.ini 含有可视化编辑无法无损保留的注释或语法，已使用文本编辑以避免保存时重写原文件。
-            </div>
-          )}
+          <p className="card-desc" style={{ marginBottom: 16 }}>可视化编辑仅修改对应变量，原有注释和空行会保留。{parseCustomEnvDocument(customEnvContent).unrecognizedLines > 0 && '有无法识别的行已原样保留，请在文本模式检查。'}</p>
 
           {customEnvEditMode === 'visual' ? (
             <>
               {customEnvEntries.map((entry, i) => (
                 <div className="domain-entry" key={i} style={{ marginBottom: 8 }}>
-                  <input className="form-input" style={{ width: 180, flexShrink: 0 }} type="text" value={entry.key} placeholder="VARIABLE_NAME" onChange={(e) => updateEnvEntry(i, { ...entry, key: e.target.value })} />
-                  <input className="form-input" type="text" value={entry.value} placeholder="value" onChange={(e) => updateEnvEntry(i, { ...entry, value: e.target.value })} />
+                  <input className="form-input" style={{ width: 180, flexShrink: 0 }} type="text" value={entry.key} aria-label={`变量 ${i + 1} 名称`} placeholder="VARIABLE_NAME" onChange={(e) => updateEnvEntry(i, { ...entry, key: e.target.value })} />
+                  <input className="form-input" type="text" value={entry.value} aria-label={`变量 ${i + 1} 值`} placeholder="value" onChange={(e) => updateEnvEntry(i, { ...entry, value: e.target.value })} />
                   <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={entry.enabled} onChange={(e) => updateEnvEntry(i, { ...entry, enabled: e.target.checked })} />启用
+                    <input aria-label={`启用变量 ${i + 1}`} type="checkbox" checked={entry.enabled} onChange={(e) => updateEnvEntry(i, { ...entry, enabled: e.target.checked })} />启用
                   </label>
-                  <button className="domain-remove-btn" onClick={() => removeEnvEntry(i)}><X size={16} /></button>
+                  <button className="domain-remove-btn" aria-label={`删除变量 ${i + 1}`} onClick={() => removeEnvEntry(i)}><X size={16} /></button>
                 </div>
               ))}
 
@@ -481,7 +248,7 @@ export default function AdvancedConfigPage() {
               </div>
             </>
           ) : (
-            <textarea className="textarea-code" value={customEnvContent} onChange={(e) => updateCustomEnvText(e.target.value)} rows={15} />
+            <textarea disabled={!envEditor.loaded} aria-label="custom_env.ini 文件内容" className="textarea-code" value={customEnvContent} onChange={(e) => updateCustomEnvText(e.target.value)} rows={15} />
           )}
 
           <div style={{ marginTop: 20, borderTop: '1px solid var(--border-color)', paddingTop: 16 }}>
@@ -493,6 +260,7 @@ export default function AdvancedConfigPage() {
 
       {activeSubTab === 'custom_mod' && (
         <>
+          <details className="form-panel" open={!customModVisualSafe}><summary>编辑 YAML 原文</summary><textarea disabled={!modEditor.loaded} aria-label="custom_mod.yaml 文件内容" className="textarea-code" rows={12} value={customModContent} onChange={(event) => modEditor.setContent(event.target.value)} /></details>
           <div className="form-panel" style={{ borderColor: 'var(--accent-amber)' }}>
             <div className="card-desc"><AlertTriangle size={16} style={{ display: 'inline', verticalAlign: 'middle' }} /> custom_mod.yaml 保存后不会自动生效。请到配置中心预览并应用，再查询目标域名验证规则；纯递归模式不支持 custom_mod。</div>
             <a className="btn btn-secondary" href="#/config" style={{ marginTop: 12 }}>前往配置中心预览并应用</a>
@@ -565,7 +333,7 @@ export default function AdvancedConfigPage() {
             <span className="badge badge-amber" style={{ marginLeft: 8 }}>需重启服务</span>
           </div>
           <div className="card-desc">添加 SRV 记录等高级配置。修改后需重启 DNS 服务生效。</div>
-          <textarea className="textarea-code" value={unboundContent} onChange={(e) => setUnboundContent(e.target.value)} rows={12} />
+          <textarea disabled={!unboundEditor.loaded} aria-label="Unbound 文件内容" className="textarea-code" value={unboundContent} onChange={(e) => setUnboundContent(e.target.value)} rows={12} />
         </div>
       )}
 
@@ -587,7 +355,6 @@ export default function AdvancedConfigPage() {
         )}
       </div>
 
-      <ConfigFeedback result={saveResult?.result} file={getActiveOutput().filename} saved={!!saveResult?.success} dirty={tabDirty[activeSubTab]} />
       {loadFailed && !loading && <p role="alert">配置尚未成功读取，保存已停用。<button className="btn btn-secondary btn-sm" onClick={() => void loadFile(activeSubTab)}>重新读取</button></p>}
       {ToastComponent}
       </fieldset>

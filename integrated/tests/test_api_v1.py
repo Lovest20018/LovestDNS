@@ -22,6 +22,9 @@ def test_instance_is_stable_across_requests_and_state_isolation(client, monkeypa
     assert (state / "instance.sqlite").exists()
     assert api.get("/api/v1/instance", headers=AUTH).get_json()["data"]["id"] == identity
     monkeypatch.setattr(server, "STATE_DIR", tmp_path / "another-state")
+    assert api.get('/api/v1/instance', headers=READ).status_code == 403
+    from browser_auth import set_external_api
+    set_external_api(server.STATE_DIR, True)
     assert api.get("/api/v1/instance", headers=READ).get_json()["data"]["id"] != identity
 
 

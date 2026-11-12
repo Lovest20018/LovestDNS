@@ -1,0 +1,8 @@
+import { suiteFetch } from './suiteApi';
+export interface GatewayConfig { revision: string; enabled: boolean; url?: string; instance_id?: string; name?: string; version?: string; has_token: boolean }
+export interface GatewaySummary { instance: { id: string; name?: string; version?: string; kind?: string }; features: Record<string, boolean>; mode: string | null; runtime: { status?: string; core_responding?: boolean; outbound_reachable?: string; forwarding_verified?: boolean }; sampled_at?: number | null; fetched_at?: number | null; freshness: { stale?: boolean; age_seconds?: number; max_age_seconds?: number } }
+export interface GatewayRow { id?: string; source: string; domain?: string; client?: string; destination?: string; actual_target?: string; upstream_peer?: string; state?: string; started_at?: number | string; first_seen_at?: number; last_seen_at?: number; decision: Record<string, string | null>; rule?: string; rule_payload?: string; chains: string[] }
+export interface GatewayConnections { items: GatewayRow[]; view: string; sampled_at?: number; fetched_at?: number; freshness: { stale?: boolean }; scope: string; filter_scope: string; complete_history: false; next_cursor?: string; next_before?: number; gap?: boolean }
+export interface GatewayFakeIP { status?: string; source?: string; domain?: string; fakeip?: string; cidr?: string; dns_ttl_seconds?: number; valid_until?: number | null; validity?: string; historical_ownership_verified?: boolean; sampled_at?: number; fetched_at?: number }
+export const gatewayConfig = (signal?: AbortSignal) => suiteFetch<GatewayConfig>('/api/v1/gateway/config', { signal });
+export function gatewayChanged() { window.dispatchEvent(new Event('lovestdns-gateway-changed')); }

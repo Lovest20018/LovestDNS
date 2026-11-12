@@ -21,6 +21,8 @@ class History:
             db.execute("""CREATE TABLE IF NOT EXISTS revisions (
                 id INTEGER PRIMARY KEY, filename TEXT NOT NULL, created REAL NOT NULL,
                 sha256 TEXT NOT NULL, content BLOB NOT NULL, reason TEXT NOT NULL)""")
+            db.execute("""CREATE TABLE IF NOT EXISTS write_intents (
+                filename TEXT PRIMARY KEY, original BLOB, candidate BLOB NOT NULL)""")
             db.execute("PRAGMA user_version=1")
             db.commit()
             with db:
@@ -69,3 +71,31 @@ class History:
             row = db.execute("SELECT content FROM revisions WHERE filename=? AND id=?",
                              (filename, revision)).fetchone()
         return bytes(row[0]).decode("utf-8").replace("\r\n", "\n") if row else None
+
+    def prepare_write(self, filename, original, candidate):
+        # Commit the recovery material BEFORE touching the watched file. A failed
+        # final history transaction must never erase the only recoverable copy.
+        with self.write_lock() as db:
+            db.execute("INSERT INTO write_intents VALUES(?,?,?)", (filename, original, candidate))
+
+    def has_pending(self, filename):
+        with self.connection() as db:
+            return db.execute("SELECT 1 FROM write_intents WHERE filename=?", (filename,)).fetchone() is not None
+
+    def complete_write(self, filename, current):
+        with self.write_lock() as db:
+            row = db.execute("SELECT original,candidate FROM write_intents WHERE filename=?", (filename,)).fetchone()
+            if row is None:
+                return
+            original, candidate = row
+            if original is not None:
+                self.record(db, filename, bytes(original), "before_save")
+            # A crash or host-side edit can leave a third version. Preserve all
+            # three for explicit recovery; never overwrite the host's new file.
+            # Matching the original does not prove the write never happened:
+            # an external edit may have restored it after our successful write.
+            self.record(db, filename, bytes(candidate), "saved" if current == candidate else "unconfirmed_candidate")
+            if current is not None and current != candidate:
+                self.record(db, filename, current, "recovered_external")
+            self.prune(db)
+            db.execute("DELETE FROM write_intents WHERE filename=?", (filename,))

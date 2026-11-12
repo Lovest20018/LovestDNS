@@ -1,0 +1,24 @@
+{
+  "format_version": 1,
+  "diagnostic_only": true,
+  "sources": {
+    "2.1.5": "044c4db9a3c7bdcf886ff8f83c4b137d2fd37a65477a92bfe86bf69587ea7355",
+    "2.1.20": "2e6adb32e0f91cb755f1d2c060cddcc80ffca6a181bf03c90df22bbade121607"
+  },
+  "toolchains": {
+    "go1.22.5": "904b924d435eaea086515bc63235b192ea441bd8c9b198c507e85009e6e4c7f0",
+    "go1.27.3": "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40"
+  },
+  "cases": {
+    "old-oldgo": ["2.1.5", "go1.22.5"],
+    "old-newgo": ["2.1.5", "go1.27.3"],
+    "new-newgo": ["2.1.20", "go1.27.3"],
+    "new-shard-fast": ["2.1.20", "go1.27.3"]
+  },
+  "patches": {
+    "dnscrypt-2.1.20-cache-shard-digest.patch": "8f514cdc9cb43dc685a9cb72d8c29f74e890666960e0f84bf1e0b6e4fbabe626"
+  },
+  "case_patches": {
+    "new-shard-fast": ["dnscrypt-2.1.20-cache-shard-digest.patch"]
+  }
+}

@@ -30,8 +30,40 @@ class FrontendAssemblyTests(unittest.TestCase):
                 self.assertEqual((target / "src/pages" / name).read_bytes(),
                                  (overlay / "src/pages" / name).read_bytes())
             api = (target / "src/api.ts").read_text(encoding="utf-8")
-            self.assertEqual(api.count("import { suiteFetch }"), 1)
-            self.assertIn("return suiteFetch<T>(path, options)", api)
+            self.assertEqual(api.count("import { suiteFetch as apiFetch }"), 1)
+            self.assertEqual(api, (overlay / 'src/api.ts').read_text(encoding='utf-8'))
+            self.assertIn('expected_revision: expectedRevision', api)
+
+    def test_clean_assembly_removes_deleted_overlay_but_preserves_dependency_cache(self):
+        build = runpy.run_path(str(ROOT / 'scripts/build-integrated-ui.py'))
+        assemble = build['assemble']
+        with TemporaryDirectory() as directory:
+            fixture = Path(directory)
+            (fixture / 'web/src').mkdir(parents=True)
+            (fixture / 'web/index.html').write_text('<title>PaoPaoDNS Web UI</title>')
+            (fixture / 'web/src/base.ts').write_text('base')
+            overlay = fixture / 'integrated/frontend/src'
+            overlay.mkdir(parents=True)
+            (overlay / 'App.tsx').write_text('overlay')
+            (overlay / 'api.ts').write_text('explicit adapter')
+            deleted = overlay / 'removed.ts'
+            deleted.write_text('obsolete')
+            packaging = fixture / 'packaging/integrated'
+            packaging.mkdir(parents=True)
+            shutil.copyfile(ROOT / 'packaging/integrated/prepare_frontend.py', packaging / 'prepare_frontend.py')
+            assemble.__globals__['ROOT'] = fixture
+            target = fixture / '.build/integrated-web'
+            (target / 'node_modules').mkdir(parents=True)
+            (target / 'node_modules/cache').write_text('keep')
+            assemble(target)
+            self.assertTrue((target / 'src/removed.ts').exists())
+            deleted.unlink()
+            assemble(target)
+            self.assertFalse((target / 'src/removed.ts').exists())
+            self.assertEqual((target / 'node_modules/cache').read_text(), 'keep')
+            self.assertEqual((target / 'src/base.ts').read_text(), 'base')
+            with self.assertRaises(ValueError):
+                assemble(fixture / 'outside-build')
 
 
 if __name__ == "__main__":

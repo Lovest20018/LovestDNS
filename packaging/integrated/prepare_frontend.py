@@ -24,6 +24,8 @@ def prepare(root, overlay):
     text = path.read_text(encoding="utf-8").replace(
         '<title>PaoPaoDNS Web UI</title>', '<title>LovestDNS</title>')
     path.write_text(text, encoding="utf-8", newline="\n")
+    if (overlay / "src/api.ts").is_file():
+        return  # Current overlay owns its explicit API adapter and types.
     # Existing editors keep their serializers and UI, but share v1 authentication,
     # error handling and backend validation with the integrated pages.
     path = root / "src/api.ts"

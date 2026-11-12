@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 import sys
 import time
+import tomllib
 
 RUN_DIR = Path(os.environ.get("SUITE_RUN_DIR", "/run/paopaodns-suite"))
 COMMANDS = {
@@ -48,6 +49,25 @@ def prepare_unbound(role, directory="/tmp"):
     path.write_text(text)
 
 
+def preserve_dnscrypt_defaults(path):
+    """Keep the initial independent upgrade on the existing protocol policy."""
+    info_path = Path(os.environ.get('SUITE_BUILD_INFO', '/opt/suite/build-info.json'))
+    try:
+        components = json.loads(info_path.read_text()).get('components') or {}
+    except FileNotFoundError:
+        return
+    if 'dnscrypt' not in components.get('selected', []):
+        return
+    path = Path(path)
+    value = path.read_text()
+    settings = tomllib.loads(value)
+    # Insert defaults at TOML's top level, preserving explicit user choices.
+    defaults = {'pqdnscrypt': 'false', 'lb_strategy': "'p2'"}
+    missing = [f'{name} = {setting}' for name, setting in defaults.items() if name not in settings]
+    if missing:
+        path.write_text('# LovestDNS: preserve pre-upgrade protocol and resolver selection.\n' + '\n'.join(missing) + '\n' + value)
+
+
 def main():
     action = sys.argv[1]
     if action == "capture-env":
@@ -72,6 +92,9 @@ def main():
     command = COMMANDS.get(action)
     if command is None:
         raise SystemExit("Unknown component")
+    if action in {'dnscrypt', 'dnscrypt-socks'}:
+        name = 'dnscrypt_socks.toml' if action == 'dnscrypt-socks' else 'dnscrypt.toml'
+        preserve_dnscrypt_defaults(Path('/data/dnscrypt-resolvers') / name)
     env = json.loads((RUN_DIR / "core-env.json").read_text())
     if action == "mosdns":
         active = RUN_DIR / "mosdns-env.json"

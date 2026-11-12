@@ -25,6 +25,28 @@ export = runpy.run_path(str(EXPORTER))
 READ = {"Authorization": "Bearer provider-test-observer", "X-Request-ID": "provider-test-0001"}
 
 
+def test_source_provenance_covers_build_inputs_and_hashes_binary_bytes_exactly(tmp_path):
+    fixture = tmp_path / 'source'
+    files = {
+        'scripts/browser.mjs': b'const value = 1;\r\n',
+        'web/eslint.config.js': b'export default [];\r\n',
+        'packaging/native/requirements.txt': b'Flask==3.1.1\r\n',
+        'integrated/frontend/public/icon.png': b'\x89PNG\r\n\x1a\nbytes\r\n',
+        'web/node_modules/ignored.js': b'ignored',
+        'integrated/frontend/dist/ignored.png': b'ignored',
+    }
+    for name, data in files.items():
+        path = fixture / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    summary = runpy.run_path(str(EXPORTER))['source_summary']
+    summary.__globals__.update(ROOT=fixture, SOURCE_ROOT_FILES=())
+    actual = summary()['files']
+    expected = {name: hashlib.sha256(data if name.endswith('.png') else data.replace(b'\r\n', b'\n')).hexdigest()
+                for name, data in files.items() if 'ignored' not in name}
+    assert actual == expected
+
+
 def test_committed_baseline_replays_and_export_is_independent_of_local_secrets(monkeypatch):
     monkeypatch.setenv("SUITE_INSTANCE_NAME", "must-not-leak")
     monkeypatch.setenv("WEB_UI_TOKEN", "must-not-leak")
@@ -61,7 +83,7 @@ def test_sample_config_revisions_hash_the_documented_utf8_bytes_on_every_host():
         assert cases[name]['response']['headers']['ETag'] == '"' + expected + '"'
 
 
-def test_shared_samples_preserve_hnm_semantics():
+def test_shared_samples_preserve_provider_semantics():
     bundle = export["build_bundle"]()
     samples = json.loads(bundle["samples.json"])
     cases = {case["id"]: case["response"] for case in samples["cases"]}

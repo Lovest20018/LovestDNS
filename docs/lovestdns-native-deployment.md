@@ -39,12 +39,18 @@ sudo python3 install.py --package ./lovestdns-native-debian-amd64.tar.gz --sha25
 ```sh
 python3 scripts/build-integrated-ui.py
 python3 -m venv .build/native-tools
+.build/native-tools/bin/python scripts/build-components.py --output .build/components-bundle
 .build/native-tools/bin/python scripts/build-native-package.py \
+  --components-bundle .build/components-bundle \
   --frontend-dist .build/integrated-web/dist \
   --output .build/lovestdns-native.tar.gz
 ```
 
-构建校验 `packaging/upstream.lock.json` 中的上游脚本 SHA-256，并为 Debian 12 的 Python 3.11、Debian 13 的 Python 3.13 下载固定版本的 wheel。输出安装包与同名 `.sha256` 文件。包内 `manifest.json` 列出全部载荷文件摘要和上游来源；`--version` 可覆盖包及 API 的版本号，用于独立测试版本。
+构建校验 `packaging/upstream.lock.json` 中的上游脚本 SHA-256，独立组件来源与构建依赖由 `packaging/components.lock.json` 固定。两种发行方式复用同一组件包，定制 MosDNS 及原运行库保留；新版组件的私有依赖独立打包。构建还为 Debian 12 的 Python 3.11、Debian 13 的 Python 3.13 下载固定版本的 wheel。输出安装包与同名 `.sha256` 文件；`manifest.json` 列出全部载荷摘要、上游和实际组件来源。`--version` 可覆盖包及 API 的版本号。单组件对照与缓存验收见 [组件构建说明](../packaging/components/README.md)。
+
+需要将已验收的 DNSCrypt `combined` 源码候选加入独立试用包时，在上述原生打包命令中显式增加 `--dnscrypt-source-candidate /path/to/normal/combined`。该目录必须包含正常静态 amd64 二进制与对应 `source-manifest.json`。打包器核对源码锁、三个补丁、工具链声明和二进制摘要，拒绝诊断构建及其他变体；保留输入组件清单，另写实际载荷清单和补丁来源。该参数不更改默认组件来源，新包保留候选、未批准发布及性能未验收标记。
+
+已有核验过的新组件原生包时，也可用 `scripts/refresh-native-package.py --base <原包> --base-sha256 <可信摘要> --frontend .build/integrated-web/dist --output <新包>` 更新应用与界面。脚本要求当前源码干净且已提交，前端为同提交的 `npm ci` 构建；上游锁、模板适配脚本、组件锁和 Python 依赖改变时拒绝刷新。所有核心、私有库、组件与 wheels 保持原字节，Linux 执行权限从原归档保留；新包分别记录继承来源与当前源码，不声称重新编译了组件。默认安装入口不会改变。
 
 ## 首次安装
 
@@ -108,11 +114,13 @@ sudo lovestdnsctl rollback
 
 升级和回退都可能短暂中断 DNS。备份保留在本机，需要给版本、数据和多份备份留足磁盘空间；本机一致备份不能替代异机备份。重新安装已经回退过的候选时会生成独立 release 目录，不覆盖先前载荷。可将已校验的新包解压后用该包的 `install.py install` 恢复升级路径。
 
+从 `.15` 及更早版本升级到外部 API 默认关闭的版本时，请使用仓库根目录的安装入口执行 `sudo python3 install.py --package /path/to/lovestdns-native.tar.gz --sha256 <已核对的SHA-256>`。它会核对新包并使用包内的新安装器，保留已有配置并生成升级备份。旧版 `lovestdnsctl upgrade` 的健康检查依赖 Token API，会在 API 关闭后误判失败并回退；完成这次升级后可继续使用新版控制命令。
+
 `health` 检查组件与采样新鲜度，并确认 DNS 协议有应答；它不证明所有公网域名、规则、代理或 IPv6 都正常。改变初始化环境、Unbound 模板后按 Web 提示重启服务；规则更新与核心升级分开处理。
 
 ## 跟进上游更新
 
-`UPDATE` 支持 `no/daily/weekly/monthly`；规则库由原生调度组件调用适配后的上游更新脚本，不改宿主机 cron 或软件源。核心版本固定在 `packaging/upstream.lock.json`：上游发布新版本后，更新来源、校验脚本与依赖，再重新构建 LovestDNS 包并在测试机跑验收，最后通过 `upgrade` 发布。不会直接用上游容器入口脚本覆盖原生服务。
+`UPDATE` 支持 `no/daily/weekly/monthly`；规则库由原生调度组件调用适配后的上游更新脚本，不改宿主机 cron 或软件源。原上游来源由 `packaging/upstream.lock.json` 固定，独立组件由 `packaging/components.lock.json` 固定。组件更新需要重建组件产物和 LovestDNS 包，完成历史缓存兼容、功能及性能对照后通过 `upgrade` 发布。网页“设置”显示包内声明的独立组件版本与清单摘要。不会直接用上游容器入口脚本覆盖原生服务。
 
 原生验收脚本只接受带 `.lovestdns-test-instance` 标记的命名测试数据目录，会切换运行模式、写入人工规则、注入一次 MosDNS 启动失败、检查恢复，并保留测试预览。**仅用于测试实例**：
 
@@ -122,6 +130,8 @@ sudo python3 scripts/test-native-instance.py --instance validation
 
 
 ## 网页配置与生效
+
+外部 Token API 默认关闭。需要接入时在“服务信息 → API 与 Token”开启，或使用主机命令 `sudo lovestdnsctl api on`；`api off` 关闭，`api status` 查看。设置持久保存且立即生效，关闭时网页配置与 DNS 解析继续使用。`lovestdnsctl health` 直接检查本机采集器、Web 页面和 DNS 协议，不依赖外部 API。升级前已设置 Token 也不会自动开启接入。
 
 日常配置直接在“基础设置、域名分流、TTL 规则、高级配置”中修改和保存，无需重新部署软件。基础设置只更新 `custom_env.ini` 中对应变量，保留其他自定义变量与注释；页面分别显示目标覆盖值和核心启动时采集的运行值。
 
@@ -133,3 +143,11 @@ sudo python3 scripts/test-native-instance.py --instance validation
 - 配置中心展示服务器保存的应用记录，其他浏览器也可读取。记录比较成功任务输入与当前文件，并绑定相关 DNS 进程；进程改变、记录不可用时显示待确认。文件监听自动加载与域名效果仍需查询验证。
 
 网页重启不会改变服务绑定地址、DNS/Web 端口、数据路径、systemd 资源限制或软件版本。这些主机参数仍在实例 `.env` 中修改，并通过对应 `lovestdnsctl` 控制命令重启整项服务；软件更新使用已验证的安装包。
+
+## 安装身份与来源记录
+
+`20261112.home2` 起，设置页分开展示持久实例 ID、命名服务和维护命令、应用提交、前端构建来源、继承基础包与组件版本声明。实例目录和命令只取原生安装器约定的服务环境；旧包或非标准路径缺失时显示“未记录”，不会据显示名称生成默认实例命令。当前页面不核对运行进程的实际可执行文件。
+
+新安装器在 `/opt/lovestdns[-实例名]/receipts/<发布目录名>.json` 保存安装收据，绑定服务名、发布路径、版本和安装清单 SHA-256。经过摘要校验的 `upgrade` 还记录外层归档摘要；直接运行解压后的 `install.py install` 没有归档输入，因此该项保持未记录。收据不加入归档，避免循环自哈希；选择旧 release 回退时读取该 release 对应的收据，不沿用新版摘要。收据不匹配时隐藏归档摘要并提示。
+
+从 home1 或更早版本安装此候选时，使用更新后的仓库根目录 `install.py --package <包路径> --sha256 <已核对摘要> --instance <实例名>`。入口核对新包后调用包内支持收据的新安装器；兼容旧包的原安装参数。该路径会临时解压两份载荷，空间预算需计入两份目录。旧控制命令升级到新包可能仍使用旧安装逻辑，收据缺失会如实显示，不能事后填入未经核对的历史归档摘要。

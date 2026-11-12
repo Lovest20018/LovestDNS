@@ -1,8 +1,8 @@
 # LovestDNS 集成版开发说明
 
-当前版本：`0.1.0-dev.lovestdns-native.20261104.11`，LovestDNS 开发候选。可独立运行，不依赖 DNS 管理。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md) 与 Docker 集成版；原生安装包通过 GitHub 预发布版本提供，Docker 镜像仍从源码构建。固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)。源码分区见 [结构说明](../docs/project-layout.md)。
+当前源码版本：`0.1.0-dev.lovestdns-native.20261111.home1`，LovestDNS 未发布测试候选，home1 尚未打包或部署；[本轮实现与验证](../docs/home-console-implementation-2026-11-11.md)。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md) 与 Docker 集成版；公开安装入口仍固定为已发布的 `.11`，测试候选通过本地包及 SHA-256 安装，Docker 镜像仍从源码构建。此前 `.opt4` 的隔离验收见 [Review 修复记录](../docs/review-fixes-2026-11-06.md)，本轮版本与源码绑定规则见 [收口说明](../docs/source-version-closure-2026-11-06.md)。固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)。源码分区见 [结构说明](../docs/project-layout.md)。
 
-家庭网络运维平台统一使用名称 **DNS 管理**。旧候选的版本号、镜像和容器标识保留 `dns`，用于对应已有契约和验收证据。API `kind`、报告类型、数据文件名和内部运行路径沿用原值，保持兼容。
+历史版本号、镜像和容器标识用于对应已有契约和验收证据。API `kind`、报告类型、数据文件名和内部运行路径沿用原值，保持兼容。
 
 独立 WebUI 已固定为 `standalone-20261024` 源码检查点。集成版通过独立后端和前端覆盖层复用该检查点；构建在临时目录中组装，不修改 `web/`。
 
@@ -15,14 +15,14 @@
 - 集成版 DNS 查询支持 A、AAAA、CNAME、NS、MX、TXT、SRV、PTR、SVCB、HTTPS，读取 PaoPaoDNS Additional TXT 诊断标记。SVCB/HTTPS 参数当前按编号和十六进制展示。
 - 保存配置时记录历史，保留最多 20 个版本/文件，并设置总内容容量上限。支持预览与单文件恢复，恢复仍执行内容校验。
 - 核心日志限量读取及 Token 脱敏；未启用完整查询日志。
-- Web 以管理员密码登录并可记住会话；首页以配置为主，诊断和运行指标保留为本地排障入口。初始密码及重置方式见原生部署说明。
+- Web 以管理员密码登录并可记住会话；首页展示核心进程、监听、缓存与通道统计，配置页提供原位应用和样本查询。初始密码及重置方式见原生部署说明。
 - `/api/v1/` 提供版本化集成接口，支持实例识别、能力发现、只读观测 Token、请求编号、OpenAPI 契约和外部 DNS 联调；接口说明见 [集成 API](../docs/integration-api.md)。
 - 首次接入保留已知用户输入的副本，不执行上游删除底层配置的初始化步骤；保持 `redis_dns_v2.rdb` 和逻辑 DB 0/1。
 - 缓存预算考虑 cgroup 内存上限并预留面板运行空间。
 
 `config_apply` 与 `redis_snapshot` 按实际运行模式和维护服务就绪状态返回；配置中心可预览并应用 custom_mod，系统页可提交受控 Redis 后台快照。初始化环境变量和 Unbound 模板修改仍需按提示重启服务。保存、恢复和任务完成不声称已经验证每条规则生效。能力接口新增 `deployment=native/container` 和实际 DNS 查询端口，原生版 Web 使用同一套管理接口。
 
-本项目收敛为 DNS 专用管理面板与稳定 API：配置中心提供历史/差异/恢复，诊断页提供查询、最多四条链路对照及 JSON 报告导入导出。ROS 接入、整网看板、长期历史、设备清单和统一告警由独立家庭运维平台负责。`cache_flush`、`client_policies` 仍未开放，MosDNS 入口总 QPS 和完整查询日志尚未实现。
+本项目提供 DNS 专用管理面板与 API：配置中心提供历史/差异/恢复，诊断页提供查询、最多四条链路对照及 JSON 报告导入导出。`cache_flush`、`client_policies` 仍未开放，MosDNS 入口总 QPS 和完整查询日志尚未实现。
 
 ## 源码固定与验证
 
@@ -41,6 +41,7 @@ cp .env.integrated.example .env
 # 生成随机 Token 并填入 .env 的 WEB_UI_TOKEN；按需修改端口和数据目录
 openssl rand -hex 32
 nano .env
+python3 scripts/build-components.py --output .build/components-bundle
 docker compose -f docker-compose.integrated.yaml build
 docker compose -f docker-compose.integrated.yaml up -d
 ```
@@ -57,7 +58,7 @@ docker compose -f docker-compose.integrated.yaml up -d
 
 本版会在独立状态卷中保存一份已知配置输入的初始副本。它不是完整数据备份：不复制 Redis RDB、大型数据文件或任意引用目录。原有底层模板原样保留；仅在生成的运行配置中增加本地统计接口。
 
-RDB 文件保持原位；本版没有改动 Redis/Unbound 二进制，但依旧需要针对旧部署的实际版本验证读取与缓存命中。2026-11-04 已只读确认 source-host 的镜像 digest、Redis 7.2.5 和 Unbound 1.21.1 与当前核心相同，尚未执行真实数据迁移。内存缓存无法完整迁移，过去未记录的查询历史也无法从 RDB 恢复。升级失败时使用原镜像和原始备份回退。
+RDB 文件保持原位；本版没有改动 Redis/Unbound 二进制，但依旧需要针对旧部署的实际版本验证读取与缓存命中。迁移兼容性必须按旧实例的实际版本单独验证。内存缓存无法完整迁移，过去未记录的查询历史也无法从 RDB 恢复。升级失败时使用原镜像和原始备份回退。
 
 ## 本地开发与检查
 
@@ -80,7 +81,7 @@ python scripts/test-integrated-container.py --image lovestdns:test
 
 测试只创建随机命名的临时容器/卷，不映射宿主机 DNS 端口；覆盖两种 CNAUTO 模式、v1 管理/只读权限、实例身份保留、采样新鲜度、UDP/TCP 链路对照、配置历史与恢复、幂等配置应用、停止并恢复 MosDNS、Redis RDB 重建容器后保留，以及 Web 进程重启。RDB 标记保留不等于证明所有历史 DNS 缓存跨版本可命中。
 
-`.github/workflows/integrated-check.yml` 提供相同构建和运行验收，只验证，不推送镜像。Windows 开发电脑没有 Docker；2026-10-26 已通过 Xterminal 在 隔离测试环境 完成 Linux amd64 隔离构建/运行验收并保留开发预览。地址、测试路由修正、失败回退证据及尚未验收范围见 [隔离测试环境 验收记录](../docs/verification.md)，仍不表示稳定发布就绪。
+`.github/workflows/integrated-check.yml` 提供相同构建和运行验收，只验证，不推送镜像。Windows 开发电脑没有 Docker；2026-10-26 已通过 Xterminal 在 validation-host 完成 Linux amd64 隔离构建/运行验收并保留开发预览。地址、测试路由修正、失败回退证据及尚未验收范围见 [validation-host 验收记录](../docs/verification.md)，仍不表示稳定发布就绪。
 
 2026-10-25 本地收尾验证：151 项 Python 测试（分进程运行集成版与独立版套件）、14 项前端测试、TypeScript/构建/ESLint 和独立版冻结校验通过。浏览器实测配置历史、差异、预览文件恢复及链路错误展示。运行验收脚本已补充上述容器场景，但尚未运行；未验证真实核心下的应用/恢复或发布就绪性。
 

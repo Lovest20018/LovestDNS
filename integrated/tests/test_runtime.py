@@ -43,6 +43,27 @@ def test_cgroup_limit_and_web_reserve(tmp_path):
     assert resources.memory_budget(info, [str(limit)]) == 6553
 
 
+@pytest.mark.parametrize('limit_name,usage_name', [('memory.max', 'memory.current'), ('memory.limit_in_bytes', 'memory.usage_in_bytes')])
+def test_cache_budget_subtracts_usage_and_rejects_exhausted_headroom(tmp_path, limit_name, usage_name):
+    info = tmp_path / 'meminfo'
+    info.write_text('MemAvailable: 8388608 kB\n')
+    limit, usage = tmp_path / limit_name, tmp_path / usage_name
+    limit.write_text(str(512 * 1024 * 1024))
+    usage.write_text(str(100 * 1024 * 1024))
+    assert resources.memory_budget(info, [limit]) == 284
+    usage.write_text(str(500 * 1024 * 1024))
+    with pytest.raises(ValueError, match='headroom'):
+        resources.memory_budget(info, [limit])
+
+
+def test_cgroup_discovery_includes_parent_slice(tmp_path):
+    membership = tmp_path / 'membership'
+    membership.write_text('0::/system.slice/test.service\n')
+    root = tmp_path / 'cgroup'
+    assert resources.cgroup_limits(root, membership) == [root/'memory.max', root/'memory/memory.limit_in_bytes',
+        root/'system.slice/test.service/memory.max', root/'system.slice/memory.max']
+
+
 def test_migration_preserves_inputs_and_does_not_touch_cache(tmp_path):
     data, state = tmp_path / "data", tmp_path / "state"
     data.mkdir(); state.mkdir()
@@ -75,3 +96,44 @@ def test_component_overrides_are_data_not_shell(tmp_path):
     path = tmp_path / "custom_env.ini"
     path.write_text('VALUE="$(echo literal)"\nBAD="bad" trailing\n#COMMENT="ignored"\n')
     assert component.read_overrides(path) == {"VALUE": "$(echo literal)"}
+
+
+def test_dnscrypt_upgrade_preserves_protocol_and_explicit_user_choice(tmp_path, monkeypatch):
+    info, config = tmp_path / 'build-info.json', tmp_path / 'dnscrypt.toml'
+    monkeypatch.setenv('SUITE_BUILD_INFO', str(info))
+    info.write_text(json.dumps({'components': {'selected': ['dnscrypt']}}))
+    original = 'http3 = false\n[static.fixture]\nstamp = "fixture"\n'
+    config.write_text(original)
+    component.preserve_dnscrypt_defaults(config)
+    assert component.tomllib.loads(config.read_text())['pqdnscrypt'] is False
+    assert component.tomllib.loads(config.read_text())['lb_strategy'] == 'p2'
+    value = config.read_text()
+    component.preserve_dnscrypt_defaults(config)
+    assert config.read_text() == value
+    config.write_text('pqdnscrypt = true\nlb_strategy = "first"\n' + original)
+    component.preserve_dnscrypt_defaults(config)
+    assert component.tomllib.loads(config.read_text())['pqdnscrypt'] is True
+    assert component.tomllib.loads(config.read_text())['lb_strategy'] == 'first'
+    info.write_text(json.dumps({'components': {'selected': ['redis']}}))
+    config.write_text(original)
+    component.preserve_dnscrypt_defaults(config)
+    assert config.read_text() == original
+
+
+def test_collector_rate_uses_monotonic_clock_when_wall_clock_moves_back(tmp_path, monkeypatch):
+    ticks, walls = iter([100, 105]), iter([1000, 900])
+    monkeypatch.setattr(observer.time, 'monotonic', lambda: next(ticks))
+    monkeypatch.setattr(observer.time, 'time', lambda: next(walls))
+    monkeypatch.setattr(observer, 'RUN_DIR', tmp_path)
+    (tmp_path / 'ready').touch()
+    monkeypatch.setattr(observer, 'read_boot_env', lambda: {'CNAUTO': 'yes'})
+    monkeypatch.setattr(observer, 'process_status', lambda: {name: {'statename': 'RUNNING', 'pid': 1, 'start': 1} for name in ['redis', 'unbound-raw', 'unbound-forward', 'mosdns', 'dnscrypt', 'watcher']})
+    monkeypatch.setattr(observer, 'redis_stats', lambda: {})
+    counter = {'queries': 10}
+    monkeypatch.setattr(observer, 'unbound_stats', lambda path: {'total.num.queries': counter['queries'], 'total.num.cachehits': 0, 'total.num.cachemiss': counter['queries'], 'time.up': counter['queries']})
+    first = observer.collect()
+    counter['queries'] = 20
+    second = observer.collect(first)
+    assert second['sampled_at'] < first['sampled_at']
+    assert second['layers']['recursive']['qps'] == 2
+    assert second['layers']['recursive']['window_seconds'] == 5

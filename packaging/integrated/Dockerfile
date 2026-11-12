@@ -1,15 +1,16 @@
-# syntax=docker/dockerfile:1
-FROM node:22-alpine AS frontend
+ARG FRONTEND_IMAGE=node:22-alpine
+FROM ${FRONTEND_IMAGE} AS frontend
 WORKDIR /build
-COPY web/package.json web/package-lock.json ./
-RUN npm ci
+COPY integrated/frontend/package.json integrated/frontend/package-lock.json ./
+RUN npm ci && npm audit --audit-level=low
 COPY web/ ./
+COPY integrated/frontend/package.json integrated/frontend/package-lock.json ./
 COPY integrated/frontend/ /overlay/
 COPY packaging/integrated/prepare_frontend.py /prepare_frontend.py
 RUN apk add --no-cache python3 && python3 /prepare_frontend.py /build /overlay && npm run build
 
 # This digest and the source checksums are recorded in packaging/upstream.lock.json.
-FROM public.ecr.aws/sliamb/paopaodns@sha256:df0f5689934b3ebb757b7bce0590cd27b97ba23173908eb7205587859012e5c4
+FROM public.ecr.aws/sliamb/paopaodns@sha256:df0f5689934b3ebb757b7bce0590cd27b97ba23173908eb7205587859012e5c4 AS upstream
 WORKDIR /app
 RUN apk add --no-cache python3 py3-pip py3-yaml && python3 -m venv --system-site-packages /opt/venv
 COPY packaging/integrated/requirements.txt /opt/suite/requirements.txt
@@ -34,3 +35,16 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=180s --retries=3 \
     CMD ["/opt/venv/bin/python", "-m", "runtime.health"]
 ENTRYPOINT ["/opt/venv/bin/python", "-m", "runtime.entrypoint"]
 CMD []
+
+# The upstream target remains available for controlled baseline comparisons.
+FROM upstream AS candidate
+ARG TARGETARCH
+RUN test "${TARGETARCH:-amd64}" = amd64
+COPY packaging/components.lock.json /opt/suite/components.lock.json
+COPY packaging/components/bundle.py /opt/suite/build/component_bundle.py
+COPY .build/components-bundle/ /opt/suite/component-input/
+ARG DNS_COMPONENTS=redis,unbound,dnscrypt
+RUN /opt/venv/bin/python /opt/suite/build/component_bundle.py \
+      --bundle /opt/suite/component-input --lock /opt/suite/components.lock.json --select "$DNS_COMPONENTS" \
+    && /opt/venv/bin/python -c 'import hashlib,json,pathlib; p=pathlib.Path("/opt/suite"); lock=json.loads((p/"components.lock.json").read_text()); assert hashlib.sha256(pathlib.Path("/usr/sbin/mosdns").read_bytes()).hexdigest() == lock["frozen"]["mosdns"]["sha256"]; info=json.loads((p/"build-info.json").read_text()); manifest=json.loads((p/"components/manifest.json").read_text()); info["components"]={"selected":manifest["selected"],"lock_sha256":manifest["lock_sha256"],"versions":{k:manifest["components"][k]["version"] for k in manifest["selected"]}}; (p/"build-info.json").write_text(json.dumps(info,sort_keys=True,indent=2)+"\n")' \
+    && rm -r /opt/suite/component-input

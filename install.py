@@ -79,7 +79,13 @@ def unpack(package, digest, directory):
                 raise ValueError('Extracted package exceeds its size limit')
         if len(roots) != 1 or not re.fullmatch(r'lovestdns-[A-Za-z0-9_.-]+', next(iter(roots))):
             raise ValueError('Expected one native package directory')
-        archive.extractall(directory, filter='data')
+        if callable(getattr(tarfile, 'data_filter', None)):
+            archive.extractall(directory, filter='data')
+        else:
+            # Debian 12's original Python 3.11.2 predates extraction filters.
+            # Every entry above has already been limited to regular files or
+            # directories under one safe root, without links or special bits.
+            archive.extractall(directory)
     root = directory / roots.pop()
     manifest = json.loads((root / 'manifest.json').read_text())
     if (manifest.get('product'), manifest.get('deployment'), manifest.get('architecture')) != ('LovestDNS', 'native', 'amd64'):
@@ -130,7 +136,13 @@ def main():
             target.with_name(ASSET + '.sha256').write_bytes((digest + '  ' + ASSET + '\n').encode('ascii'))
             print('Verified package: ' + str(target.resolve()))
             return
-        command = [sys.executable, str(root / 'install.py'), '--instance', args.instance, 'install']
+        # New packages record the verified outer archive through their own
+        # upgrade path. Older public packages retain their original CLI.
+        receipt_capable = json.loads((root / 'manifest.json').read_text()).get('installation_receipt_v1') is True
+        command = [sys.executable, str(root / 'install.py'), '--instance', args.instance,
+                   'upgrade' if receipt_capable else 'install']
+        if receipt_capable:
+            command.extend([str(package), '--sha256', digest])
         for flag, value in (('--config', args.config), ('--import-data', args.import_data)):
             if value:
                 command.extend([flag, str(value.resolve(strict=True))])

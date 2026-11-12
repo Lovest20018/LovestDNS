@@ -30,7 +30,20 @@ def database(root):
         db.execute("CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY CHECK(id=1), password_hash TEXT NOT NULL, initial INTEGER NOT NULL)")
         db.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires REAL NOT NULL, remembered INTEGER NOT NULL)")
         db.execute("CREATE TABLE IF NOT EXISTS attempts (address TEXT PRIMARY KEY, started REAL NOT NULL, count INTEGER NOT NULL)")
+        db.execute("CREATE TABLE IF NOT EXISTS settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)")
         yield db
+
+
+def external_api_enabled(root):
+    with database(root) as db:
+        row = db.execute("SELECT value FROM settings WHERE name='external_api'").fetchone()
+        return bool(row and row['value'] == 'enabled')
+
+
+def set_external_api(root, enabled):
+    with database(root) as db:
+        db.execute("INSERT OR REPLACE INTO settings VALUES('external_api', ?)",
+                   ('enabled' if enabled else 'disabled',))
 
 
 def ensure_admin(root):
@@ -106,6 +119,22 @@ def register(server):
 
     def failure(message, status):
         return jsonify({"error": message}), status
+
+    @app.route("/auth/external-api", methods=["GET", "PUT"])
+    def external_api_setting():
+        session = current_session(server.STATE_DIR)
+        if not session:
+            return failure("请先登录", 401)
+        if session['initial']:
+            return failure("请先修改初始管理员密码", 403)
+        if request.method == 'PUT':
+            if not csrf_valid(session):
+                return failure("登录校验已失效，请刷新页面", 403)
+            body = request.get_json(silent=True)
+            if not isinstance(body, dict) or type(body.get('enabled')) is not bool:
+                return failure("enabled 需为布尔值", 400)
+            set_external_api(server.STATE_DIR, body['enabled'])
+        return jsonify({'enabled': external_api_enabled(server.STATE_DIR)})
 
     @app.before_request
     def browser_request_guard():
@@ -208,7 +237,13 @@ if __name__ == "__main__":
     import getpass
     parser = argparse.ArgumentParser(description="Reset the local administrator password and revoke browser sessions")
     parser.add_argument("--state-dir", type=Path, required=True)
+    parser.add_argument("--external-api", choices=['on', 'off', 'status'])
     args = parser.parse_args()
+    if args.external_api:
+        if args.external_api != 'status':
+            set_external_api(args.state_dir, args.external_api == 'on')
+        print('External API: ' + ('enabled' if external_api_enabled(args.state_dir) else 'disabled'))
+        raise SystemExit(0)
     password = getpass.getpass("New administrator password (8–256 characters): ")
     if password != getpass.getpass("Repeat password: "):
         parser.error("Passwords do not match")

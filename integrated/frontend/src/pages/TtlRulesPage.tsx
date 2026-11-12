@@ -1,174 +1,30 @@
+import { parseTtlRules, serializeTtlRules } from '../ttlEditor';
+import type { TtlRuleEntry } from '../ttlEditor';
 import EditorToolbar from '../components/EditorToolbar';
-import { useSuite } from '../suiteContext';
-import { preflightSave } from '../configSave';
+import { useSuiteConfig } from '../suiteContext';
 import { useUnsavedChanges } from '../unsaved';
-import ConfigFeedback from '../components/ConfigFeedback';
-import { saveFeedback } from '../saveFeedback';
-import { useState, useEffect, useRef } from 'react';
-import { useStore } from '../store';
-import * as api from '../api';
+import { useFileEditor } from '../useFileEditor';
+import { useState } from 'react';
 import { useToast } from '../hooks';
 import { Plus, X, Clock, Save, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 
-interface TtlRuleEntry {
-  id: number;
-  domain: string;
-  server: string;
-  type: 'forward' | 'record' | 'cname';
-  matchMode?: 'subdomain' | 'exact';
-  record?: string;
-}
-
-interface TtlRuleParseResult {
-  entries: TtlRuleEntry[];
-  visualSafe: boolean;
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-const TTL_VISUAL_HEADER_LINES = new Set([
-  '# TTL 规则配置文件',
-  '# 格式: domain@server:port 或 domain@@record',
-  '# domain@server:port — 转发到指定DNS服务器',
-  '# domain@@IP — 直接指定A/AAAA记录(子域名匹配)',
-  '# domain@@@IP — 精确匹配指定A/AAAA记录',
-  '# domain@@CNAME — 子域名CNAME到另一域名',
-  '# domain@@@CNAME — 精确匹配CNAME到另一域名',
-]);
-
-function parseTtlRules(content: string): TtlRuleParseResult {
-  const entries: TtlRuleEntry[] = [];
-  let id = 0;
-  let visualSafe = true;
-  const ipv4Like = (s: string) => /^\d{1,3}(\.\d{1,3}){1,3}$/.test(s);
-  const ipv6Like = (s: string) => /^[0-9a-fA-F:]+$/.test(s) && s.includes(':');
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    if (trimmed.startsWith('#')) {
-      if (!TTL_VISUAL_HEADER_LINES.has(trimmed)) {
-        visualSafe = false;
-      }
-      continue;
-    }
-
-    if (trimmed.includes('@@@')) {
-      const [domain, record] = trimmed.split('@@@');
-      const r = record.trim();
-      const isIp = ipv4Like(r) || ipv6Like(r);
-      const isDomain = r.includes('.') && !isIp;
-      if (!isIp && !isDomain) {
-        visualSafe = false;
-      }
-      entries.push({ id: id++, domain: domain.trim(), server: '', type: isDomain ? 'cname' : 'record', matchMode: 'exact', record: r });
-    } else if (trimmed.includes('@@')) {
-      const [domain, record] = trimmed.split('@@');
-      const r = record.trim();
-      const isIp = ipv4Like(r) || ipv6Like(r);
-      const isDomain = r.includes('.') && !isIp;
-      if (!isIp && !isDomain) {
-        visualSafe = false;
-      }
-      entries.push({ id: id++, domain: domain.trim(), server: '', type: isDomain ? 'cname' : 'record', matchMode: 'subdomain', record: r });
-    } else if (trimmed.includes('@')) {
-      const [domain, serverPart] = trimmed.split('@');
-      entries.push({ id: id++, domain: domain.trim(), server: serverPart?.trim() || '', type: 'forward' });
-    } else {
-      visualSafe = false;
-    }
-  }
-  return { entries, visualSafe };
-}
-
-function serializeTtlRules(entries: TtlRuleEntry[]): string {
-  const lines: string[] = [
-    '# TTL 规则配置文件',
-    '# 格式: domain@server:port 或 domain@@record',
-    '# domain@server:port — 转发到指定DNS服务器',
-    '# domain@@IP — 直接指定A/AAAA记录(子域名匹配)',
-    '# domain@@@IP — 精确匹配指定A/AAAA记录',
-    '# domain@@CNAME — 子域名CNAME到另一域名',
-    '# domain@@@CNAME — 精确匹配CNAME到另一域名',
-    '',
-  ];
-  for (const e of entries) {
-    if (e.type === 'record' || e.type === 'cname') {
-      const separator = e.matchMode === 'exact' ? '@@@' : '@@';
-      lines.push(`${e.domain}${separator}${e.record || ''}`);
-    } else {
-      lines.push(`${e.domain}@${e.server}`);
-    }
-  }
-  return lines.join('\n');
-}
-
 export default function TtlRulesPage() {
-  const { error: connectionError } = useSuite();
-  const { envValues } = useStore();
+  const { error: connectionError, runningEnv } = useSuiteConfig();
   const { showToast, ToastComponent } = useToast();
-  const rulesTtl = parseInt(envValues.RULES_TTL || '0');
+  const rulesTtl = parseInt(runningEnv?.RULES_TTL || '0');
   const rulesEnabled = rulesTtl > 0;
-  const cnAutoEnabled = envValues.CNAUTO === 'yes';
-
-  const [entries, setEntries] = useState<TtlRuleEntry[]>([]);
-  const [rawContent, setRawContent] = useState('');
+  const cnAutoEnabled = runningEnv?.CNAUTO === 'yes';
+  const editor = useFileEditor('force_ttl_rules.txt');
+  const { content: rawContent, setContent: setRawContent, busy: saving, result: saveResult, dirty } = editor;
+  const loading = !editor.loaded && !editor.error;
+  const loadFailed = !editor.loaded || !!editor.error;
+  const loadFile = () => editor.load(true);
+  const parsed = parseTtlRules(rawContent);
+  const entries = parsed.entries;
+  const visualSafe = parsed.visualSafe;
+  const setEntries = (update: TtlRuleEntry[] | ((old: TtlRuleEntry[]) => TtlRuleEntry[])) => setRawContent(serializeTtlRules(typeof update === 'function' ? update(entries) : update, rawContent));
   const [editMode, setEditMode] = useState<'visual' | 'text'>('text');
-  const [visualSafe, setVisualSafe] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(true);
-  const [lastLoadedContent, setLastLoadedContent] = useState('');
-  const [diskBaseline, setDiskBaseline] = useState<string | null>(null);
-  const [saveResult, setSaveResult] = useState<{ success: boolean; msg: string; result?: api.SaveResult } | null>(null);
-  const loadFileRef = useRef<() => Promise<void>>(async () => {});
-
-  const getCurrentContent = () => editMode === 'visual' ? serializeTtlRules(entries) : rawContent;
-
-  const dirty = getCurrentContent() !== lastLoadedContent;
   useUnsavedChanges(dirty);
-
-  const loadFile = async () => {
-    setLoading(true);
-    try {
-      const result = await api.readFile('force_ttl_rules.txt');
-      const content = result.content || '';
-      setDiskBaseline(content);
-      const parsed = parseTtlRules(content);
-      setLoadFailed(false);
-      setLastLoadedContent(content);
-      setRawContent(content);
-      setEntries(parsed.entries);
-      setVisualSafe(parsed.visualSafe);
-    } catch (e: unknown) {
-      const message = getErrorMessage(e);
-      if (message.includes('not found') || message.includes('404')) {
-        setLoadFailed(false);
-        setLastLoadedContent('');
-        setDiskBaseline(null);
-        setRawContent('');
-        setEntries([]);
-        setVisualSafe(true);
-      } else {
-        setLoadFailed(true);
-        showToast('读取 force_ttl_rules.txt 失败: ' + message);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadFileRef.current = loadFile;
-  });
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadFileRef.current();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
 
   const addEntry = () => {
     setEntries((prev) => [
@@ -178,19 +34,7 @@ export default function TtlRulesPage() {
   };
 
   const switchEditMode = (mode: 'visual' | 'text') => {
-    if (mode === editMode) return;
-    if (mode === 'visual') {
-      const parsed = parseTtlRules(rawContent);
-      if (!parsed.visualSafe) {
-        setVisualSafe(false);
-        showToast('当前文件含有可视化编辑无法保留的注释或语法，请使用文本编辑保存原文');
-        return;
-      }
-      setEntries(parsed.entries);
-      setVisualSafe(true);
-    } else {
-      setRawContent(serializeTtlRules(entries));
-    }
+    if (mode === 'visual' && !visualSafe) { showToast('当前文件含有未支持的语法，请使用文本编辑保留原文'); return; }
     setEditMode(mode);
   };
 
@@ -200,7 +44,6 @@ export default function TtlRulesPage() {
 
   const updateRawContent = (content: string) => {
     setRawContent(content);
-    setVisualSafe(parseTtlRules(content).visualSafe);
   };
 
   const removeEntry = (id: number) => {
@@ -208,21 +51,8 @@ export default function TtlRulesPage() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    setSaveResult(null);
-    const content = getCurrentContent();
-    try {
-      const result = await preflightSave('force_ttl_rules.txt', diskBaseline, content, api.readFile, api.writeFile);
-      const msg = saveFeedback(result);
-      setDiskBaseline(content);
-      setLastLoadedContent(content);
-      setSaveResult({ success: true, msg, result });
-      showToast('配置已保存到 /data');
-    } catch (e: unknown) {
-      setSaveResult({ success: false, msg: getErrorMessage(e) || '保存失败' });
-    } finally {
-      setSaving(false);
-    }
+    const result = await editor.save();
+    if (result?.success) showToast('配置已保存；请按生效提示继续');
   };
 
   return (
@@ -237,7 +67,7 @@ export default function TtlRulesPage() {
         </p>
       </div>
 
-      {!cnAutoEnabled && (
+      {runningEnv && !cnAutoEnabled && (
         <div className="card" style={{ borderColor: 'var(--accent-amber)' }}>
           <div className="card-desc" style={{ color: 'var(--accent-amber)' }}>
             CNAUTO 未开启，TTL 规则功能不会工作。请在基础设置中开启智能分流 并重启 DNS 服务。
@@ -253,60 +83,13 @@ export default function TtlRulesPage() {
         </div>
       )}
 
-      <div className="card">
-        <div className="card-title">
-          <Clock size={18} />
-          TTL 规则说明
-        </div>
-        <div className="card-desc">
-          RULES_TTL 值大于 0 时生效。规则仅对 A 记录和 AAAA 记录生效。
-          保存后按后端返回的监听条件处理，并查询目标域名验证。升级会保留此配置文件。
-        </div>
-        <table className="info-table">
-          <thead>
-            <tr><th>格式</th><th>说明</th><th>示例</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@server</code></td>
-              <td>转发到指定 DNS 服务器（子域名匹配）</td>
-              <td>cncheck.03k.org@129.211.176.224</td>
-            </tr>
-            <tr>
-              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@server:port</code></td>
-              <td>转发到指定 DNS 服务器含端口</td>
-              <td>cncheck.03k.org@129.211.176.224:53</td>
-            </tr>
-            <tr>
-              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@s1,s2</code></td>
-              <td>多服务器轮询</td>
-              <td>cncheck.03k.org@129.211.176.224,112.80.181.45</td>
-            </tr>
-            <tr>
-              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@@IP</code></td>
-              <td>直接指定 A/AAAA 记录（子域名匹配）</td>
-              <td>www.qq.com@@1.2.3.4</td>
-            </tr>
-            <tr>
-              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@@@IP</code></td>
-              <td>直接指定记录（精确匹配）</td>
-              <td>www.qq.com@@@1.2.3.4</td>
-            </tr>
-            <tr>
-              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@@CNAME</code></td>
-              <td>CNAME 到另一域名（子域名匹配）</td>
-              <td>www.qq.com@@qq.03k.org</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <EditorToolbar file={"force_ttl_rules.txt"} dirty={dirty} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} onSave={() => void handleSave()} />
+      <EditorToolbar file={"force_ttl_rules.txt"} dirty={dirty} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} onSave={() => void handleSave()} />
+      {editor.error && <p className="suite-editor-result is-error" role="alert">{editor.error}</p>}
 
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div className="card-title">规则编辑</div>
-          <button className="btn btn-secondary btn-sm" onClick={() => { if (!dirty || window.confirm('重新读取会丢失修改，确定继续？')) void loadFile(); }} disabled={loading}>
+          <button className="btn btn-secondary btn-sm" onClick={() => void loadFile()} disabled={loading || saving}>
             <RefreshCw size={14} /> 刷新
           </button>
         </div>
@@ -364,15 +147,14 @@ export default function TtlRulesPage() {
                     <label className="form-label">规则类型</label>
                     <select
                       className="form-select"
-                      value={entry.type}
+                      value={entry.type === 'cname' ? 'record' : entry.type}
                       onChange={(e) => {
                         const type = e.target.value as TtlRuleEntry['type'];
                         updateEntry(entry.id, { type, matchMode: type === 'forward' ? undefined : entry.matchMode || 'subdomain' });
                       }}
                     >
                       <option value="forward">转发到 DNS 服务器 (@)</option>
-                      <option value="record">指定 A/AAAA 记录 (@@/@@@)</option>
-                      <option value="cname">CNAME 到域名 (@@)</option>
+                      <option value="record">指定 IP 或 CNAME (@@/@@@)</option>
                     </select>
                   </div>
                 </div>
@@ -448,7 +230,7 @@ export default function TtlRulesPage() {
         )}
 
         <div className="suite-editor-actions" style={{ marginTop: 16, borderTop: '1px solid var(--border-color)', paddingTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" disabled={saving || loading || loadFailed || !!connectionError} onClick={handleSave}>
+          <button className="btn btn-primary" disabled={saving || loading || loadFailed || !!connectionError || !dirty} onClick={handleSave}>
             <Save size={16} /> {saving ? '保存中...' : '保存配置'}
           </button>
           {saveResult && (
@@ -463,7 +245,54 @@ export default function TtlRulesPage() {
         </div>
       </div>
 
-      <ConfigFeedback result={saveResult?.result} file={'force_ttl_rules.txt'} saved={!!saveResult?.success} dirty={dirty} />
+      <details className="card suite-editor-help"><summary><Clock size={16} /> TTL 语法和生效说明</summary>
+        <div className="card-title">
+          <Clock size={18} />
+          TTL 规则说明
+        </div>
+        <div className="card-desc">
+          RULES_TTL 值大于 0 时生效。规则仅对 A 记录和 AAAA 记录生效。
+          保存后按后端返回的监听条件处理，并查询目标域名验证。升级会保留此配置文件。
+        </div>
+        <table className="info-table">
+          <thead>
+            <tr><th>格式</th><th>说明</th><th>示例</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@server</code></td>
+              <td>转发到指定 DNS 服务器（子域名匹配）</td>
+              <td>cncheck.03k.org@129.211.176.224</td>
+            </tr>
+            <tr>
+              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@server:port</code></td>
+              <td>转发到指定 DNS 服务器含端口</td>
+              <td>cncheck.03k.org@129.211.176.224:53</td>
+            </tr>
+            <tr>
+              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@s1,s2</code></td>
+              <td>多服务器轮询</td>
+              <td>cncheck.03k.org@129.211.176.224,112.80.181.45</td>
+            </tr>
+            <tr>
+              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@@IP</code></td>
+              <td>直接指定 A/AAAA 记录（子域名匹配）</td>
+              <td>www.qq.com@@1.2.3.4</td>
+            </tr>
+            <tr>
+              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@@@IP</code></td>
+              <td>直接指定记录（精确匹配）</td>
+              <td>www.qq.com@@@1.2.3.4</td>
+            </tr>
+            <tr>
+              <td><code style={{ color: 'var(--accent-cyan)' }}>domain@@CNAME</code></td>
+              <td>CNAME 到另一域名（子域名匹配）</td>
+              <td>www.qq.com@@qq.03k.org</td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
+
       {loadFailed && !loading && <p role="alert">配置尚未成功读取，保存已停用。<button className="btn btn-secondary btn-sm" onClick={() => void loadFile()}>重新读取</button></p>}
       {ToastComponent}
       </fieldset>

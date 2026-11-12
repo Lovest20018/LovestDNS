@@ -111,6 +111,7 @@ def test_restart_preflight_failure_never_stops_components(tmp_path, monkeypatch,
 def test_restart_task_is_native_only_and_deduplicated(tmp_path, monkeypatch):
     core = Core(tmp_path)
     manager = Manager(core, TaskStore(core.state))
+    monkeypatch.setattr(manager, 'healthy', lambda: True)  # No background execution in this submission test.
     request = {'operation': 'submit', 'task': {'action': 'restart_dns_core', 'request_id': 'c' * 32, 'expected_sha256': None}}
     monkeypatch.delenv('LOVESTDNS_SYSTEMD', raising=False)
     with pytest.raises(ValueError):
@@ -121,3 +122,34 @@ def test_restart_task_is_native_only_and_deduplicated(tmp_path, monkeypatch):
     assert len(manager.store.list()) == 1
     (core.run / 'ready').unlink()
     assert manager.dispatch(request)['task']['id'] == manager.store.list()[0]['id']
+
+
+def test_streaming_backup_retains_manifest_and_rejects_corruption_before_restore(tmp_path, monkeypatch, restart_module):
+    from native.backup import create
+    core = Core(tmp_path)
+    path = core.temporary / 'large.conf'
+    path.write_bytes(b'x' * (1024 * 1024))
+    original = Path.read_bytes
+    def bounded_only(value):
+        assert value != path, 'Runtime configuration must be streamed'
+        return original(value)
+    monkeypatch.setattr(Path, 'read_bytes', bounded_only)
+    backup = create(core)
+    manifest = json.loads((core.state / 'last-runtime-before-restart.json').read_text())
+    assert manifest['schema_version'] == 1
+    assert (core.state / 'last-runtime-before-restart.json').stat().st_size < 4096
+    assert all(len(item['sha256']) == 64 for item in manifest['files'])
+    item = next(item for item in manifest['files'] if item['name'] == 'large.conf')
+    (backup.directory / item['blob']).write_bytes(b'corrupt')
+    (core.temporary / 'mosdns.yaml').write_text('still running')
+    with pytest.raises(ValueError, match='校验失败'):
+        backup.restore()
+    assert (core.temporary / 'mosdns.yaml').read_text() == 'still running'
+
+
+def test_backup_rejects_path_escape(tmp_path, restart_module):
+    from native.backup import RuntimeBackup
+    core = Core(tmp_path)
+    manifest = {'files': [{'group': 'temporary', 'name': '../outside', 'blob': '0000'}]}
+    with pytest.raises(ValueError, match='路径无效'):
+        RuntimeBackup(core, core.state, manifest)

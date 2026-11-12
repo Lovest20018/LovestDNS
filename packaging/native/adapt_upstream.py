@@ -4,6 +4,19 @@ from pathlib import Path
 from patch_upstream import replace_once
 
 
+def adapt_mark_checksum(text):
+    # The upstream checksum header is padded with NUL bytes. GNU grep
+    # suppresses matching text in binary files unless -a is explicit.
+    return replace_once(text, 'sp_sha_hash=$(grep -Eo', 'sp_sha_hash=$(grep -aEo')
+
+
+def adapt_root_hints_update(text):
+    # The native root-hints file also lives in /tmp. Keep the download separate:
+    # the upstream updater truncates/removes update_file_down after checking it.
+    return replace_once(text, 'update_file_down="/tmp/named.cache"',
+                        'update_file_down="/tmp/named.cache.download"')
+
+
 def adapt(directory):
     directory = Path(directory)
     init = (directory / "init.sh").read_text()
@@ -39,6 +52,10 @@ def adapt(directory):
         text = text.replace('-m runtime.component', '-m native.component')
         text = text.replace('-m runtime.legacy_reload', '-m native.legacy_reload')
         text = text.replace('-m runtime.resources', '-m native.resources')
+        if name == 'watch_list.sh':
+            text = adapt_mark_checksum(text)
+        if name == 'data_update.sh':
+            text = adapt_root_hints_update(text)
         path.write_text(text, encoding="utf-8", newline="\n")
         path.chmod(0o755)
     # Container-private listeners become loopback-only on the Debian host.
