@@ -33,6 +33,7 @@ serverurl=unix://{run}/supervisor.sock
                 0 if name == "updater" else 1) for name, priority in programs.items()]
     entries += [("observer", f"{py} -m runtime.observer", True, True, 45, 1),
                 ("manager", f"{py} -m runtime.manager", True, True, 46, 1),
+                ("query-recorder", f"{py} -m runtime.query_recorder", True, True, 47, 1),
                 ("web", f"{py} -m gunicorn --bind {address}:{web_port} --workers 2 --worker-class gthread --threads 4 --timeout 120 server:app", True, True, 50, 2),
                 ("bootstrap", f"/bin/bash {home}/core/init.sh", True, False, 100, 0)]
     for name, command, start, restart, priority, seconds in entries:

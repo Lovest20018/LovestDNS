@@ -1,6 +1,6 @@
 {
   "api_version": "1",
-  "candidate_version": "0.1.0-dev.lovestdns-native.20261112.home2.1",
+  "candidate_version": "0.1.0-dev.lovestdns-native.20261112.query1",
   "cases": [
     {
       "id": "observer_instance",
@@ -25,7 +25,7 @@
             "id": "00000000-0000-4000-8000-000000000001",
             "kind": "paopaodns",
             "name": "Contract DNS",
-            "version": "0.1.0-dev.lovestdns-native.20261112.home2.1"
+            "version": "0.1.0-dev.lovestdns-native.20261112.query1"
           },
           "meta": {
             "api_version": "1",
@@ -78,6 +78,7 @@
               "config_history": false,
               "config_state": false,
               "dns_debug": true,
+              "query_recording": false,
               "redis_snapshot": false,
               "restart_dns_core": false,
               "runtime_snapshot": true
@@ -142,7 +143,7 @@
               "HTTPS"
             ],
             "runtime_error": null,
-            "version": "0.1.0-dev.lovestdns-native.20261112.home2.1"
+            "version": "0.1.0-dev.lovestdns-native.20261112.query1"
           },
           "meta": {
             "api_version": "1",
@@ -764,6 +765,7 @@
               "config_history": false,
               "config_state": false,
               "dns_debug": true,
+              "query_recording": false,
               "redis_snapshot": false,
               "restart_dns_core": false,
               "runtime_snapshot": false
@@ -828,7 +830,7 @@
               "HTTPS"
             ],
             "runtime_error": "collector unavailable in test scenario",
-            "version": "0.1.0-dev.lovestdns-native.20261112.home2.1"
+            "version": "0.1.0-dev.lovestdns-native.20261112.query1"
           },
           "meta": {
             "api_version": "1",
@@ -976,6 +978,345 @@
           "X-Request-ID": "contract-forbidden_config"
         },
         "status": 403
+      }
+    },
+    {
+      "id": "query_recording_default_off",
+      "operation_id": "query_recording_status",
+      "provenance": {
+        "inputs": "synthetic recorder I/O, default-off status; actual administrator-only handler",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-query_recording_default_off"
+        },
+        "method": "GET",
+        "path": "/api/v1/query-recording",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "active": false,
+            "counters": {},
+            "database_bytes": 16384,
+            "enabled": false,
+            "endpoints": [],
+            "limits": {
+              "database_bytes": 32505856,
+              "retention_seconds": 86400,
+              "rows": 100000,
+              "storage_bytes": 67108864
+            },
+            "memory_limits": {
+              "event_queue": 512,
+              "pending_queries": 2048,
+              "response_wait_seconds": 10,
+              "tcp_streams": 128
+            },
+            "phase": "disabled",
+            "queue_depth": 0,
+            "reason": null,
+            "retained_rows": 0,
+            "sampled_at": 1792972800.0,
+            "scope": "service_network_namespace",
+            "session_id": "synthetic-recorder-session",
+            "source": "linux_passive_entry_packets",
+            "timing_scope": "passive_entry_packet_interval"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-query_recording_default_off"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-query_recording_default_off"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "query_recording_observer_forbidden",
+      "operation_id": "query_recording_status",
+      "provenance": {
+        "inputs": "real guard denies query history to external observer credentials",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-query_recording_observer_forbidden"
+        },
+        "method": "GET",
+        "path": "/api/v1/query-recording",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "FORBIDDEN",
+            "message": "只读接入不能访问配置、日志或维护任务"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-query_recording_observer_forbidden"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-query_recording_observer_forbidden"
+        },
+        "status": 403
+      }
+    },
+    {
+      "id": "query_records_recent",
+      "operation_id": "query_records_recent",
+      "provenance": {
+        "inputs": "synthetic passive event at recorder I/O boundary; no live traffic or cache/path inference",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-query_records_recent"
+        },
+        "method": "GET",
+        "path": "/api/v1/query-records",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "events": [
+              {
+                "addresses": [
+                  "192.0.2.8"
+                ],
+                "addresses_complete": true,
+                "answer_count": 1,
+                "branch": null,
+                "cache_hit": null,
+                "component": "mosdns",
+                "domain": "example.test.",
+                "elapsed_ms": 1.0,
+                "entry_address": "192.0.2.1",
+                "entry_port": 15453,
+                "id": "synthetic-recorder-session:1",
+                "observed_at": 1792972799.0,
+                "outcome": "response_observed",
+                "qclass": 1,
+                "qtype": 1,
+                "rcode": "NOERROR",
+                "rcode_value": 0,
+                "record_type": "A",
+                "response_at": 1792972799.001,
+                "same_key_packets": 1,
+                "sequence": 1,
+                "source_ip": "192.0.2.2",
+                "source_port": 32000,
+                "timing_scope": "passive_entry_packet_interval",
+                "transport": "udp",
+                "truncated": false
+              }
+            ],
+            "instance_id": "00000000-0000-4000-8000-000000000001",
+            "next_before": null,
+            "status": {
+              "active": false,
+              "counters": {},
+              "database_bytes": 16384,
+              "enabled": false,
+              "endpoints": [],
+              "limits": {
+                "database_bytes": 32505856,
+                "retention_seconds": 86400,
+                "rows": 100000,
+                "storage_bytes": 67108864
+              },
+              "memory_limits": {
+                "event_queue": 512,
+                "pending_queries": 2048,
+                "response_wait_seconds": 10,
+                "tcp_streams": 128
+              },
+              "phase": "disabled",
+              "queue_depth": 0,
+              "reason": null,
+              "retained_rows": 1,
+              "sampled_at": 1792972800.0,
+              "scope": "service_network_namespace",
+              "session_id": "synthetic-recorder-session",
+              "source": "linux_passive_entry_packets",
+              "timing_scope": "passive_entry_packet_interval"
+            }
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-query_records_recent"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-query_records_recent"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "query_recording_opt_in",
+      "operation_id": "query_recording_configure",
+      "provenance": {
+        "inputs": "synthetic recorder I/O; actual handler submits explicit opt-in",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "body": {
+          "enabled": true
+        },
+        "headers": {
+          "X-Request-ID": "contract-query_recording_opt_in"
+        },
+        "method": "PUT",
+        "path": "/api/v1/query-recording",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "active": false,
+            "counters": {},
+            "database_bytes": 16384,
+            "enabled": true,
+            "endpoints": [],
+            "limits": {
+              "database_bytes": 32505856,
+              "retention_seconds": 86400,
+              "rows": 100000,
+              "storage_bytes": 67108864
+            },
+            "memory_limits": {
+              "event_queue": 512,
+              "pending_queries": 2048,
+              "response_wait_seconds": 10,
+              "tcp_streams": 128
+            },
+            "phase": "starting",
+            "queue_depth": 0,
+            "reason": null,
+            "retained_rows": 0,
+            "sampled_at": 1792972800.0,
+            "scope": "service_network_namespace",
+            "session_id": "synthetic-recorder-session",
+            "source": "linux_passive_entry_packets",
+            "timing_scope": "passive_entry_packet_interval"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-query_recording_opt_in"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-query_recording_opt_in"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "query_records_clear",
+      "operation_id": "query_records_clear",
+      "provenance": {
+        "inputs": "synthetic empty recorder status; actual administrator clear handler",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-query_records_clear"
+        },
+        "method": "DELETE",
+        "path": "/api/v1/query-records",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "active": false,
+            "counters": {},
+            "database_bytes": 16384,
+            "enabled": false,
+            "endpoints": [],
+            "limits": {
+              "database_bytes": 32505856,
+              "retention_seconds": 86400,
+              "rows": 100000,
+              "storage_bytes": 67108864
+            },
+            "memory_limits": {
+              "event_queue": 512,
+              "pending_queries": 2048,
+              "response_wait_seconds": 10,
+              "tcp_streams": 128
+            },
+            "phase": "disabled",
+            "queue_depth": 0,
+            "reason": null,
+            "retained_rows": 0,
+            "sampled_at": 1792972800.0,
+            "scope": "service_network_namespace",
+            "session_id": "synthetic-recorder-session",
+            "source": "linux_passive_entry_packets",
+            "timing_scope": "passive_entry_packet_interval"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-query_records_clear"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-query_records_clear"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "query_records_unavailable",
+      "operation_id": "query_records_recent",
+      "provenance": {
+        "inputs": "synthetic recorder I/O failure; actual handler returns UNAVAILABLE without fabricated rows",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-query_records_unavailable"
+        },
+        "method": "GET",
+        "path": "/api/v1/query-records",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "UNAVAILABLE",
+            "message": "查询记录服务暂不可用"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-query_records_unavailable"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-query_records_unavailable"
+        },
+        "status": 503
       }
     },
     {

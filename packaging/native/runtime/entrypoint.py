@@ -24,7 +24,7 @@ def main():
     if not data.is_dir() or os.environ.get("LOVESTDNS_SYSTEMD") != "1":
         raise SystemExit("Start this runtime through the installed systemd unit")
     preserve_inputs(data, state)
-    for name in ("ready", "core-env.json", "mosdns-env.json", "supervisor.sock", "observer.sock", "manager.sock"):
+    for name in ("ready", "core-env.json", "mosdns-env.json", "supervisor.sock", "observer.sock", "manager.sock", "query-recorder.sock"):
         (run / name).unlink(missing_ok=True)
     shutil.copyfile(home / "core/named.cache", "/tmp/named.cache")
     os.environ["DNSPORT"] = os.environ["SUITE_DNS_PORT"]

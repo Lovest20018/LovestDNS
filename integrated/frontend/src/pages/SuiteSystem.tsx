@@ -8,7 +8,7 @@ import SuiteMaintenance from '../components/SuiteMaintenance';
 import { Empty, Notice, Permission, Section } from '../components/SuiteUI';
 import './SuitePage.css';
 
-const COMPONENTS = ['bootstrap', 'mosdns', 'unbound-raw', 'unbound-forward', 'redis', 'dnscrypt', 'dnscrypt-socks', 'watcher', 'manager', 'observer', 'cron', 'updater'];
+const COMPONENTS = ['bootstrap', 'mosdns', 'unbound-raw', 'unbound-forward', 'redis', 'dnscrypt', 'dnscrypt-socks', 'watcher', 'manager', 'observer', 'query-recorder', 'cron', 'updater'];
 function componentFromHash() {
   const value = new URLSearchParams(window.location.hash.split('?')[1]).get('component');
   return value && COMPONENTS.includes(value) ? value : COMPONENTS[0];

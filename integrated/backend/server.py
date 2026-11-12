@@ -1,6 +1,7 @@
 """Integrated-only API overlay. The frozen standalone backend is imported unchanged."""
 import json
 import os
+import re
 from pathlib import Path
 import sqlite3
 import shutil
@@ -20,7 +21,7 @@ from installation import read_object, recorded, installation_summary, provenance
 app = base.app
 if os.environ.get("SUITE_DIST_DIR"):
     app.static_folder = os.environ["SUITE_DIST_DIR"]
-VERSION = "0.1.0-dev.lovestdns-native.20261112.home2.1"
+VERSION = "0.1.0-dev.lovestdns-native.20261112.query1"
 STATE_DIR = Path(os.environ.get("SUITE_STATE_DIR", "/var/lib/paopaodns-suite"))
 RUN_DIR = Path(os.environ.get("SUITE_RUN_DIR", "/run/paopaodns-suite"))
 history = History(STATE_DIR)
@@ -254,8 +255,51 @@ def capabilities():
                      "redis_snapshot": management.get("save_redis_snapshot") is True,
                      "restart_dns_core": management.get("restart_dns_core") is True,
                      "conditional_config_write": True, "config_state": True,
-                     "cache_flush": False, "client_policies": False},
+                     "query_recording": True, "cache_flush": False, "client_policies": False},
         "runtime_error": current.get("error")})
+
+
+def _query_records(payload):
+    try:
+        value = runtime_client.query_records_request(payload)
+        if payload['operation'] == 'recent':
+            from api_v1 import instance_identity
+            value = {**value, 'instance_id': instance_identity(STATE_DIR)}
+        return jsonify(value)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc)}), 503
+
+
+def query_recording_status():
+    return _query_records({'operation': 'status'})
+
+
+def query_recording_configure():
+    body = request.get_json()
+    if not isinstance(body, dict) or set(body) != {'enabled'} or type(body['enabled']) is not bool:
+        return jsonify({'error': '只接受 enabled 布尔值'}), 400
+    return _query_records({'operation': 'configure', **body})
+
+
+def query_records_clear():
+    return _query_records({'operation': 'clear'})
+
+
+def query_records_recent():
+    if set(request.args) - {'limit', 'before', 'source', 'domain', 'qtype'} or any(len(request.args.getlist(k)) != 1 for k in request.args):
+        return jsonify({'error': '查询筛选参数无效'}), 400
+    payload = {'operation': 'recent', **request.args.to_dict()}
+    try:
+        for key in ('limit', 'before', 'qtype'):
+            if key in payload:
+                if not re.fullmatch(r'[0-9]{1,19}', payload[key]):
+                    raise ValueError('数值筛选参数无效')
+                payload[key] = int(payload[key])
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return _query_records(payload)
 
 
 def api_read_file(filename):
@@ -394,7 +438,7 @@ def restore_history(filename, revision):
 
 @app.get("/api/core-logs/<component>")
 def core_logs(component):
-    if component not in {"mosdns", "unbound-raw", "unbound-forward", "redis", "dnscrypt", "dnscrypt-socks", "watcher", "bootstrap", "manager", "observer", "cron", "updater"}:
+    if component not in {"mosdns", "unbound-raw", "unbound-forward", "redis", "dnscrypt", "dnscrypt-socks", "watcher", "bootstrap", "manager", "observer", "query-recorder", "cron", "updater"}:
         return jsonify({"error": "Unknown component"}), 404
     try:
         with (STATE_DIR / "logs" / f"{component}.log").open("rb") as source:

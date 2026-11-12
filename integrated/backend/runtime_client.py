@@ -72,3 +72,24 @@ def snapshot():
         return value
     except (OSError, ValueError, KeyError, TypeError) as exc:
         return {"available": False, "error": str(exc)[:200]}
+
+
+def query_records_request(payload):
+    from runtime.query_recorder import validate_request
+    payload = validate_request(dict(payload))
+    path = Path(os.environ.get('SUITE_RUN_DIR', '/run/paopaodns-suite')) / 'query-recorder.sock'
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(4)
+            sock.connect(str(path))
+            sock.sendall(json.dumps(payload).encode() + b'\n')
+            with sock.makefile('rb') as stream:
+                raw = stream.readline(512 * 1024 + 1)
+        if len(raw) > 512 * 1024 or not raw.endswith(b'\n'):
+            raise RuntimeError('查询记录响应超过上限')
+        value = json.loads(raw)
+        if not isinstance(value, dict) or value.get('ok') is not True:
+            raise RuntimeError('查询记录服务暂不可用')
+        return value['result']
+    except (OSError, AttributeError, ValueError, KeyError) as exc:
+        raise RuntimeError('查询记录服务暂不可用') from exc

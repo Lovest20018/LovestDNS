@@ -6,6 +6,8 @@ LovestDNS 是基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS) 的 DNS 服�
 
 `install.py` 默认下载仍固定 `.20261104.11`。选择新版时使用最新安装脚本并显式传入 `--version 0.1.0-dev.lovestdns-native.20261112.home2.1`；首次配置和实例参数见下方及[部署说明](docs/lovestdns-native-deployment.md)。原验收包与最终公开包摘要不同，以对应 Release 的校验文件为准。
 
+当前开发源码为 `20261112.query1`，新增默认关闭、有容量上限的[真实入口查询记录](docs/query-recording-mvp-2026-11-12.md)。该源码候选尚未发布安装包；公开 home2.1 不含此功能。
+
 首页、配置流程和监听采集见[首批实现](docs/home-console-implementation-2026-11-11.md)，实例身份、维护命令及来源见[本轮实现](docs/home2-installation-identity-2026-11-12.md)。原候选安装、升级、回退、测试实例部署和 15 分钟功能观察见[home2.1 验收](docs/home21-validation-results-2026-11-12.md)，公开包的额外验证另列在发行记录中。客户端系统 DNS 未切换。
 
 本仓库为 [LovestDNS](https://github.com/Lovest20018/LovestDNS)，由原 `Lovest20018/PaoPaoDNS` fork 更名；[PaoPaoDNS-WebUI](https://github.com/Lovest20018/PaoPaoDNS-WebUI) 保持独立。原生版运行无需 Docker。源码与历史版本对应关系见[收口说明](docs/source-version-closure-2026-11-06.md)。

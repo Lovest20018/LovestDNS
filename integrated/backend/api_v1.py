@@ -45,6 +45,10 @@ OPERATIONS = [
     ("/history/<filename>/<int:revision>", "GET", "history_read", "read_history", "读取指定历史版本"),
     ("/history/<filename>/<int:revision>/restore", "POST", "history_restore", "restore_history", "重新校验并恢复单文件版本"),
     ("/core-logs/<component>", "GET", "logs", "core_logs", "读取最近二百行脱敏组件日志"),
+    ("/query-recording", "GET", "query_recording_status", "query_recording_status", "查询采集状态与保留上限，仅管理权限"),
+    ("/query-recording", "PUT", "query_recording_configure", "query_recording_configure", "启停被动查询采集，默认关闭"),
+    ("/query-records", "GET", "query_records_recent", "query_records_recent", "读取最近真实入口查询，不推测缓存或分流路径"),
+    ("/query-records", "DELETE", "query_records_clear", "query_records_clear", "清空持久查询记录并丢弃待采集事件"),
 ]
 
 
@@ -221,7 +225,7 @@ def register(server):
         if observer:
             value["features"] = {**value["features"], "config_history": False,
                                  "config_apply": False, "redis_snapshot": False, "restart_dns_core": False,
-                                 "conditional_config_write": False, "config_state": False}
+                                 "conditional_config_write": False, "config_state": False, "query_recording": False}
         return jsonify({"data": value, "meta": meta()})
 
     @api.get("/runtime")

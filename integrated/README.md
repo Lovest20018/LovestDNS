@@ -1,6 +1,6 @@
 # LovestDNS 集成版开发说明
 
-当前源码版本：`0.1.0-dev.lovestdns-native.20261111.home1`，LovestDNS 未发布测试候选，home1 尚未打包或部署；[本轮实现与验证](../docs/home-console-implementation-2026-11-11.md)。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md) 与 Docker 集成版；公开安装入口仍固定为已发布的 `.11`，测试候选通过本地包及 SHA-256 安装，Docker 镜像仍从源码构建。此前 `.opt4` 的隔离验收见 [Review 修复记录](../docs/review-fixes-2026-11-06.md)，本轮版本与源码绑定规则见 [收口说明](../docs/source-version-closure-2026-11-06.md)。固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)。源码分区见 [结构说明](../docs/project-layout.md)。
+当前源码版本：`0.1.0-dev.lovestdns-native.20261112.query1`，新增[真实查询观测 MVP](../docs/query-recording-mvp-2026-11-12.md)，尚未发布安装包。最新公开预发布为 [home2.1](../docs/native-home21-release-2026-11-12.md)，默认安装入口仍固定 `.11`。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md) 与源码构建的 Docker 集成版。固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)，源码分区见 [结构说明](../docs/project-layout.md)。
 
 历史版本号、镜像和容器标识用于对应已有契约和验收证据。API `kind`、报告类型、数据文件名和内部运行路径沿用原值，保持兼容。
 
@@ -14,7 +14,7 @@
 - 组件状态、两路 Unbound 的查询增量与命中率、Redis 内存/DB/持久化信息。缺失数据明确显示不可用，组件重启后不跨计数周期计算增量。
 - 集成版 DNS 查询支持 A、AAAA、CNAME、NS、MX、TXT、SRV、PTR、SVCB、HTTPS，读取 PaoPaoDNS Additional TXT 诊断标记。SVCB/HTTPS 参数当前按编号和十六进制展示。
 - 保存配置时记录历史，保留最多 20 个版本/文件，并设置总内容容量上限。支持预览与单文件恢复，恢复仍执行内容校验。
-- 核心日志限量读取及 Token 脱敏；未启用完整查询日志。
+- 核心日志限量读取及 Token 脱敏；真实入口查询记录默认关闭，开启后按容量和时间保留，不保证全量。
 - Web 以管理员密码登录并可记住会话；首页展示核心进程、监听、缓存与通道统计，配置页提供原位应用和样本查询。初始密码及重置方式见原生部署说明。
 - `/api/v1/` 提供版本化集成接口，支持实例识别、能力发现、只读观测 Token、请求编号、OpenAPI 契约和外部 DNS 联调；接口说明见 [集成 API](../docs/integration-api.md)。
 - 首次接入保留已知用户输入的副本，不执行上游删除底层配置的初始化步骤；保持 `redis_dns_v2.rdb` 和逻辑 DB 0/1。
@@ -22,7 +22,7 @@
 
 `config_apply` 与 `redis_snapshot` 按实际运行模式和维护服务就绪状态返回；配置中心可预览并应用 custom_mod，系统页可提交受控 Redis 后台快照。初始化环境变量和 Unbound 模板修改仍需按提示重启服务。保存、恢复和任务完成不声称已经验证每条规则生效。能力接口新增 `deployment=native/container` 和实际 DNS 查询端口，原生版 Web 使用同一套管理接口。
 
-本项目提供 DNS 专用管理面板与 API：配置中心提供历史/差异/恢复，诊断页提供查询、最多四条链路对照及 JSON 报告导入导出。`cache_flush`、`client_policies` 仍未开放，MosDNS 入口总 QPS 和完整查询日志尚未实现。
+本项目提供 DNS 专用管理面板与 API：配置中心提供历史/差异/恢复，诊断页提供最近入口查询、主动查询、最多四条链路对照及 JSON 报告导入导出。`cache_flush`、`client_policies` 仍未开放；被动查询记录不提供完整流量计数、缓存命中或分流路径推断。
 
 ## 源码固定与验证
 

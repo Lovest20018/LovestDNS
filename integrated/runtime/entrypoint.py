@@ -55,7 +55,7 @@ def main():
     for path in (data, state, state / "logs", run):
         path.mkdir(parents=True, exist_ok=True, mode=0o700)
     preserve_inputs(data, state)
-    for name in ("ready", "core-env.json", "mosdns-env.json", "supervisor.sock", "observer.sock", "manager.sock"):
+    for name in ("ready", "core-env.json", "mosdns-env.json", "supervisor.sock", "observer.sock", "manager.sock", "query-recorder.sock"):
         (run / name).unlink(missing_ok=True)
     os.execv("/opt/venv/bin/supervisord", ["supervisord", "-c", "/opt/suite/supervisord.conf"])
 

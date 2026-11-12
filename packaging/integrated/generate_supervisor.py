@@ -36,6 +36,7 @@ def config():
     entries += [
         ("observer", "/opt/venv/bin/python -m runtime.observer", True, "true", 45, 1),
         ("manager", "/opt/venv/bin/python -m runtime.manager", True, "true", 46, 1),
+        ("query-recorder", "/opt/venv/bin/python -m runtime.query_recorder", True, "true", 47, 1),
         ("web", "/opt/venv/bin/gunicorn --bind 0.0.0.0:8080 --workers 2 --worker-class gthread --threads 4 --timeout 120 server:app",
          True, "true", 50, 2),
         ("bootstrap", "/bin/sh /usr/sbin/init.sh", True, "false", 100, 0),

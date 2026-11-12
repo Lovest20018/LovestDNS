@@ -136,7 +136,29 @@ def openapi_document(version):
     schemas['ConfigState'] = obj({'files': array(ref('ConfigStateRow')), 'sampled_at': timestamp, 'scope': text, 'verified': {'const': False}},
                                 ['files', 'sampled_at', 'scope', 'verified'])
     schemas["Comparison"] = obj({"domain": schemas["Query"]["properties"]["domain"], "record_type": schemas["Query"]["properties"]["record_type"], "targets": array(ref("Target"), minItems=1, maxItems=4)}, ["domain", "targets"])
-    output = {"config_state": "ConfigState", "instance": "Instance", "capabilities": "Capabilities", "runtime": "Runtime", "metrics": "Metrics", "status": "Status", "env": "Env", "file_read": "File", "file_write": "SavedFile", "dns_query": "DnsResult", "dns_compare": "DnsReport", "dns_health": "DnsHealth", "apply_plan": "ApplyPlan", "task_list": "Tasks", "task_submit": "TaskResponse", "task_read": "TaskResponse", "history_list": "History", "history_read": "RevisionContent", "history_restore": "SavedFile", "logs": "Logs"}
+    event_fields = {'id': text, 'sequence': integer, 'observed_at': timestamp,
+        'response_at': nullable_number, 'source_ip': text, 'source_port': port,
+        'entry_address': text, 'entry_port': port, 'component': {'enum': ['mosdns', 'unbound-raw']},
+        'transport': {'enum': ['udp', 'tcp']}, 'domain': text, 'qtype': integer, 'qclass': integer,
+        'record_type': text, 'same_key_packets': integer, 'rcode': nullable_text,
+        'rcode_value': nullable_number, 'answer_count': nullable_number,
+        'addresses': array(text, maxItems=4), 'addresses_complete': boolean,
+        'truncated': {'type': ['boolean', 'null']}, 'elapsed_ms': nullable_number,
+        'outcome': {'enum': ['response_observed', 'no_response_observed']},
+        'timing_scope': {'const': 'passive_entry_packet_interval'}, 'branch': {'type': 'null'}, 'cache_hit': {'type': 'null'}}
+    schemas['QueryEvent'] = obj(event_fields, list(event_fields))
+    recording_fields = {'enabled': boolean, 'active': boolean, 'phase': {'enum': ['disabled', 'starting', 'recording', 'unavailable']},
+        'reason': nullable_text, 'sampled_at': timestamp, 'session_id': text,
+        'source': {'const': 'linux_passive_entry_packets'}, 'scope': {'const': 'service_network_namespace'},
+        'timing_scope': {'const': 'passive_entry_packet_interval'}, 'endpoints': array(obj({'address': text, 'port': port,
+            'transport': {'enum': ['udp', 'tcp']}, 'component': text, 'pid': integer, 'start_ticks': text}, ['address', 'port', 'transport', 'component', 'pid', 'start_ticks'])),
+        'counters': dictionary(integer), 'queue_depth': integer, 'retained_rows': integer, 'database_bytes': integer,
+        'memory_limits': obj({key: integer for key in ('event_queue', 'pending_queries', 'tcp_streams', 'response_wait_seconds')}, ['event_queue', 'pending_queries', 'tcp_streams', 'response_wait_seconds']),
+        'limits': obj({key: integer for key in ('retention_seconds', 'rows', 'storage_bytes', 'database_bytes')}, ['retention_seconds', 'rows', 'storage_bytes', 'database_bytes'])}
+    schemas['QueryRecording'] = obj(recording_fields, list(recording_fields))
+    schemas['QueryRecords'] = obj({'instance_id': {'type': 'string', 'format': 'uuid'}, 'status': ref('QueryRecording'), 'events': array(ref('QueryEvent'), maxItems=100), 'next_before': nullable_number}, ['instance_id', 'status', 'events', 'next_before'])
+    output = {"config_state": "ConfigState", "instance": "Instance", "capabilities": "Capabilities", "runtime": "Runtime", "metrics": "Metrics", "status": "Status", "env": "Env", "file_read": "File", "file_write": "SavedFile", "dns_query": "DnsResult", "dns_compare": "DnsReport", "dns_health": "DnsHealth", "apply_plan": "ApplyPlan", "task_list": "Tasks", "task_submit": "TaskResponse", "task_read": "TaskResponse", "history_list": "History", "history_read": "RevisionContent", "history_restore": "SavedFile", "logs": "Logs",
+              'query_recording_status': 'QueryRecording', 'query_recording_configure': 'QueryRecording', 'query_records_clear': 'QueryRecording', 'query_records_recent': 'QueryRecords'}
     for name in set(output.values()):
         schemas[name + "Response"] = obj({"data": ref(name), "meta": ref("Meta")}, ["data", "meta"])
     operations = OPERATIONS + [("/instance", "GET", "instance", None, "持久实例身份"), ("/capabilities", "GET", "capabilities", None, "版本、权限与能力"),
@@ -152,6 +174,11 @@ def openapi_document(version):
                            {'name': 'If-None-Match', 'in': 'header', 'schema': {'const': '*'}, 'description': '仅当文件不存在时创建'}]
         if operation == "dns_health":
             parameters += [{"name": name, "in": "query", "schema": prop} for name, prop in (("server", text), ("port", port))]
+        if operation == 'query_records_recent':
+            parameters += [{'name': name, 'in': 'query', 'schema': prop} for name, prop in (
+                ('limit', {'type': 'integer', 'minimum': 1, 'maximum': 100, 'default': 50}),
+                ('before', {'type': 'integer', 'minimum': 1}), ('source', text), ('domain', {'type': 'string', 'maxLength': 253}),
+                ('qtype', {'type': 'integer', 'minimum': 0, 'maximum': 65535}))]
         success = "202" if operation == "task_submit" else "200"
         paths.setdefault(route, {})[method.lower()] = endpoint = {"operationId": operation, "summary": title,
             "description": "管理或只读 Token" if operation in READ_OPERATIONS else "仅管理 Token", "parameters": parameters, "security": [{"BearerToken": []}],
@@ -172,6 +199,8 @@ def openapi_document(version):
                 {'name': 'If-Match', 'in': 'header', 'description': '单个读取时返回的强 ETag；与正文条件同时传入时必须一致', 'schema': {'type': 'string', 'pattern': '^"[a-f0-9]{64}"$'}},
                 {'name': 'If-None-Match', 'in': 'header', 'description': '仅创建尚不存在的文件；不可与 If-Match 同用', 'schema': {'const': '*'}}]
         body = {"dns_query": ref("Query"), "dns_compare": ref("Comparison"), "task_submit": ref("TaskSubmission"), "file_write": obj({"content": text, "expected_revision": file_version}, ["content"]), "history_restore": obj({"expected_revision": file_version})}.get(operation)
+        if operation == 'query_recording_configure':
+            body = {**obj({'enabled': boolean}, ['enabled']), 'additionalProperties': False}
         if body:
             endpoint["requestBody"] = {"required": operation != "history_restore", "content": {"application/json": {"schema": body}}}
     # Browser-only adapter; bearer credentials never authorize these operations.

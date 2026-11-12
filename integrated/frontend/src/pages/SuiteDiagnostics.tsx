@@ -6,6 +6,7 @@ import { RECORD_TYPES, REPORT_LIMIT, parseSuiteReport } from '../reports';
 import { useSuite } from '../suiteContext';
 import { Notice, Section } from '../components/SuiteUI';
 import { diagnosticTargets, dnsAddress } from '../dnsListeners';
+import RecentQueries from '../components/RecentQueries';
 import './SuitePage.css';
 import './HomeWorkflow.css';
 
@@ -57,6 +58,7 @@ export default function SuiteDiagnostics() {
     catch (e) { setError(errorText(e)); }
   };
   return <div className="suite-page">
+    <RecentQueries />
     <div className="suite-local-links"><a className="btn btn-secondary btn-sm" href="#/status">查看服务状态</a><a className="btn btn-secondary btn-sm" href="#/system">维护与日志</a></div>
     <Section title="DNS 诊断" subtitle="查询从当前 DNS 实例发起；链路可用性取决于运行模式" icon={HeartPulse}
       actions={<div className="suite-button-row"><button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => input.current?.click()}><Upload size={14} />导入报告</button><button className="btn btn-secondary btn-sm" disabled={!report || busy} onClick={() => report && downloadJson(report, `paopaodns-dns-${new Date(report.started_utc).getTime()}.json`)}><Download size={14} />导出报告</button><input ref={input} hidden aria-label="导入 DNS 报告" type="file" accept="application/json,.json" onChange={(e) => { const file = e.target.files?.[0]; if (file) void importReport(file); e.target.value = ''; }} /></div>}>

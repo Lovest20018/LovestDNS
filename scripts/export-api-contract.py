@@ -174,6 +174,38 @@ def collect_samples(server, stack, temp):
             capture(operation + "_unavailable", "/" + operation, operation, status=503, scenario="collector I/O failure substituted at snapshot boundary")
         capture("unauthorized", "/instance", "instance", role="anonymous", status=401, scenario="no Authorization header")
         capture("forbidden_config", "/file/custom_env.ini", "file_read", status=403, scenario="observer credential; real config-read authorization guard")
+        query_status = {'enabled': False, 'active': False, 'phase': 'disabled', 'reason': None,
+            'sampled_at': NOW, 'session_id': 'synthetic-recorder-session',
+            'source': 'linux_passive_entry_packets', 'scope': 'service_network_namespace',
+            'timing_scope': 'passive_entry_packet_interval', 'endpoints': [],
+            'counters': {}, 'queue_depth': 0, 'retained_rows': 0, 'database_bytes': 16384,
+            'memory_limits': {'event_queue': 512, 'pending_queries': 2048, 'tcp_streams': 128, 'response_wait_seconds': 10},
+            'limits': {'retention_seconds': 86400, 'rows': 100000, 'storage_bytes': 67108864, 'database_bytes': 32505856}}
+        with patch.object(server.runtime_client, 'query_records_request', return_value=query_status):
+            capture('query_recording_default_off', '/query-recording', 'query_recording_status', role='admin',
+                    scenario='synthetic recorder I/O, default-off status; actual administrator-only handler')
+            capture('query_recording_observer_forbidden', '/query-recording', 'query_recording_status', status=403,
+                    scenario='real guard denies query history to external observer credentials')
+        query_event = {'id': 'synthetic-recorder-session:1', 'sequence': 1, 'observed_at': NOW - 1,
+            'response_at': NOW - .999, 'source_ip': '192.0.2.2', 'source_port': 32000,
+            'entry_address': '192.0.2.1', 'entry_port': 15453, 'component': 'mosdns', 'transport': 'udp',
+            'domain': 'example.test.', 'qtype': 1, 'qclass': 1, 'record_type': 'A', 'same_key_packets': 1,
+            'rcode': 'NOERROR', 'rcode_value': 0, 'answer_count': 1, 'addresses': ['192.0.2.8'],
+            'addresses_complete': True, 'truncated': False, 'elapsed_ms': 1.0,
+            'outcome': 'response_observed', 'timing_scope': 'passive_entry_packet_interval', 'branch': None, 'cache_hit': None}
+        with patch.object(server.runtime_client, 'query_records_request', return_value={
+            'status': {**query_status, 'retained_rows': 1}, 'events': [query_event], 'next_before': None}):
+            capture('query_records_recent', '/query-records', 'query_records_recent', role='admin',
+                    scenario='synthetic passive event at recorder I/O boundary; no live traffic or cache/path inference')
+        with patch.object(server.runtime_client, 'query_records_request', return_value={**query_status, 'enabled': True, 'phase': 'starting'}):
+            capture('query_recording_opt_in', '/query-recording', 'query_recording_configure', method='PUT', role='admin',
+                    body={'enabled': True}, scenario='synthetic recorder I/O; actual handler submits explicit opt-in')
+        with patch.object(server.runtime_client, 'query_records_request', return_value=query_status):
+            capture('query_records_clear', '/query-records', 'query_records_clear', method='DELETE', role='admin',
+                    scenario='synthetic empty recorder status; actual administrator clear handler')
+        with patch.object(server.runtime_client, 'query_records_request', side_effect=RuntimeError('查询记录服务暂不可用')):
+            capture('query_records_unavailable', '/query-records', 'query_records_recent', role='admin', status=503,
+                    scenario='synthetic recorder I/O failure; actual handler returns UNAVAILABLE without fabricated rows')
         with patch('api_v1.external_api_enabled', return_value=False):
             capture('external_api_disabled', '/instance', 'instance', role='admin', status=403,
                     scenario='external token access explicitly disabled; real authentication switch')
