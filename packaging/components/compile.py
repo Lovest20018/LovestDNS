@@ -77,7 +77,10 @@ for name, entry in LOCK['components'].items():
     folder = OUT / name
     (folder / 'bin').mkdir(parents=True)
     if name == 'redis':
-        run(['make', '-j2', 'MALLOC=libc', 'BUILD_TLS=no', 'redis-server', 'redis-cli'], cwd=source)
+        # The root Makefile starts a separate recursive make for each target.
+        # Build both binaries in one dependency graph so their shared Lua
+        # library and generated headers are never written concurrently.
+        run(['make', '-C', 'src', '-j2', 'MALLOC=libc', 'BUILD_TLS=no', 'redis-server', 'redis-cli'], cwd=source)
         binaries = {x: source / 'src' / x for x in entry['binaries']}
     elif name == 'unbound':
         run(['./configure', *entry['configure']], cwd=source)

@@ -155,7 +155,7 @@
       "packaging/components/Dockerfile": "bf2ee53c1bf23d16bbd8e4495e10ac13d901c1e76ff656be25fd765860b11d52",
       "packaging/components/README.md": "d789dc79918aa0eb225d044feec3a376bf88beb8f316e32075a28a4d5f57b875",
       "packaging/components/bundle.py": "50fc02fc494456ab5242c9098099cdba80c13810e3a4141646b24bb6a6bebdb5",
-      "packaging/components/compile.py": "a3dd742c8e9708c033001feb96e5a0d6cf7923c4b28dadbd296e5f72c2662de2",
+      "packaging/components/compile.py": "f1912bf43da918ce5f72f1ccf8bde668104bb224a5713623e90c2a4ec91553db",
       "packaging/components/dnscrypt_candidate.py": "b2e307c7525b1fb3ed47166135e4ba7452a7cb82cff3ed14e02bb7f665456462",
       "packaging/components/patches/README.md": "0bac5b077c69d7e019060dc6e12716bd613a9e0d6054db5f309048a02be00c4a",
       "packaging/components/patches/dnscrypt-2.1.20-cache-shard-digest.patch": "8f514cdc9cb43dc685a9cb72d8c29f74e890666960e0f84bf1e0b6e4fbabe626",
@@ -332,7 +332,7 @@
       "packaging/components.lock.json",
       "packaging/dnscrypt-source.lock.json"
     ],
-    "sha256": "79e67fde2eac63c4ae43e5c1072ce43330454c17cdcf3fde37a51a8c0737e1a5"
+    "sha256": "61854fc2416e9a60bd6906bc17beb36d074d50969af46e9eac1736d6eb353615"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",
