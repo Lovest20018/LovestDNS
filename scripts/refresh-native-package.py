@@ -41,6 +41,16 @@ def write_json(path, value):
     path.write_text(json.dumps(value, sort_keys=True, indent=2) + '\n', encoding='utf-8', newline='\n')
 
 
+def preserve_provenance(package, archive_sha256):
+    # Keep each immediate base's records under its verified archive identity.
+    # Reusing base-* names collides on Windows and overwrites history on Unix.
+    history = package / 'base-provenance' / archive_sha256
+    history.mkdir(parents=True)
+    for name in ('source-provenance.json', 'native-trial-provenance.json', 'native-refresh-provenance.json'):
+        if (package / name).is_file():
+            (package / name).rename(history / name)
+
+
 def refresh(base, expected, frontend, output):
     base, frontend, output = map(Path, (base, frontend, output))
     if output.exists() or output.with_suffix(output.suffix + '.sha256').exists():
@@ -93,9 +103,7 @@ def refresh(base, expected, frontend, output):
         for relative, destination in (('web/backend/app.py', 'app/base/app.py'), ('packaging/native/install.py', 'install.py'),
                                       ('docs/lovestdns-native-deployment.md', 'README.md')):
             (package / destination).write_bytes((ROOT / relative).read_bytes().replace(b'\r\n', b'\n'))
-        for name in ('source-provenance.json', 'native-trial-provenance.json'):
-            if (package / name).is_file():
-                (package / name).rename(package / ('base-' + name))
+        preserve_provenance(package, expected)
         write_json(package / 'source-provenance.json', source)
         provenance = {'format_version': 1, 'method': 'verified-components-with-current-app-ui', 'source_commit': commit,
                       'source_sha256': source['sha256'], 'base_archive_sha256': expected, 'base_version': old['version'],

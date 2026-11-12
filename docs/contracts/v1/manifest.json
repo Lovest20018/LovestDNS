@@ -225,7 +225,7 @@
       "scripts/prepare-cachedb-upgrade.py": "6b7d82b1251c3718ee091759ce3d12539378717b469fe8657830c024ce62e80e",
       "scripts/profile-dnscrypt.py": "e0675d61c38e853072d74c6dcf3e21b40fc9bc957d5d7415325b4fab966506db",
       "scripts/query-records-fixture.py": "08e37c4da47d580a9799ebf64fc291fcef091de3c0e56e988c173bdf44317c69",
-      "scripts/refresh-native-package.py": "005c3c3ee3f7d5a1393bd99526b5e4066e3abf91435a0fb412ee68b3f11878bc",
+      "scripts/refresh-native-package.py": "f56addfce9fed735ed8ce7255bab3cd67759604aad752c0982e50376d30ca514",
       "scripts/report-dns-benchmark.py": "85ad49fb14ac39e541ea967facbc0ccb1bdf7ec7ed857e5b253707e30a3ff98f",
       "scripts/report-dnscrypt-chain.py": "4d168687dbb8e8d4db0c6890b3b7b25f0d241bc6de2985a71e2f4959a1575c6e",
       "scripts/test-cache-compatibility.py": "8e7d90862cd27effb031f68a2ce4159d3e39ce8f2296ee410c2f089a5968c81e",
@@ -271,7 +271,7 @@
       "scripts/tests/test_native_dnscrypt_candidate.py": "89a851db18f8d06a96164a4255b7395dc5b99cd8b98cf2437f889d394bffbca3",
       "scripts/tests/test_native_frontend_provenance.py": "d24256c281a9ebb016a6863c05973ac4e15cbecc565c5653548d020e75e3cb44",
       "scripts/tests/test_native_package.py": "7f8e4ffe722ba17b9ba1dca8c2ea0e2bdb4d1aeedd169960af0886763534db55",
-      "scripts/tests/test_native_refresh.py": "85387fd3c83f396cc72d207d3b7ab22e452f9dac1794ee9900596164cea4c72f",
+      "scripts/tests/test_native_refresh.py": "d933822bb531e3e50f7c70b8a37a9146921fa15bdfc4bc514495ef00ec99706e",
       "scripts/tests/test_native_restart.py": "ee3a051e8d1fa3f747341c82c9b934628d5cb1934d700c2a1416524e0cd33ff8",
       "scripts/tests/test_prepare_frontend.py": "c7fca37cb74ff1648374ca101be3ebebe4fa5d795315d9cc56d2057a6419bf49",
       "scripts/tests/test_public_privacy.py": "e2250b33558ad167ae9549a1eeb93a9042c5deaa5cb115e70766515aca68b50f",
@@ -343,7 +343,7 @@
       "packaging/components.lock.json",
       "packaging/dnscrypt-source.lock.json"
     ],
-    "sha256": "5030aef81ec20714a217a911029855b430814a6cdc0d0ab03f4a1d42494d1335"
+    "sha256": "2c06fa25de6e612a2ac89e63540a279317df177a2fd149316c571c21606afa1b"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",
