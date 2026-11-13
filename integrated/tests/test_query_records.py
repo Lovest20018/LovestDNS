@@ -4,12 +4,15 @@ import queue
 import sqlite3
 import struct
 import time
+import threading
+from types import SimpleNamespace
 
 import pytest
 from runtime.query_wire import Correlator, dns_message, name_at, MAX_PENDING, WAIT_SECONDS
 from runtime.query_store import Store
 from runtime.query_recorder import Recorder, validate_request
 from runtime.query_capture import filter_program
+from runtime import query_recorder
 from test_integrated_api import client, AUTH
 import server
 
@@ -253,3 +256,62 @@ def test_stale_capture_status_never_claims_active(tmp_path):
     recorder.updated_at = time.time() - 6
     value = recorder.status()
     assert value['phase'] == 'unavailable' and not value['active'] and value['reason'] == 'recorder_stale'
+
+
+@pytest.mark.parametrize('ipv6', [False, True])
+@pytest.mark.parametrize('wall_step', [0, .2, -.2])
+def test_slow_entry_check_keeps_pending_query_but_real_clock_step_resets(monkeypatch, ipv6, wall_step):
+    # Exercise the actual capture loop and wire correlator without real sockets.
+    # A query stays pending while the next entry check takes 150 ms instead of
+    # 10 ms. Both clocks advance together unless an actual wall step is given.
+    clock = SimpleNamespace(mono=0.0, step=0.0, checks=0, receives=0)
+    stop = threading.Event()
+    events, captures = [], []
+
+    def endpoints(_):
+        index = clock.checks
+        clock.checks += 1
+        clock.mono += (.01, .15, .01)[index]
+        if index == 1:
+            clock.step += wall_step
+        return [{'component': 'mosdns', 'address': '::', 'port': 15453, 'transport': 'udp'}]
+
+    wall = lambda: 1000 + clock.mono + clock.step
+
+    class Capture:
+        closed = False
+
+        def __init__(self, _):
+            captures.append(self)
+
+        def drops(self):
+            return 0
+
+        def receive(self):
+            clock.receives += 1
+            clock.mono += 1
+            if clock.receives == 3:
+                stop.set()
+                return None
+            reply = clock.receives == 2
+            return packet(dns(reply), reply=reply, ipv6=ipv6), wall()
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr(query_recorder, 'time', SimpleNamespace(time=wall, monotonic=lambda: clock.mono))
+    monkeypatch.setattr(query_recorder, 'entry_endpoints', endpoints)
+    monkeypatch.setattr(query_recorder, 'local_addresses', lambda: {'192.0.2.1', '2001:db8::1'})
+    monkeypatch.setattr(query_recorder, 'PacketSocket', Capture)
+    recorder = SimpleNamespace(stop=stop, enabled=True, generation=1, lock=threading.RLock(), run=None,
+                               session='clock-regression', counters=query_recorder.Counter(),
+                               emit=lambda generation, value: events.append(value))
+    Recorder.capture_loop(recorder)
+    assert len(captures) == 1 and captures[0].closed
+    assert recorder.counters['clock_resets'] == int(bool(wall_step))
+    assert recorder.counters['discarded_pending'] == int(bool(wall_step))
+    if wall_step:
+        assert not events and recorder.counters['unmatched_responses'] == 1
+    else:
+        assert len(events) == 1 and events[0]['outcome'] == 'response_observed'
+        assert events[0]['rcode'] == 'NOERROR' and events[0]['elapsed_ms'] == pytest.approx(1150)

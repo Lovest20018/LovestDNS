@@ -202,7 +202,9 @@ class Recorder:
                                 correlator = Correlator(endpoints, lambda event, generation=generation: self.emit(generation, event),
                                                         self.counters, f'{self.session}:{generation}:{uuid.uuid4().hex}', addresses)
                             signature = current
-                        offset = time.time() - mono
+                        # Entry validation can block. Pair fresh clocks here so
+                        # its duration cannot look like a wall-clock step.
+                        offset = time.time() - time.monotonic()
                         if abs(offset - clock_offset) > .1 and correlator:
                             correlator.reset()
                             self.counters['clock_resets'] += 1
