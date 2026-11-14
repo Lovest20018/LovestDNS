@@ -259,10 +259,19 @@ def apply(core, home, env, values):
                 published = True
             if core.data / "global_mark.dat" in active:
                 write(flag, b"ok\n")
-            subprocess.run(
-                ["/bin/bash", str(home / "watch_list.sh"), "suite-reload-check"],
-                env=old_env, timeout=60, check=True,
-            )
+            # The upstream raw reload ends with a BusyBox-style ps probe
+            # which returns false on Debian despite a successful restart.
+            # Reuse its rule generation only for MosDNS and control Unbound
+            # through Supervisor with the same bounded readiness checks.
+            if env.get("CNAUTO") != "no" and any(path.parent == core.data for path in active):
+                subprocess.run(
+                    ["/bin/bash", str(home / "watch_list.sh"), "suite-reload-force"],
+                    env=old_env, timeout=60, check=True,
+                )
+            if core.temporary / "named.cache" in active:
+                from native.restart import control
+                control("stop", "unbound-raw")
+                control("start", "unbound-raw")
             required = ["unbound-raw"] + (["mosdns"] if env.get("CNAUTO") != "no" else [])
             for name in required:
                 core.wait_running(name)

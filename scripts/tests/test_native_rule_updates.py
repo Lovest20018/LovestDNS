@@ -181,6 +181,27 @@ def test_failed_apply_restores_live_and_runtime_files_and_watcher(rules, core, m
     assert calls[-1] == ("start", "watcher")
 
 
+def test_root_hints_restart_uses_supervisor_without_legacy_ps_probe(rules, core, monkeypatch, tmp_path):
+    target = core.temporary / "named.cache"
+    target.write_bytes(b"previous")
+    calls = []
+    core.environment = lambda: {}
+    core.states = lambda: {"watcher": {"statename": "RUNNING"}}
+    core.control = lambda *args: None
+    core.wait_running = lambda name: None
+    core.probe = lambda: None
+    monkeypatch.setattr(rules, "maintenance_lock", lambda *args, **kwargs: nullcontext())
+    monkeypatch.setattr(rules, "runtime_backup", lambda core: SimpleNamespace(restore=lambda: None))
+    monkeypatch.setattr(rules, "desired_files", lambda *args: {target: b"next"})
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Root hints reload must not scan ps output")
+    monkeypatch.setattr(rules.subprocess, "run", forbidden)
+    from native import restart
+    monkeypatch.setattr(restart, "control", lambda *args: calls.append(args))
+    assert rules.apply(core, tmp_path, {"CNAUTO": "no"}, {}) == [str(target)]
+    assert calls == [("stop", "unbound-raw"), ("start", "unbound-raw")]
+
+
 def test_success_records_period_and_does_not_repeat_on_next_scheduler_tick(rules, core, monkeypatch, tmp_path):
     home = tmp_path / "immutable"
     home.mkdir()
