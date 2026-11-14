@@ -2,15 +2,15 @@
 
 LovestDNS 是基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS) 的 DNS 服务与 Web 管理面板。DNS 核心、面板、采集器和维护服务可通过 Debian 原生 systemd 服务或 Docker 集成镜像独立运行。
 
-**当前主线版本：query1.4**（`0.1.0-dev.lovestdns-native.20261114.query1.4`，Debian amd64 预发布）。修复原生规则更新的只读路径、下载回退和失败恢复；保留网页软件更新、真实入口查询记录及既有 UI / 交互修复。home2.1 为历史版本。
+**当前主线版本：query1.5**（`0.1.0-dev.lovestdns-native.20261114.query1.5`，Debian amd64 预发布）。增加软件更新专用 HTTP/SOCKS5 代理，覆盖版本检查、校验文件与安装包下载；保留 query1.4 规则更新修复、真实入口查询记录及既有 UI / 交互改进。home2.1 为历史版本。
 
-[下载主线 query1.4](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261114.query1.4) · [发行与验收记录](docs/native-query14-release-2026-11-14.md) · [安装、升级与回退](docs/lovestdns-native-deployment.md)
+[下载主线 query1.5](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261114.query1.5) · [发行与验收记录](docs/native-query15-release-2026-11-14.md) · [安装、升级与回退](docs/lovestdns-native-deployment.md)
 
 主线支持通过网页升级官方原生包，同时包含查询分区与直达、刷新状态区分、复制反馈与回退、筛选保留、手机记录卡片和明暗主题链接改进。查询记录默认关闭，仅管理员可查看；启用后按时间及容量保留，缓存命中和逐请求分流路径保持未知。Redis 7.2.17、Unbound 1.26.2、DNSCrypt 2.1.20 combined 与定制 MosDNS 保持已验收的组件字节。
 
-发行包的应用和前端固定到提交 `c4c7106`，完成真实规则加载、离线及坏摘要保持旧规则、注入加载失败后的恢复、完整 Linux CI 和匿名公开下载验证。query1.3 的安装／升级／回退与 500 次计数查询验证保留在历史发行记录中。仍按预发布提供，不宣称长期稳定性或全面提速；[查询记录范围](docs/query-recording-mvp-2026-11-12.md)列出观测限制。
+发行包的应用和前端固定到提交 `d232acb`。完成 Linux 回归、固定依赖前端构建/审计、隔离原生安装/升级、真实代理下载安装与回退；750 项 Python 回归和 47 项集成前端测试通过。query1.4 的规则加载与失败恢复、query1.3 的安装／升级／回退及计数查询验证继续按历史范围保留。仍按预发布提供，不宣称长期稳定性或全面提速；[查询记录范围](docs/query-recording-mvp-2026-11-12.md)列出观测限制。
 
-**安装入口默认选择 query1.4。** query1.3 及后续版本可在 **设置 → 服务信息 → 软件更新** 检查、确认并升级。升级前校验和备份，DNS 与网页会短暂重启；失败会尝试恢复原版，关闭网页不取消任务。不同版本的摘要不能混用，以对应 Release 的校验文件为准。
+**安装入口默认选择 query1.5。** query1.3 及后续版本可在 **设置 → 服务信息 → 软件更新** 检查、确认并升级。query1.5 起可在“更新网络”保存专用代理；旧版本若无法直连 GitHub，可先用已校验归档迁移。升级前校验和备份，DNS 与网页会短暂重启；失败会尝试恢复原版，关闭网页不取消任务。不同版本的摘要不能混用，以对应 Release 的校验文件为准。
 
 本仓库为 [LovestDNS](https://github.com/Lovest20018/LovestDNS)，由原 `Lovest20018/PaoPaoDNS` fork 更名；[PaoPaoDNS-WebUI](https://github.com/Lovest20018/PaoPaoDNS-WebUI) 保持独立。原生版运行无需 Docker。源码与历史版本对应关系见[收口说明](docs/source-version-closure-2026-11-06.md)。
 
@@ -19,11 +19,11 @@ LovestDNS 是基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS) 的 DNS 服�
 支持 Debian 12/13 amd64、systemd。先在专用主机或独立测试端口验收，再切换客户端 DNS。默认 DNS 为 `0.0.0.0:53/UDP+TCP`，Web 为 `127.0.0.1:8123`；需要局域网访问面板时，在私有配置文件中设置主机内网 IP。
 
 ```sh
-curl -fL https://github.com/Lovest20018/LovestDNS/releases/download/v0.1.0-dev.lovestdns-native.20261114.query1.4/install.py -o install.py
+curl -fL https://github.com/Lovest20018/LovestDNS/releases/download/v0.1.0-dev.lovestdns-native.20261114.query1.5/install.py -o install.py
 curl -fL https://raw.githubusercontent.com/Lovest20018/LovestDNS/main/.env.native.example -o lovestdns-install.env
 chmod 600 lovestdns-install.env
 nano lovestdns-install.env
-sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.4 --config ./lovestdns-install.env
+sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.5 --config ./lovestdns-install.env
 sudo lovestdnsctl health
 sudo lovestdnsctl password
 ```
@@ -31,7 +31,7 @@ sudo lovestdnsctl password
 已有命名实例升级时保留原配置，使用原实例名；默认实例省略 `--instance`：
 
 ```sh
-sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.4 --instance <实例名>
+sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.5 --instance <实例名>
 ```
 
 安装入口选择固定版本，下载并校验归档及包内文件，随后调用原生安装器。默认不停止已有 DNS、不修改宿主机解析器、不导入旧目录或关闭 Docker；端口冲突会退出。系统依赖通过 Debian 软件源补齐，Python 依赖已随包离线携带。完整的备份、升级、回退及数据迁移步骤见 [原生部署说明](docs/lovestdns-native-deployment.md)。
@@ -43,7 +43,7 @@ sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.4 -
 - 组件状态、两路 Unbound 的 QPS 与命中率、Redis 内存及持久化信息。
 - DNS 查询、UDP/TCP 链路对照、诊断报告导入导出与受控 Redis 快照任务。
 - 真实入口查询记录默认关闭，仅管理员可查看；来源、域名、类型筛选与分页有界，缓存命中与实际分流路径保持未知。
-- Debian 原生版可在网页检查官方发行版、确认升级并查看结果；独立任务支持重启后恢复结果，默认不自动升级。
+- Debian 原生版可在网页检查官方发行版、设置软件更新专用 HTTP/SOCKS5 代理、确认升级并查看结果；独立任务支持重启后恢复结果，默认不自动升级。
 - 可选的 `/api/v1/` 外部接入，提供管理/只读 Token、实例身份、能力发现、运行指标和 OpenAPI，默认关闭。
 
 网页登录后，在“服务信息 → API 与 Token”开启或关闭外部接入，设置立即生效并保留。关闭不影响网页和 DNS。原生默认实例的 Token 在主机 `/etc/lovestdns/lovestdns.env` 中配置：`SUITE_READ_TOKEN` 用于只读与诊断，`WEB_UI_TOKEN` 用于配置和维护；它们与网页管理员密码独立。详见 [API 认证与角色](docs/integration-api.md#认证与角色)。
