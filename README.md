@@ -2,15 +2,15 @@
 
 LovestDNS 是基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS) 的 DNS 服务与 Web 管理面板。DNS 核心、面板、采集器和维护服务可通过 Debian 原生 systemd 服务或 Docker 集成镜像独立运行。
 
-**当前主线版本：query1.3**（`0.1.0-dev.lovestdns-native.20261114.query1.3`，Debian amd64 预发布）。新增网页软件更新，保留真实入口查询记录、采集时钟修复和全部六项 UI / 交互修复。home2.1 为历史版本。
+**当前主线版本：query1.4**（`0.1.0-dev.lovestdns-native.20261114.query1.4`，Debian amd64 预发布）。修复原生规则更新的只读路径、下载回退和失败恢复；保留网页软件更新、真实入口查询记录及既有 UI / 交互修复。home2.1 为历史版本。
 
-[下载主线 query1.3](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261114.query1.3) · [发行与验收记录](docs/native-query13-release-2026-11-14.md) · [安装、升级与回退](docs/lovestdns-native-deployment.md)
+[下载主线 query1.4](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261114.query1.4) · [发行与验收记录](docs/native-query14-release-2026-11-14.md) · [安装、升级与回退](docs/lovestdns-native-deployment.md)
 
 主线支持通过网页升级官方原生包，同时包含查询分区与直达、刷新状态区分、复制反馈与回退、筛选保留、手机记录卡片和明暗主题链接改进。查询记录默认关闭，仅管理员可查看；启用后按时间及容量保留，缓存命中和逐请求分流路径保持未知。Redis 7.2.17、Unbound 1.26.2、DNSCrypt 2.1.20 combined 与定制 MosDNS 保持已验收的组件字节。
 
-发行包的应用和前端固定到提交 `03b8f70`，已完成同包安装／升级／回退、500 次计数查询、完整 Linux CI 和匿名下载验证；真实 systemd 更新助手在合成下载边界下完成成功升级及失败恢复。仍按预发布提供，不宣称长期稳定性或全面提速；[查询记录范围](docs/query-recording-mvp-2026-11-12.md)列出观测限制。
+发行包的应用和前端固定到提交 `c4c7106`，完成真实规则加载、离线及坏摘要保持旧规则、注入加载失败后的恢复、完整 Linux CI 和匿名公开下载验证。query1.3 的安装／升级／回退与 500 次计数查询验证保留在历史发行记录中。仍按预发布提供，不宣称长期稳定性或全面提速；[查询记录范围](docs/query-recording-mvp-2026-11-12.md)列出观测限制。
 
-**安装入口默认选择 query1.3。** 旧版本先用此 Release 随附的安装入口升级一次，后续可在 **设置 → 服务信息 → 软件更新** 检查、确认并升级。升级前校验和备份，DNS 与网页会短暂重启；失败会尝试恢复原版，关闭网页不取消任务。不同版本的摘要不能混用，以对应 Release 的校验文件为准。
+**安装入口默认选择 query1.4。** query1.3 及后续版本可在 **设置 → 服务信息 → 软件更新** 检查、确认并升级。升级前校验和备份，DNS 与网页会短暂重启；失败会尝试恢复原版，关闭网页不取消任务。不同版本的摘要不能混用，以对应 Release 的校验文件为准。
 
 本仓库为 [LovestDNS](https://github.com/Lovest20018/LovestDNS)，由原 `Lovest20018/PaoPaoDNS` fork 更名；[PaoPaoDNS-WebUI](https://github.com/Lovest20018/PaoPaoDNS-WebUI) 保持独立。原生版运行无需 Docker。源码与历史版本对应关系见[收口说明](docs/source-version-closure-2026-11-06.md)。
 
@@ -19,11 +19,11 @@ LovestDNS 是基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS) 的 DNS 服�
 支持 Debian 12/13 amd64、systemd。先在专用主机或独立测试端口验收，再切换客户端 DNS。默认 DNS 为 `0.0.0.0:53/UDP+TCP`，Web 为 `127.0.0.1:8123`；需要局域网访问面板时，在私有配置文件中设置主机内网 IP。
 
 ```sh
-curl -fL https://github.com/Lovest20018/LovestDNS/releases/download/v0.1.0-dev.lovestdns-native.20261114.query1.3/install.py -o install.py
+curl -fL https://github.com/Lovest20018/LovestDNS/releases/download/v0.1.0-dev.lovestdns-native.20261114.query1.4/install.py -o install.py
 curl -fL https://raw.githubusercontent.com/Lovest20018/LovestDNS/main/.env.native.example -o lovestdns-install.env
 chmod 600 lovestdns-install.env
 nano lovestdns-install.env
-sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.3 --config ./lovestdns-install.env
+sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.4 --config ./lovestdns-install.env
 sudo lovestdnsctl health
 sudo lovestdnsctl password
 ```
@@ -31,7 +31,7 @@ sudo lovestdnsctl password
 已有命名实例升级时保留原配置，使用原实例名；默认实例省略 `--instance`：
 
 ```sh
-sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.3 --instance <实例名>
+sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.4 --instance <实例名>
 ```
 
 安装入口选择固定版本，下载并校验归档及包内文件，随后调用原生安装器。默认不停止已有 DNS、不修改宿主机解析器、不导入旧目录或关闭 Docker；端口冲突会退出。系统依赖通过 Debian 软件源补齐，Python 依赖已随包离线携带。完整的备份、升级、回退及数据迁移步骤见 [原生部署说明](docs/lovestdns-native-deployment.md)。

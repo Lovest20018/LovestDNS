@@ -1,5 +1,7 @@
 # query1.3 原生预发布记录
 
+后继版本：[query1.4 原生规则更新修复](native-query14-release-2026-11-14.md)。本页保留 query1.3 的固定发布与验证记录。
+
 发布：`0.1.0-dev.lovestdns-native.20261114.query1.3`，Debian 12/13 amd64，仍为 Pre-release。[发行页](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261114.query1.3)。
 
 query1.3 增加原生版网页软件更新，保留 query1.2 的查询记录、采集时钟修复及六项 UI 修复。更新入口为“设置 → 服务信息 → 软件更新”：检查最新公开原生包、核对版本说明、确认升级，再查看持久任务结果。预发布版明确标注，没有后台自动升级。旧安装需先通过新安装入口迁移一次；Docker 继续使用主机 Compose。
