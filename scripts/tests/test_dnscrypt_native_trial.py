@@ -101,7 +101,12 @@ def test_trial_packages_have_matched_app_and_preserve_frozen_components(inputs,t
     for label,metadata in packages.items():
         assert sha(output/metadata['archive'])==metadata['sha256']
         target=tmp_path/('unpack-'+label);target.mkdir()
-        with tarfile.open(output/metadata['archive']) as z:z.extractall(target,filter='data')
+        with tarfile.open(output/metadata['archive']) as z:
+            if callable(getattr(tarfile, 'data_filter', None)):
+                z.extractall(target, filter='data')
+            else:
+                # This fixture was just constructed by the builder above.
+                z.extractall(target)
         p=next(target.iterdir());manifest=trial['installer']['verify_package'](p);unpacked[label]=p
         assert manifest['candidate_only'] and not manifest['release_approved']
         for name in ('libexec/mosdns','libexec/dnscrypt-proxy','dist/index.html','wheels/unused.whl'):

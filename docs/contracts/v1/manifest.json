@@ -278,7 +278,7 @@
       "scripts/tests/test_dnscrypt_container_trial.py": "c29f7f427d5a2bcbaedd2b31986ee3181e4d97a3a240047781158c3fe6980908",
       "scripts/tests/test_dnscrypt_cost.py": "a1db291cdc7115ce9844ac0bd7dc5e8a0e4daf92014404a6b75479ba7c3719e4",
       "scripts/tests/test_dnscrypt_diagnostics.py": "a126f106b5bd892ab324d6cb27cc3a9717b5354a55bd955e28e9bffc14bcfa30",
-      "scripts/tests/test_dnscrypt_native_trial.py": "ab5526450634bae5f866866f30655436772850b63869c68f42dfffadd9b2a51a",
+      "scripts/tests/test_dnscrypt_native_trial.py": "dbd265b1d77d23ea447840ad78c7dccbb7620463e64a7229ac4d6c4aecff833c",
       "scripts/tests/test_dnscrypt_route.py": "8a86140e872638fdf8a52ab5f1f650dedfd2e1bc5419e98c68c049e998f276bb",
       "scripts/tests/test_dnscrypt_source.py": "30b64c1f6c1112780a9743d93ecc20674fcef103d8faff986cb35a77320292e9",
       "scripts/tests/test_dnscrypt_source_function.py": "a3e023c500e34bd69551d46494c2cefbcdfaf113200b30e7f1743585f60fafa8",
@@ -362,7 +362,7 @@
       "packaging/components.lock.json",
       "packaging/dnscrypt-source.lock.json"
     ],
-    "sha256": "f68ea794e14ed1d0261e634c4bf9bad33e9d00e86cd3bd4042e501c07db77af7"
+    "sha256": "328621c4fe4df190a7ce3f560ea9f64ba856ef54f11f93a81b17995381868c52"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",
