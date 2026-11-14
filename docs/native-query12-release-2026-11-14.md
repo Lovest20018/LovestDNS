@@ -1,5 +1,7 @@
 # query1.2 查询记录与 UI 修复预发布
 
+后继版本：[query1.3 网页软件更新](native-query13-release-2026-11-14.md)。本页保留 query1.2 的固定发布与验证记录。
+
 2026-11-14。包含全部六项交互修复的 Debian amd64 原生包已公开：
 [LovestDNS query1.2](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261114.query1.2)。
 
