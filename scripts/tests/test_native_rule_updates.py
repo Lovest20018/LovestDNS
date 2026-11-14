@@ -88,6 +88,13 @@ def test_compressed_rules_are_bounded_and_have_a_complete_stream(rules, monkeypa
         rules.expand(lzma.compress(b"x" * 101))
 
 
+def test_upstream_64_mib_xz_dictionary_has_room_for_decoder_overhead(rules):
+    value = lzma.compress(b"upstream dictionary regression",
+        filters=[{"id": lzma.FILTER_LZMA2, "dict_size": 64 * 1024 * 1024,
+                  "mode": lzma.MODE_FAST, "mf": lzma.MF_HC3, "nice_len": 8}])
+    assert rules.expand(value) == b"upstream dictionary regression"
+
+
 def test_country_and_trackers_prepare_only_writable_files_and_preserve_additions(rules, core):
     (core.data / "trackerslist.txt").write_bytes(b"udp://user.example:80/announce\n")
     geo = b"fixture mmdb \xab\xcd\xefMaxMind.com"

@@ -158,7 +158,9 @@ def root_hints(value):
 
 
 def expand(value):
-    decoder = lzma.LZMADecompressor(memlimit=64 * 1024 * 1024)
+    # The locked upstream GeoIP stream declares a 64 MiB dictionary; decoder
+    # bookkeeping also counts towards memlimit. Keep a bounded allowance for it.
+    decoder = lzma.LZMADecompressor(memlimit=128 * 1024 * 1024)
     result = decoder.decompress(value, max_length=EXPANDED_LIMIT + 1)
     if len(result) > EXPANDED_LIMIT or not decoder.eof or decoder.unused_data:
         raise ValueError("Compressed rule is invalid or exceeds expansion limit")
