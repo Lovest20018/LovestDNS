@@ -4,6 +4,7 @@
   --suite-line: #e2e8f0; --suite-line-strong: #cbd5e1; --suite-ink: #172033;
   --suite-muted: #67778c; --suite-blue: #c55b16; --suite-teal: #16847e;
   --suite-purple: #7656d6; --suite-amber: #c17b10; --suite-red: #d6455d;
+  --suite-link: #116e68; --suite-link-hover: #0b524d;
   --suite-shadow: 0 3px 16px rgba(23, 37, 54, .035); --suite-radius: 12px;
 }
 :root[data-theme='dark'] { color-scheme: dark; --suite-bg: #0b1220; --suite-panel: #111b2e; --suite-panel-soft: #162238; --suite-line: #263750; --suite-line-strong: #38506c; --suite-ink: #edf4ff; --suite-muted: #93a4bb; --suite-shadow: 0 14px 36px rgba(0,0,0,.24); }
@@ -78,7 +79,7 @@
 @media (max-width:900px) { .suite-sidebar { position:fixed; z-index:20; inset:0 auto 0 0; transform:translateX(-102%); transition:transform .2s ease; box-shadow:16px 0 40px rgba(15,23,42,.2); }.suite-sidebar.is-open { transform:translateX(0); }.suite-sidebar-backdrop.is-open { display:block; position:fixed; z-index:19; inset:0; background:rgba(15,23,42,.35); }.suite-mobile-close,.suite-mobile-menu { display:inline-flex; border:0; background:none; color:var(--suite-muted); cursor:pointer; }.suite-mobile-close { margin-left:auto; }.suite-mobile-menu { align-items:center; justify-content:center; }.suite-topbar { padding:0 18px; gap:15px; }.suite-content { padding:24px 18px 45px; }.suite-page-heading { align-items:flex-start; flex-direction:column; }.suite-page-meta { flex-wrap:wrap; }.suite-global-error { align-items:flex-start; flex-wrap:wrap; }.suite-global-error label { width:100%; }.suite-global-error input { flex:1; } }
 @media (max-width:580px) { .suite-content { padding:20px 13px 36px; }.suite-top-actions .suite-connection,.suite-top-actions .suite-refresh { font-size:0; padding:0; width:34px; }.suite-top-actions .suite-refresh svg { margin:0; }.suite-page-heading h1 { font-size:24px; }.suite-page-meta { gap:9px; }.suite-global-error input { width:100%; }.suite-global-error label { flex-wrap:wrap; } }
 /* Lovest family: navy structure, orange interaction, compact local controls. */
-:root[data-theme='dark'] { --suite-blue:#f99a55; --suite-panel:#142132; --suite-bg:#0d1623; --suite-panel-soft:#1a2a3d; }
+:root[data-theme='dark'] { --suite-blue:#f99a55; --suite-panel:#142132; --suite-bg:#0d1623; --suite-panel-soft:#1a2a3d; --suite-link:#75dfd4; --suite-link-hover:#b0fff4; }
 .suite-sidebar { width:232px; flex-basis:232px; }
 .suite-brand { gap:10px; text-decoration:none; color:var(--suite-ink); }
 .suite-brand-mark { width:43px; height:43px; border-radius:0; background:none; box-shadow:none; }
@@ -148,7 +149,14 @@
 .suite-override input { accent-color:var(--accent-cyan); }
 .suite-setting.is-inactive { border-style:dashed; }
 .suite-editor-next { margin-top:18px; font-size:13px; color:var(--text-secondary); padding:14px 16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:10px; }
-.suite-editor-next a, .suite-notice a { color:var(--accent-cyan); text-decoration:underline; text-underline-offset:3px; }
+.suite-section a:not(.btn):not([class]), .suite-editor-next a, .suite-notice a, .suite-task a, .suite-doc-link { color:var(--suite-link); text-decoration:underline; text-underline-offset:3px; }
+.suite-section a:not(.btn):not([class]):hover, .suite-editor-next a:hover, .suite-notice a:hover, .suite-task a:hover, .suite-doc-link:hover { color:var(--suite-link-hover); }
+.suite-refresh-paused { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:18px; padding:14px 16px; border:1px solid var(--suite-line-strong); border-radius:10px; background:var(--suite-panel-soft); font-size:13px; }
+.suite-refresh-paused p { margin-top:5px; color:var(--suite-muted); font-size:12px; line-height:1.6; }
+.suite-copy-text>.suite-button-row { flex-wrap:wrap; }
+.suite-copy-selection { display:block; width:100%; min-height:180px; margin-top:10px; resize:vertical; }
+.suite-diagnostic-tabs { margin-bottom:0; }
+@media(max-width:640px) { .suite-diagnostic-tabs { display:flex; flex-wrap:wrap; gap:5px; } .suite-diagnostic-tabs a { flex:1; justify-content:center; padding-inline:9px; font-size:12px; white-space:nowrap; } .suite-toolbar { flex-wrap:wrap; gap:10px; } }
 @media (max-width:700px) { .suite-settings-grid { grid-template-columns:minmax(0,1fr); gap:12px; } .suite-editor-toolbar { position:static; align-items:flex-start; flex-direction:column; } .suite-editor-toolbar > div { width:100%; } .suite-editor-toolbar button { flex:1; } .suite-setting p { min-height:0; } }
 /* Shared editor operations and compact configuration discovery. */
 .suite-editor-actions { position:static; padding:14px!important; border:1px solid var(--suite-line); border-radius:12px; background:var(--suite-panel); box-shadow:var(--suite-shadow); flex-wrap:wrap; }

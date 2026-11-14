@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { LIST_FILE_INFO } from '../types';
 import { Plus, X, FileText, Download, Copy, Save, CheckCircle, AlertCircle, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '../hooks';
+import { copyText } from '../copyText';
 
 const PREFIXES = ['domain', 'full', 'regexp', 'keyword'];
 
@@ -132,8 +133,8 @@ function DomainFileEditor({ activeTab, onSelect }: { activeTab: string; onSelect
 
   const handleCopy = async () => {
     const content = getCurrentContent();
-    await navigator.clipboard.writeText(content);
-    showToast('已复制到剪贴板');
+    const copied = await copyText(content);
+    showToast(copied ? '已复制到剪贴板' : '浏览器无法自动复制，请在文本编辑中选择内容手动复制，或下载文件。');
   };
 
   const handleDownload = () => {

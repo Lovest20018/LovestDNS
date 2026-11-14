@@ -1,4 +1,4 @@
-import { Copy, ExternalLink, KeyRound, Network, Server, ShieldCheck, TerminalSquare } from 'lucide-react';
+import { ExternalLink, KeyRound, Network, Server, ShieldCheck, TerminalSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSuite } from '../suiteContext';
 import { errorText, externalApiSetting } from '../suiteApi';
@@ -6,6 +6,7 @@ import { Section, Empty, Notice } from '../components/SuiteUI';
 import { confirmDiscard } from '../unsaved';
 import GatewaySettings from '../components/GatewaySettings';
 import { nativeMaintenanceCommands } from '../settingsIdentity';
+import CopyableText from '../components/CopyableText';
 import './SuitePage.css';
 
 export default function SuiteDeploy() {
@@ -87,9 +88,8 @@ export default function SuiteDeploy() {
       </dl>
       <p className="suite-muted">Token 在主机配置，修改后重启服务加载。两个 Token 应分别设置；当前网页不显示或修改 Token。</p>
     </Section>
-    <Section title={native ? '宿主机维护命令' : '开发验证命令'} subtitle={native ? '对应当前实例；在主机终端执行' : '1053/18080 适合本机验证'} icon={TerminalSquare}
-      actions={<button className="btn btn-secondary btn-sm" disabled={!commands} onClick={() => { if (commands) void navigator.clipboard?.writeText(commands); }}><Copy size={14} />复制</button>}>
-      {commands ? <pre className="suite-log">{commands}</pre> : <Notice tone="info">当前实例未提供可核对的维护命令，请使用安装时返回的控制命令。</Notice>}<p className="suite-muted">{native ? '原生部署、更新与回退流程见项目 docs/lovestdns-native-deployment.md。' : 'Docker 部署与旧数据迁移见项目 docs/lovestdns-pve-deployment.md。'}核心升级需使用适配并验收过的 LovestDNS 版本；规则库按配置的更新周期处理。</p>
+    <Section title={native ? '宿主机维护命令' : '开发验证命令'} subtitle={native ? '对应当前实例；在主机终端执行' : '1053/18080 适合本机验证'} icon={TerminalSquare}>
+      {commands ? <CopyableText text={commands} fileName="lovestdns-maintenance.txt" /> : <Notice tone="info">当前实例未提供可核对的维护命令，请使用安装时返回的控制命令。</Notice>}<p className="suite-muted">{native ? '原生部署、更新与回退流程见项目 docs/lovestdns-native-deployment.md。' : 'Docker 部署与旧数据迁移见项目 docs/lovestdns-pve-deployment.md。'}核心升级需使用适配并验收过的 LovestDNS 版本；规则库按配置的更新周期处理。</p>
     </Section>
     <a className="suite-doc-link" href="https://github.com/Lovest20018/LovestDNS" target="_blank" rel="noreferrer"><ExternalLink size={15} />查看项目文档</a>
     </>}

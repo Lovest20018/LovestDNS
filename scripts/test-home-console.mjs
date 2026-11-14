@@ -73,7 +73,7 @@ try{
  await click('验证样本查询');await wait("document.body.textContent.includes('本次样本取得目标记录')");
  await control({external_change:true});
  await wait("document.body.textContent.includes('历史样本 · 当前配置效果待确认')",250);
- await e("location.hash='#/diagnostics'");await wait("!!document.getElementById('diagnostic-target')");
+ await e("location.hash='#/diagnostics?tab=query'");await wait("!!document.getElementById('diagnostic-target')");
  await e("location.hash='#/advanced?file=custom_env.ini'");await wait("document.querySelector('textarea')?.value.includes('external')");
  await e("document.querySelector('.suite-config-workflow>summary').click()");
  await wait("!!document.querySelector('.suite-inline-query input')");
@@ -83,7 +83,7 @@ try{
  await wait("document.body.textContent.includes('当前配置核对暂不可用')",250);
  assert(await e("document.body.textContent.includes('历史样本 · 当前配置效果待确认')"));
  await control({config_error:false},'/fixture/home-control');
- await e("location.hash='#/diagnostics'");await wait("!!document.getElementById('diagnostic-target')");
+ await e("location.hash='#/diagnostics?tab=query'");await wait("!!document.getElementById('diagnostic-target')");
  assert(await e("[...document.getElementById('diagnostic-target').options].some(o=>o.textContent.includes('5304'))"));
  await e("const s=document.getElementById('diagnostic-target');s.value=[...s.options].find(o=>o.textContent.includes('转发通道')&&o.textContent.includes('TCP')).value;s.dispatchEvent(new Event('change',{bubbles:true}))");
  assert.equal(await e("document.querySelector('input[aria-label=\"DNS 端口\"]').value"),'5304');
@@ -102,7 +102,7 @@ try{
  await e("window.dispatchEvent(new Event('lovestdns-config-changed'))");
  await wait("document.body.textContent.includes('当前实例未提供可核对的维护命令')");
  assert(!await e("document.body.textContent.includes('sudo lovestdnsctl')"));
- assert(await e("[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='复制').disabled"));
+ assert(await e("![...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='复制')"));
  await control({identity:'mismatch'},'/fixture/home-control');
  await e("window.dispatchEvent(new Event('lovestdns-config-changed'))");
  await wait("document.body.textContent.includes('安装收据与当前发布不一致')");

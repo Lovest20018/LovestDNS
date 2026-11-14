@@ -47,10 +47,10 @@ try {
   await input('input[name=password]', 'synthetic-browser-password'); await evaluate("document.querySelector('.suite-login-submit').click()");
   await wait("document.querySelectorAll('.suite-nav a').length===6");
   await evaluate("location.hash='#/diagnostics'");
-  await wait("document.body.textContent.includes('采集已关闭')");
+  await wait("document.body.textContent.includes('后台记录已关闭')");
   assert(await evaluate("document.body.textContent.includes('暂无符合条件的记录')"));
   await shot('default-off');
-  await click('开启采集'); await wait("document.body.textContent.includes('正在采集')");
+  await click('开启记录'); await wait("document.body.textContent.includes('后台记录已开启')");
   await click('刷新记录'); await wait("document.querySelectorAll('.query-record-table tbody tr').length===50");
   assert(await evaluate("document.querySelector('.query-record-table tbody tr').textContent.includes('129.synthetic-query')"));
   await shot('recent-desktop');
@@ -61,6 +61,20 @@ try {
   await input('[aria-label="筛选来源 IP"]', '192.0.2.20'); await input('[aria-label="筛选查询类型"]', '1'); await click('筛选');
   await wait("document.querySelector('.query-record-table tbody tr')?.textContent.includes('128.synthetic-query')");
   assert(await evaluate("[...document.querySelectorAll('.query-record-table tbody tr')].every(r=>r.textContent.includes('192.0.2.20') && r.textContent.includes('UDP'))"));
+  const filteredHash = await evaluate('location.hash');
+  await evaluate("location.hash='#/'"); await wait("!!document.querySelector('.suite-home')");
+  await evaluate("document.querySelector('.suite-nav a[href=\"#/diagnostics\"]').click()");
+  await wait("document.querySelector('[aria-label=\"筛选来源 IP\"]')?.value==='192.0.2.20' && document.querySelectorAll('.query-record-table tbody tr').length===50");
+  assert.equal(await evaluate('location.hash'), filteredHash);
+  await send('Page.reload');
+  await wait("document.querySelector('[aria-label=\"筛选来源 IP\"]')?.value==='192.0.2.20' && document.querySelectorAll('.query-record-table tbody tr').length===50");
+  assert.equal(await evaluate('location.hash'), filteredHash);
+  await evaluate("document.querySelector('.query-record-table tbody tr a').click()");
+  await wait("document.querySelector('[aria-label=\"查询域名\"]')?.value==='128.synthetic-query.example.test.'");
+  assert.equal(await evaluate("document.querySelector('[aria-label=\"查询记录类型\"]').value"), 'A');
+  assert(await evaluate("document.querySelector('[aria-label=\"查询域名\"]').getBoundingClientRect().bottom<innerHeight"));
+  await evaluate("document.querySelector('.suite-diagnostic-tabs a').click()");
+  await wait("document.querySelector('[aria-label=\"筛选来源 IP\"]')?.value==='192.0.2.20' && document.querySelectorAll('.query-record-table tbody tr').length===50");
   await input('[aria-label="筛选查询域名"]', '%'); await click('筛选'); await wait("!document.querySelector('.query-record-table')");
   await input('[aria-label="筛选来源 IP"]', ''); await input('[aria-label="筛选查询类型"]', ''); await input('[aria-label="筛选查询域名"]', ''); await click('筛选');
   await wait("document.querySelectorAll('.query-record-table tbody tr').length===50");
@@ -74,22 +88,27 @@ try {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false });
     await sleep(200);
     assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'), 'page overflow at ' + width);
-    assert(await evaluate("document.querySelector('.suite-table-scroll').scrollWidth>document.querySelector('.suite-table-scroll').clientWidth"), 'table needs its own scroll region');
+    assert(await evaluate("getComputedStyle(document.querySelector('.query-record-desktop')).display==='none' && getComputedStyle(document.querySelector('.query-record-cards')).display!=='none'"), 'mobile uses readable record cards');
+    assert(await evaluate("(()=>{const card=document.querySelector('.query-record-card');return [...card.querySelectorAll('code,strong,dt,dd')].every(n=>{const r=n.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1;});})()"), 'source, domain, response and elapsed time fit without sideways scrolling');
     await shot('recent-mobile-' + width);
     await evaluate("document.documentElement.dataset.theme='dark'"); await shot('recent-mobile-' + width + '-dark');
     await evaluate("document.documentElement.dataset.theme='light'");
-    assert(await evaluate("(()=>{const t=document.querySelector('.suite-table-scroll');t.scrollLeft=t.scrollWidth;return t.scrollLeft>0;})()"), 'table must scroll to response details');
+    await evaluate("document.querySelector('.query-record-card details').open=true");
     await shot('recent-mobile-' + width + '-response');
-    await evaluate("document.querySelector('.suite-table-scroll').scrollLeft=0");
+    await evaluate("document.querySelector('.query-record-card details').open=false");
   }
-  await click('关闭采集'); await wait("document.body.textContent.includes('采集已关闭')");
+  await click('关闭记录'); await wait("document.body.textContent.includes('后台记录已关闭')");
   assert.equal(await evaluate("document.querySelectorAll('.query-record-table tbody tr').length"), 50);
   await click('清空记录'); await click('取消');
   assert.equal(await evaluate("document.querySelectorAll('.query-record-table tbody tr').length"), 50);
   await click('清空记录'); await click('确认清空记录'); await wait("!document.querySelector('.query-record-table')");
   assert(await evaluate("document.body.textContent.includes('0 条')"));
   assert.deepEqual(errors, []);
-  await fs.writeFile(path.join(out, 'result.json'), JSON.stringify({ passed: true, fixture: 'synthetic loopback browser fixture; no live DNS capture', widths: [1360, 390, 320], checks: ['default_off', 'explicit_enable_disable', '50_row_cursor_pagination', 'source_type_literal_domain_filters', 'unavailable_retains_previous_results', 'malformed_response_rejected', 'clear_confirmation_cancel_and_apply', 'light_dark_mobile_table_scroll', 'six_navigation_entries', 'no_runtime_exceptions'] }, null, 2));
+  await fs.writeFile(path.join(out, 'result.json'), JSON.stringify({ passed: true, fixture: 'synthetic loopback browser fixture; no live DNS capture', widths: [1360, 390, 320], checks: ['default_off', 'explicit_enable_disable', '50_row_cursor_pagination', 'source_type_literal_domain_filters', 'filter_navigation_and_reload', 'record_to_active_query', 'unavailable_retains_previous_results', 'malformed_response_rejected', 'clear_confirmation_cancel_and_apply', 'light_dark_mobile_cards', 'six_navigation_entries', 'no_runtime_exceptions'] }, null, 2));
   console.log('PASS: query recorder UI, filters, pagination, errors, clear, 1360/390/320 layouts. Output: ' + out);
-} catch (error) { if (evaluate) console.log(await evaluate('document.body.innerText')); console.log(fixtureError.slice(-2500)); console.log(chromeError); throw error; }
+} catch (error) {
+  await fs.writeFile(path.join(out, 'failure.json'), JSON.stringify({ error: String(error), stack: error.stack, fixture: fixtureError.slice(-2500), chrome: chromeError }, null, 2));
+  if (evaluate) try { console.log(await evaluate('document.body.innerText')); } catch { /* Preserve the original failure if the renderer stopped responding. */ }
+  console.log(fixtureError.slice(-2500)); console.log(chromeError); throw error;
+}
 finally { if (send) try { await Promise.race([send('Browser.close'), sleep(500)]); } catch {} if (ws) ws.close(); chrome.kill(); fixture.kill(); }

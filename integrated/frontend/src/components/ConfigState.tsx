@@ -41,6 +41,6 @@ export default function ConfigState({ compact = false }: { compact?: boolean }) 
     <p className="suite-note">状态由服务器记录，其他页面和设备可读取。版本一致不代表每条域名规则已验证；文件监听自动加载仍需查询确认。</p>
     {error && <p role="status">配置版本暂不可用：{error}</p>}
     {!value && !error && <p role="status">读取配置版本…</p>}
-    {value && <>{!value.files.length && <p className="suite-note">尚无配置版本记录。</p>}{rows(value.files.slice(0, 3))}{value.files.length > 3 && <details><summary>其他规则文件（{value.files.length - 3}）</summary>{rows(value.files.slice(3))}</details>}<p className="suite-note">进程更换后旧记录显示待确认；升级、回退和自动重载可能改变进程。<a href="#/diagnostics">查询目标域名验证</a></p></>}
+    {value && <>{!value.files.length && <p className="suite-note">尚无配置版本记录。</p>}{rows(value.files.slice(0, 3))}{value.files.length > 3 && <details><summary>其他规则文件（{value.files.length - 3}）</summary>{rows(value.files.slice(3))}</details>}<p className="suite-note">进程更换后旧记录显示待确认；升级、回退和自动重载可能改变进程。<a href="#/diagnostics?tab=query">查询目标域名验证</a></p></>}
   </div>;
 }

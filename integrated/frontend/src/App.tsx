@@ -18,6 +18,7 @@ import { useStore } from './store';
 import { clearMaintenanceRequests } from './maintenanceRequests';
 import ConfigState from './components/ConfigState';
 import PageBoundary from './components/PageBoundary';
+import { clearDiagnosticRoutes } from './useDiagnosticRoute';
 import './suite.css';
 
 type Page = 'cache' | 'dashboard' | 'diagnostics' | 'gateway' | 'config' | 'env' | 'lists' | 'ttl' | 'advanced' | 'system' | 'deploy';
@@ -57,7 +58,7 @@ function pageFromHash(): Page {
 type Theme = 'light' | 'dark' | 'system';
 
 function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: Theme; setTheme: (value: Theme) => void; onLogout: () => void; onPassword: () => void; actionError: string }) {
-  const { caps, runtime, error, runtimeError, runtimeStale, paused, loading, refreshing, refresh } = useSuite();
+  const { caps, runtime, error, runtimeError, runtimeStale, paused, setPaused, loading, refreshing, refresh } = useSuite();
   const { config: gateway } = useGateway();
   const [page, setPage] = useState<Page>(() => pageFromHash());
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -84,8 +85,13 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
     return () => { document.removeEventListener('keydown', keydown); (opener ?? previous)?.focus(); };
   }, [mobileOpen]);
   useEffect(() => {
-    const sync = () => {
-      setPage(pageFromHash()); setMobileOpen(false); window.scrollTo(0, 0);
+    const sync = (event: HashChangeEvent) => {
+      setPage(pageFromHash()); setMobileOpen(false);
+      const section = (url: string) => {
+        const [path, params] = (url.split('#')[1] ?? '/').split('?');
+        return `${path}:${new URLSearchParams(params).get('tab') ?? ''}`;
+      };
+      if (event.oldURL && section(event.oldURL) !== section(event.newURL)) window.scrollTo(0, 0);
     };
     window.addEventListener('hashchange', sync);
     if (!window.location.hash) window.history.replaceState(null, '', '#/');
@@ -97,15 +103,16 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
     <aside inert={narrow && !mobileOpen} ref={sidebar} id="suite-navigation" aria-label="主导航" className={`suite-sidebar ${mobileOpen ? 'is-open' : ''}`}>
       <a href="#/" className="suite-brand"><img className="suite-brand-mark" src="/lovestdns-icon.svg" alt="" /><div><strong>LovestDNS</strong><span>DNS 管理面板</span></div></a>
       <button className="suite-mobile-close" onClick={() => setMobileOpen(false)} aria-label="关闭导航"><X size={18} /></button>
-      <a href="#/status" className="suite-instance"><div className="suite-instance-icon"><Network size={17} /></div><div><small>当前 DNS</small><strong title={caps?.name ?? 'LovestDNS'}>{caps?.name ?? 'LovestDNS'}</strong></div><Status value={health} label={error ? '连接中断' : paused ? '采样已暂停' : runtimeStale ? '数据过期' : runtime?.core_healthy ? '正常' : runtime ? '需检查' : loading ? '连接中' : caps ? '未采集' : '离线'} /></a>
+      <a href="#/status" className="suite-instance"><div className="suite-instance-icon"><Network size={17} /></div><div><small>当前 DNS</small><strong title={caps?.name ?? 'LovestDNS'}>{caps?.name ?? 'LovestDNS'}</strong></div><Status value={health} label={error ? '连接中断' : paused ? '刷新已暂停' : runtimeStale ? '数据过期' : runtime?.core_healthy ? '正常' : runtime ? '需检查' : loading ? '连接中' : caps ? '未采集' : '离线'} /></a>
       <nav className="suite-nav">{NAV.map((group) => <div className="suite-nav-group" key={group.title}><span className="suite-nav-title">{group.title}</span>{group.items.filter((item) => item.key !== 'gateway' || gateway?.enabled).map((item) => { const Icon = item.icon; return <a key={item.key} href={`#${PATHS[item.key]}`} aria-current={navPage(page) === item.key ? 'page' : undefined} className={navPage(page) === item.key ? 'is-active' : ''}><Icon size={17} /><span>{TITLES[item.key]}</span>{navPage(page) === item.key && <ChevronRight size={14} />}</a>; })}</div>)}</nav>
       <div className="suite-sidebar-footer"><span>本地配置与诊断</span><small>{caps?.deployment === 'native' ? '原生服务' : caps ? '容器服务' : 'LovestDNS'} · {caps?.version?.replace('0.1.0-dev.lovestdns-native.', '') ?? '准备中'}</small></div>
     </aside>
     <main className="suite-main" inert={mobileOpen}>
       <header className="suite-topbar"><button ref={menuButton} aria-controls="suite-navigation" aria-expanded={mobileOpen} className="suite-mobile-menu" onClick={() => setMobileOpen(true)} aria-label="打开导航"><Boxes size={19} /></button><div className="suite-breadcrumb"><span>DNS</span><ChevronRight size={14} /><strong>{TITLES[page]}</strong></div><div className="suite-top-actions"><button className="suite-icon-button" onClick={() => setTheme(theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system')} aria-label={`主题：${theme === 'system' ? '系统' : theme === 'light' ? '明亮' : '深色'}，点击切换`} title={`主题：${theme === 'system' ? '系统' : theme === 'light' ? '明亮' : '深色'}`}>{theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}</button><button className="suite-refresh" onClick={() => void refresh()} disabled={refreshing} aria-busy={refreshing} aria-label="刷新状态"><Activity size={16} className={refreshing ? 'spin' : ''} /><span>刷新</span></button><details className="suite-account"><summary><KeyRound size={16} />账户</summary><div className="suite-account-menu"><button className="btn btn-secondary btn-sm" onClick={onPassword}><KeyRound size={15} />修改管理员密码</button><button className="btn btn-secondary btn-sm" onClick={onLogout}><LogOut size={15} />退出登录</button></div></details></div></header>
-      <section className="suite-content"><div className="suite-page-heading"><div><span className="suite-kicker">LOVESTDNS</span><h1>{TITLES[page]}</h1></div><div className="suite-page-meta"><span><Server size={15} /> {caps?.deployment === 'native' ? '原生服务' : caps?.deployment === 'container' ? '容器服务' : '等待实例'}</span><Status value={health} label={error ? '连接中断 · 状态待确认' : paused ? '采样已暂停 · 显示历史快照' : runtimeStale ? '数据过期 · 状态待确认' : runtime?.core_healthy ? '运行中' : runtime ? 'DNS 状态需检查' : '等待状态采样'} /></div></div>
+      <section className="suite-content"><div className="suite-page-heading"><div><span className="suite-kicker">LOVESTDNS</span><h1>{TITLES[page]}</h1></div><div className="suite-page-meta"><span><Server size={15} /> {caps?.deployment === 'native' ? '原生服务' : caps?.deployment === 'container' ? '容器服务' : '等待实例'}</span><Status value={health} label={error ? '连接中断 · 状态待确认' : paused ? '自动刷新已暂停 · 显示历史快照' : runtimeStale ? '数据过期 · 状态待确认' : runtime?.core_healthy ? '运行中' : runtime ? 'DNS 状态需检查' : '等待状态采样'} /></div></div>
         {(error || actionError) && <div className="suite-global-error"><HeartPulse size={16} /><div><strong>{error ? '连接暂时中断，草稿已保留' : '操作未完成'}</strong><p>{error || actionError}</p></div><button className="btn btn-secondary btn-sm" onClick={() => void refresh()}>重试</button></div>}
-        {runtimeError && !error && <div className="suite-global-warning"><Activity size={16} /><span>运行采集暂不可用：{runtimeError}</span></div>}
+        {runtimeError && !error && <div className="suite-global-warning"><Activity size={16} /><span>运行状态读取暂不可用：{runtimeError}</span></div>}
+        {paused && <div className="suite-refresh-paused" role="status"><div><strong>自动刷新已暂停</strong><p>页面保留上次结果；后台 DNS 查询记录开关不受影响。</p></div><button className="btn btn-secondary btn-sm" onClick={() => setPaused(false)}>恢复自动刷新</button></div>}
         {['config', 'env', 'lists', 'advanced', 'cache', 'ttl'].includes(page) && <div className="suite-page-tabs" aria-label="页面分区">{(navPage(page) === 'cache' ? [['cache', '缓存统计与快照'], ['ttl', 'TTL 规则']] : [['config', '配置状态'], ['env', '基础与上游'], ['lists', '域名分流'], ['advanced', '高级配置']]).map(([key, label]) => <a key={key} aria-current={page === key ? 'page' : undefined} href={`#${PATHS[key as Page]}`}>{label}</a>)}</div>}
         {['env', 'lists', 'advanced', 'ttl'].includes(page) && caps?.permissions.configure && <ConfigState compact />}
         <PageBoundary key={`${page}-${pageAttempt}`} onRetry={() => { retryPage(page); setPageAttempt((value) => value + 1); }}><Suspense fallback={<p role="status">正在加载页面…</p>}>
@@ -138,7 +145,7 @@ export default function App() {
     void browserAuth('session').then((value) => { if (!cancelled) { setSession(value); setAuthError(''); } })
       .catch((e) => { if (!cancelled) { setSession(null); setAuthError(errorText(e)); } })
       .finally(() => { if (!cancelled) setLoading(false); });
-    const expired = () => { setBrowserCsrf(''); setChanging(false); setLoading(true); void checkSession(); };
+    const expired = () => { clearDiagnosticRoutes(); setBrowserCsrf(''); setChanging(false); setLoading(true); void checkSession(); };
     window.addEventListener('lovestdns-auth-expired', expired);
     return () => { cancelled = true; window.removeEventListener('lovestdns-auth-expired', expired); };
   }, [checkSession]);
@@ -146,7 +153,7 @@ export default function App() {
   const logout = async () => {
     if (!confirmDiscard()) return;
     setActionError('');
-    try { const value = await browserAuth('logout', {}); clearFileDrafts(); clearMaintenanceRequests(); useStore.getState().resetAll(); setSession(value); setChanging(false); }
+    try { const value = await browserAuth('logout', {}); clearFileDrafts(); clearMaintenanceRequests(); clearDiagnosticRoutes(); useStore.getState().resetAll(); setSession(value); setChanging(false); }
     catch (e) { setActionError(errorText(e)); }
   };
   if (!session?.authenticated || session.must_change_password || changing) return <BrowserLogin key={changing || session?.must_change_password ? 'password' : 'login'} session={session} loading={loading} error={authError} changePassword={changing} onAuthenticated={(value) => { setSession(value); setChanging(false); setActionError(''); }} onCancel={() => setChanging(false)} onRetry={() => { setLoading(true); void checkSession(); }} />;
