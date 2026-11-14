@@ -1,6 +1,6 @@
 # LovestDNS 集成版开发说明
 
-当前应用源码版本：`0.1.0-dev.lovestdns-native.20261114.query1.3`，在[query1.2](../docs/native-query12-release-2026-11-14.md) 的查询记录、采集时钟修复与六项 UI 修复上，新增 Debian 原生版的网页软件更新。检查、确认和结果位于“设置 → 服务信息 → 软件更新”；独立主机任务在网页重启后继续，安装前校验并备份，失败尝试恢复原版本。默认安装入口固定 query1.3，实际公开发行状态以项目首页及 Release 为准。此前[主线记录](../docs/query11-mainline-2026-11-14.md)保留 query1.1 阶段的验证范围。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md) 与源码构建的 Docker 集成版。固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)，源码分区见 [结构说明](../docs/project-layout.md)。
+当前应用源码版本：`0.1.0-dev.lovestdns-native.20261114.query1.4`。本次修复原生规则更新写入只读版本目录的问题，增加官方内容 API 回退、完整校验、加载失败恢复和退避重试，保留 query1.3 的网页软件更新。公开发行状态以[项目首页](../README.md)及对应 Release 为准。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md) 与源码构建的 Docker 集成版。固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)，源码分区见 [结构说明](../docs/project-layout.md)。
 
 历史版本号、镜像和容器标识用于对应已有契约和验收证据。API `kind`、报告类型、数据文件名和内部运行路径沿用原值，保持兼容。
 

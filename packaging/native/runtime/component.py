@@ -79,33 +79,40 @@ def prepare_dnscrypt(socks=False):
 
 def update(core, env):
     import fcntl
+    from native.rule_updates import update as update_rules
     # The boot update and periodic scheduler cannot modify rule data together.
     path = Path(os.environ["SUITE_RUN_DIR"]) / "updater.lock"
     with path.open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            return
-        subprocess.run(["/bin/bash", str(core / "data_update.sh")], env=env, check=True)
+            return False
+        update_rules(core, env)
+        return True
 
 
 def scheduler(core, env):
+    from native.rule_updates import load_status, next_attempt
     period = {"daily": 86400, "weekly": 7 * 86400, "monthly": 30 * 86400}.get(env.get("UPDATE"))
     if period is None:
         raise ValueError("UPDATE must be no, daily, weekly or monthly")
-    marker = Path(os.environ["SUITE_STATE_DIR"]) / "last-periodic-update"
-    try:
-        last = float(marker.read_text())
-    except (OSError, ValueError):
-        last = time.time()
+    state = Path(os.environ["SUITE_STATE_DIR"])
+    due = next_attempt(state, period, time.time())
     while True:
-        if time.time() - last >= period:
+        # Re-read the boot updater's result. A failed initial fetch must retry
+        # soon even if a previous weekly update had recently succeeded.
+        if load_status(state):
+            due = next_attempt(state, period, time.time())
+        if time.time() >= due:
             try:
-                update(core, env)
-                last = time.time()
-                marker.write_text(str(last))
-            except subprocess.CalledProcessError:
-                time.sleep(60)
+                # Use the named Supervisor process so retries and its eventual
+                # exit status remain visible in the existing updater log/UI.
+                import xmlrpc.client
+                from runtime.observer import UnixTransport
+                with xmlrpc.client.ServerProxy("http://localhost/RPC2", transport=UnixTransport()) as rpc:
+                    rpc.supervisor.startProcess("updater", False)
+            except (OSError, xmlrpc.client.Error):
+                print("Rule updater is busy or unavailable; retrying scheduler in 30s", flush=True)
         time.sleep(30)
 
 

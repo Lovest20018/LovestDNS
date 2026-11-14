@@ -2,11 +2,11 @@
 import json
 import os
 from pathlib import Path
-import shutil
 import sys
 
 from runtime.entrypoint import preserve_inputs
 from native.supervisor import configuration
+from native.rule_updates import read, root_hints
 
 
 def main():
@@ -26,7 +26,12 @@ def main():
     preserve_inputs(data, state)
     for name in ("ready", "core-env.json", "mosdns-env.json", "supervisor.sock", "observer.sock", "manager.sock", "query-recorder.sock"):
         (run / name).unlink(missing_ok=True)
-    shutil.copyfile(home / "core/named.cache", "/tmp/named.cache")
+    hints = data / "rule-assets/named.cache"
+    try:
+        value = root_hints(read(hints, 256 * 1024))
+    except (OSError, ValueError):
+        value = read(home / "core/named.cache", 256 * 1024)
+    Path("/tmp/named.cache").write_bytes(value)
     os.environ["DNSPORT"] = os.environ["SUITE_DNS_PORT"]
     config = run / "supervisord.conf"
     config.write_text(configuration(home, state, run, os.environ["WEB_BIND_ADDRESS"], int(os.environ["WEB_HOST_PORT"])))

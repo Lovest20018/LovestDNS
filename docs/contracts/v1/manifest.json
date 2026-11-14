@@ -3,14 +3,14 @@
   "artifacts": {
     "openapi.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "7692516eaed386e969c696f84a4267fb0ffb300f81f4053c77c860ed079fee1a"
+      "sha256": "bbbad66b55d23d5b8e98613795b9bd20e86f6f75e304b9f3fd983c8630347972"
     },
     "samples.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "058cccc0aa2629ced4ed4cfd3bd57536d8884cb872faa5daf5855da8c4285def"
+      "sha256": "fbd67c37ace435f8a51509ea3bc91025c55ca3b5bced4f70c896e073f217ea1b"
     }
   },
-  "candidate_version": "0.1.0-dev.lovestdns-native.20261114.query1.3",
+  "candidate_version": "0.1.0-dev.lovestdns-native.20261114.query1.4",
   "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
   "format_version": 1,
   "provenance": "All responses from actual Flask handlers with synthetic I/O and clocks; no live core/network acceptance evidence",
@@ -33,9 +33,9 @@
       "docker-compose-web.yaml": "0409bc4340124407c7a72fdb01a352f8ef74347e5470af9ae1d21e020d5d7214",
       "docker-compose.integrated.yaml": "b40f095e7fe8119b627abd161e1b4d62a8649a27e854978c67ec7813d8e845fb",
       "docker-compose.sidecar.yaml": "2e9bd7a32e43599b9aedbc8bae3ef9e7cd2b93379d642446016940903fc45609",
-      "docs/lovestdns-native-deployment.md": "726bfcae6da9bf3b027085a3339b97f6d1e19555b8d7b612f9e665f0693102f6",
-      "install.py": "c036d19e0c36e42997392693452ea48d89a3f1dd6e28e287ab3116b1fb32016c",
-      "integrated/README.md": "24a4ae6f1184d6690c49bf3a0f9892d1aa9444c8ef58d04e84d8bb7234df68dc",
+      "docs/lovestdns-native-deployment.md": "c3fe58c3782f1c5463de760c8db54526a1a9005aa6f7d43aaf12f2f753ebcf3b",
+      "install.py": "ff0d6c89930d6f227d7b037d353e791e5f13f8f9dcecc316db4475db444c238b",
+      "integrated/README.md": "9e63adddcdbea8bd6150c63ca11e6f618b1e2bbcfe1c8136b1c0018640f3e654",
       "integrated/backend/api_schema.py": "b4dc3be48d90a51e25f32fbc26147a5bd8c75715c7f6060513ab49e387883b17",
       "integrated/backend/api_v1.py": "150cd07a84cb0df016354461cc3a51ad7d677bde4d480d851a465e0a52b99a3e",
       "integrated/backend/browser_auth.py": "4e64b0f1554c4ba362e0d71e41e469a81d2ad5b8f24ae4af4110d8a88f69eeaa",
@@ -45,7 +45,7 @@
       "integrated/backend/history.py": "068715c1e54af2ec880712da543bd7a7c1e88f5567c213f0b2fd6007dea28713",
       "integrated/backend/installation.py": "64190ebaa3b32c2dfb6f5aa67a8a35303e77be1547114d8a6a866cfc44fd6a84",
       "integrated/backend/runtime_client.py": "965061573678b8bfa909af28475fa819c9f1c5c1ca558c1f16a51d81d2ec37e1",
-      "integrated/backend/server.py": "ea12d7f83212eac373a7b956f54a1c38fe93ae554dd1c028f98cce335d61ca1c",
+      "integrated/backend/server.py": "20874befe2a6110e3c9ac7c3a4591423fad4b67745e78afb3aad48f33347e217",
       "integrated/backend/software_update.py": "969c3fa257d2082cde747ffac15e93376073e278c18d775efa961413f00d423d",
       "integrated/frontend/package-lock.json": "a9cc6c4341237b1ddb91874a72cf08878df13787d20fc3cbc19b1bfc56a915a7",
       "integrated/frontend/package.json": "465e17dc4fde55be78c58247330b5bd39920eef42123a3917c564b41b2a08d38",
@@ -193,12 +193,13 @@
       "packaging/native/requirements.lock.txt": "0b63aa4fd0e4abe316ac8b6524ecdbe243e1b9b1690c20ace3b2ede18d9b9922",
       "packaging/native/runtime/__init__.py": "d07fe518abd1ce934cdac25faa4c56c051788a38b58a64bce6576272d07b7955",
       "packaging/native/runtime/backup.py": "7e5940802be800780c0dad0a4996425a62d1f73266ae615d5877f4b01a3df367",
-      "packaging/native/runtime/component.py": "c4db39d341aba707ab41e1bae7ad0645af541696821050963ecc679bc1818126",
-      "packaging/native/runtime/entrypoint.py": "34cdf2e1609cc8e1e09b9da5005090268184dad7af086a9cbb5bdd8c77f5b4a5",
+      "packaging/native/runtime/component.py": "6bf743e7ac02e2a7d5d969f02c7235a2a06946d57eb7ff4bd18f5a0eeae64e8d",
+      "packaging/native/runtime/entrypoint.py": "a754a1ee81ec5a1808fcb6c10b972e3f85e8c6c9960bc4a8486a3e7008d4ddb2",
       "packaging/native/runtime/environment.py": "072901672ea27e1fa866c776b016db930ee2323695cb36235f719a716bf7b63f",
       "packaging/native/runtime/legacy_reload.py": "039dc245da9f51fbd18b9a7809faeddec03dc1a39a92487e8a007492aa945e37",
       "packaging/native/runtime/resources.py": "b7bfcfe9075d21335c3a8927d31cfc69bd56eed9f3de1749095b30b6dea9998c",
       "packaging/native/runtime/restart.py": "bb2318b1c737f733f7e5e3e6744d12ca87b653c00ba4306de021ed4d570506cf",
+      "packaging/native/runtime/rule_updates.py": "a43331fd28a82dcaea7f790796534cb683ee78b6fc79057e47820e9beea0170e",
       "packaging/native/runtime/supervisor.py": "de5b0eb5927e2f841c6b45264cd0610e4a771e0db13c721121252e83b2b2bd5b",
       "packaging/native/runtime/update_worker.py": "9f4054bc401c64c45fbf0b0eca05934b2fd6c78e54dffca38e0c1b31e0749a81",
       "packaging/standalone.freeze.json": "f6482e7601e3e24751f3ee3545fc4bfd30664abb51f32b029a1c0cd1ae23b4aa",
@@ -286,6 +287,7 @@
       "scripts/tests/test_native_package.py": "7f8e4ffe722ba17b9ba1dca8c2ea0e2bdb4d1aeedd169960af0886763534db55",
       "scripts/tests/test_native_refresh.py": "d933822bb531e3e50f7c70b8a37a9146921fa15bdfc4bc514495ef00ec99706e",
       "scripts/tests/test_native_restart.py": "ee3a051e8d1fa3f747341c82c9b934628d5cb1934d700c2a1416524e0cd33ff8",
+      "scripts/tests/test_native_rule_updates.py": "cd4f30a3cb4cad54afc131f5b7a0ded99fa54a5451e8c89a2e3027d4823aec98",
       "scripts/tests/test_prepare_frontend.py": "c7fca37cb74ff1648374ca101be3ebebe4fa5d795315d9cc56d2057a6419bf49",
       "scripts/tests/test_public_privacy.py": "e2250b33558ad167ae9549a1eeb93a9042c5deaa5cb115e70766515aca68b50f",
       "scripts/tests/test_release_installer.py": "26bdd7291f6b751e6e6f564c30395c96eb40e9b75f769d3679177a5894fc08d7",
@@ -356,7 +358,7 @@
       "packaging/components.lock.json",
       "packaging/dnscrypt-source.lock.json"
     ],
-    "sha256": "b74ea13affcc5104dc31262fe14b0788f22a91407c717f6057df427daa176d35"
+    "sha256": "8f914a0653bb939a26a4f990a0d4cd73e698f24aa0f73c9ba9085d3311ae0a26"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

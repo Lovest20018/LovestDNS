@@ -16,7 +16,7 @@ sudo lovestdnsctl health
 sudo lovestdnsctl password
 ```
 
-根目录 `install.py` 默认选择 `0.1.0-dev.lovestdns-native.20261114.query1.3`，按精确标签下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`，核对归档、路径、清单和载荷后再执行包内安装器。摘要与归档来自同一发布渠道，可检测传输损坏，不代替对发布账号的信任。可使用 `--version <不含v的版本>` 选择其他已发布版本；发行状态以项目首页及对应 Release 为准，预发布包仍需先验收自己的环境。
+根目录 `install.py` 默认选择 `0.1.0-dev.lovestdns-native.20261114.query1.4`，按精确标签下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`，核对归档、路径、清单和载荷后再执行包内安装器。摘要与归档来自同一发布渠道，可检测传输损坏，不代替对发布账号的信任。可使用 `--version <不含v的版本>` 选择其他已发布版本；发行状态以项目首页及对应 Release 为准，预发布包仍需先验收自己的环境。
 
 只下载且验证、不安装：
 
@@ -59,7 +59,7 @@ python3 -m venv .build/native-tools
 ```sh
 sha256sum -c lovestdns-native.tar.gz.sha256
 tar -xzf lovestdns-native.tar.gz
-cd lovestdns-0.1.0-dev.lovestdns-native.20261114.query1.3
+cd lovestdns-0.1.0-dev.lovestdns-native.20261114.query1.4
 cp native.env.example /root/lovestdns-install.env
 chmod 600 /root/lovestdns-install.env
 nano /root/lovestdns-install.env
@@ -99,6 +99,14 @@ systemd 仅在服务自己的挂载命名空间内将持久化数据映射到 `/
 
 Web 编辑的 `custom_env.ini` 用于 DNS 参数与规则变量。原生版禁止其覆盖 PATH、Python/动态加载器变量及服务运行目录、绑定端口、Web 认证等保留变量；这些参数应在 `/etc/lovestdns/lovestdns.env` 中修改，再执行控制命令重启。普通自定义规则变量仍可使用。
 
+## 规则数据更新
+
+原生版的规则更新与网页软件升级是两项独立任务。`UPDATE=daily/weekly/monthly` 控制根提示、GeoIP、tracker 和全局标记数据的更新周期；`UPDATE=no` 关闭规则自动更新。程序版本目录保持只读，压缩输入和根提示保存到 `/data/rule-assets`，解压后的活动规则仍使用既有 `/data` 路径。用户 tracker 增补按原有合并方式保留。
+
+每轮先获取并校验所有启用的数据。根提示沿用 Internic 发布的 MD5，其他三项使用上游 SHA-256；另验证 XZ 解压限制、GeoIP 格式和全局标记的内嵌 SHA-512。下载仅使用固定官方上游及 CDN，GitHub 官方内容 API 为回退入口，不接受客户端任意 URL。单次请求和整轮有时限，文件及解压体积有上限。配置了 SOCKS5 时先使用既有 MosDNS 下载器，再尝试直连；故障信息不输出代理凭据。
+
+下载或校验失败保留活动规则。替换前取得维护锁并备份运行文件，暂停监听器，以同目录原子替换写入数据，调用既有加载流程后重新启动监听器，避免替换 inode 后丢失监视。加载或健康检查失败时尝试恢复旧文件及运行配置；不停止 Redis，也不清缓存。规则变化可能短暂重启相关 DNS 组件。成功后记录本轮时间，失败按 1、2、4 分钟递增重试，最长间隔一小时；结果保存在 `state/rule-update.json`，详细过程在“维护与日志 → updater”。状态为成功只证明下载、格式校验和本机服务响应，不证明每条规则符合实际业务。
+
 ## 日常维护、升级与回退
 
 从 query1.3 起，Debian 原生安装包含网页更新助手。在 **设置 → 服务信息 → 软件更新** 点击“检查更新”，核对版本及发行说明，再点击“更新到此版本 → 确认更新并重启”。页面会区分下载、校验、备份安装和最终结果；重启期间继续重连，关闭网页不会取消主机任务，重新进入此页可查看结果。没有后台自动升级。
@@ -108,7 +116,7 @@ Web 编辑的 `custom_env.ini` 用于 DNS 参数与规则变量。原生版禁�
 首次从不含更新助手的版本迁移，需要通过当前安装入口升级一次，并保留实际实例名；之后可在前端完成同实例软件升级：
 
 ```sh
-sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.3 --instance <实例名>
+sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.4 --instance <实例名>
 ```
 
 默认实例省略 `--instance`。Docker 部署继续由宿主机 Compose 管理。网页更新仅允许已修改初始密码的管理员会话与 CSRF 校验，不接受外部管理/只读 Token、任意 URL、主机命令或其他实例参数。更新开始后暂停配置、认证设置和维护任务写入，DNS 查询与状态读取仍可用；有未保存草稿时请先保存或还原。
