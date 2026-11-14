@@ -1,6 +1,6 @@
 # LovestDNS 集成版开发说明
 
-当前源码版本：`0.1.0-dev.lovestdns-native.20261113.query1.1`，包含[真实查询观测 MVP](../docs/query-recording-mvp-2026-11-12.md)、采集时钟修复与六项交互修复；[主线记录](../docs/query11-mainline-2026-11-14.md)区分源码、本地候选包和实际验证范围。最新公开预发布仍为 [home2.1](../docs/native-home21-release-2026-11-12.md)，默认安装入口仍固定 `.11`。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md) 与源码构建的 Docker 集成版。固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)，源码分区见 [结构说明](../docs/project-layout.md)。
+当前源码版本：`0.1.0-dev.lovestdns-native.20261114.query1.2`，包含[真实查询观测 MVP](../docs/query-recording-mvp-2026-11-12.md)、采集时钟修复与六项交互修复，正在准备同源原生预发布包；此前[主线记录](../docs/query11-mainline-2026-11-14.md)区分源码、本地候选包和实际验证范围。默认安装入口仍固定 `.11`。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md) 与源码构建的 Docker 集成版。固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)，源码分区见 [结构说明](../docs/project-layout.md)。
 
 历史版本号、镜像和容器标识用于对应已有契约和验收证据。API `kind`、报告类型、数据文件名和内部运行路径沿用原值，保持兼容。
 

@@ -6,7 +6,7 @@ LovestDNS 是基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS) 的 DNS 服�
 
 `install.py` 默认下载仍固定 `.20261104.11`。选择新版时使用最新安装脚本并显式传入 `--version 0.1.0-dev.lovestdns-native.20261112.home2.1`；首次配置和实例参数见下方及[部署说明](docs/lovestdns-native-deployment.md)。原验收包与最终公开包摘要不同，以对应 Release 的校验文件为准。
 
-当前主线开发版本为 `0.1.0-dev.lovestdns-native.20261113.query1.1`：包含默认关闭、有容量上限的[真实入口查询记录](docs/query-recording-mvp-2026-11-12.md)、慢入口检查导致的误重置修复，以及查询分区、筛选保留、复制回退和手机布局等六项交互修复。源码状态与验证边界见[本轮主线记录](docs/query11-mainline-2026-11-14.md)。query1 / query1.1 本地候选包已有安装与试用验证，尚未上传公开 Release；最新 UI 修复尚未打入原生安装包。
+当前主线开发版本为 `0.1.0-dev.lovestdns-native.20261114.query1.2`：包含默认关闭、有容量上限的[真实入口查询记录](docs/query-recording-mvp-2026-11-12.md)、慢入口检查导致的误重置修复，以及查询分区、筛选保留、复制回退和手机布局等六项交互修复。本轮正从同一份干净提交准备包含全部 UI 修复的原生预发布包；此前源码与验证边界见[主线记录](docs/query11-mainline-2026-11-14.md)。正式资产与摘要以对应 GitHub Release 为准。
 
 首页、配置流程和监听采集见[首批实现](docs/home-console-implementation-2026-11-11.md)，实例身份、维护命令及来源见[本轮实现](docs/home2-installation-identity-2026-11-12.md)。原候选安装、升级、回退、测试实例部署和 15 分钟功能观察见[home2.1 验收](docs/home21-validation-results-2026-11-12.md)，公开包的额外验证另列在发行记录中。客户端系统 DNS 未切换。
 

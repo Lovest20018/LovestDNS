@@ -3,14 +3,14 @@
   "artifacts": {
     "openapi.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "6f43ef63d44b44df3c3758b13665769e97e61b0f763e71fc97c681c462a88c05"
+      "sha256": "4e8d6a2bd9ab8701b05e74df829fceb3bed2ea224f246e7b2fbf1fc6097c8250"
     },
     "samples.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "e0b59f6d40a561da8129da5e545827be861cd6d01bf95b49fa882932414df727"
+      "sha256": "b765c64ae9d83d58996f3bdf56e27063ccbae81b9c9c8b29c5821fd95b99cc10"
     }
   },
-  "candidate_version": "0.1.0-dev.lovestdns-native.20261113.query1.1",
+  "candidate_version": "0.1.0-dev.lovestdns-native.20261114.query1.2",
   "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
   "format_version": 1,
   "provenance": "All responses from actual Flask handlers with synthetic I/O and clocks; no live core/network acceptance evidence",
@@ -35,7 +35,7 @@
       "docker-compose.sidecar.yaml": "2e9bd7a32e43599b9aedbc8bae3ef9e7cd2b93379d642446016940903fc45609",
       "docs/lovestdns-native-deployment.md": "78c65f47ecf41c8391303ceefd85bbdec06969e7e4e1dfac866c0a5447f748ab",
       "install.py": "c2e0e5c8b9c55747c0883a5bab586d83813315dbf58a46da0560ab212b7dc4a9",
-      "integrated/README.md": "126ea6fe95c653a88107848469f213ab06d9ec0f831af34b9bd54d4e2d53d8b4",
+      "integrated/README.md": "9d329de290306186b4b9032e4ccfe767b480abc834a46e5d9c46c5ca1e9e62e2",
       "integrated/backend/api_schema.py": "b4dc3be48d90a51e25f32fbc26147a5bd8c75715c7f6060513ab49e387883b17",
       "integrated/backend/api_v1.py": "150cd07a84cb0df016354461cc3a51ad7d677bde4d480d851a465e0a52b99a3e",
       "integrated/backend/browser_auth.py": "4e64b0f1554c4ba362e0d71e41e469a81d2ad5b8f24ae4af4110d8a88f69eeaa",
@@ -45,7 +45,7 @@
       "integrated/backend/history.py": "068715c1e54af2ec880712da543bd7a7c1e88f5567c213f0b2fd6007dea28713",
       "integrated/backend/installation.py": "64190ebaa3b32c2dfb6f5aa67a8a35303e77be1547114d8a6a866cfc44fd6a84",
       "integrated/backend/runtime_client.py": "965061573678b8bfa909af28475fa819c9f1c5c1ca558c1f16a51d81d2ec37e1",
-      "integrated/backend/server.py": "fd8a870b9a7f1d6c34e1553db58f249ccbb5e79f9fa6ae50a849582210d67abe",
+      "integrated/backend/server.py": "7bd7a5908be9135ccaf176cbc20f34d17491c528433a33d2cb2670e959dadae1",
       "integrated/frontend/package-lock.json": "a9cc6c4341237b1ddb91874a72cf08878df13787d20fc3cbc19b1bfc56a915a7",
       "integrated/frontend/package.json": "465e17dc4fde55be78c58247330b5bd39920eef42123a3917c564b41b2a08d38",
       "integrated/frontend/public/favicon.svg": "f40f9a0426f725f1294587b6b222af620f22785f9e3d173d067aed3c879c9642",
@@ -349,7 +349,7 @@
       "packaging/components.lock.json",
       "packaging/dnscrypt-source.lock.json"
     ],
-    "sha256": "88ae0118086a1b4f1cb7ad9a2cdbd5fd6dc2c5a2739a7c60354c0e3374a8d9fc"
+    "sha256": "1c332bb9748d820d2b78536123b5b0036f0cee50b6687e97310be78c2ea618f9"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",
