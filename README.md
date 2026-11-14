@@ -2,11 +2,11 @@
 
 LovestDNS 是基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS) 的 DNS 服务与 Web 管理面板。DNS 核心、面板、采集器和维护服务可通过 Debian 原生 systemd 服务或 Docker 集成镜像独立运行。
 
-最新公开安装包为 [home2.1：组件更新与新控制台](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261112.home2.1)（Debian amd64）。Redis 7.2.17、Unbound 1.26.2、DNSCrypt 2.1.20 combined 与新控制台一同交付，保留定制 MosDNS。公开源码、安装包摘要及实际下载验证见[发行记录](docs/native-home21-release-2026-11-12.md)。该安装包不含下述查询记录功能；本项目尚未宣称稳定版或全面提速。
+最新预发布为 [query1.2：查询记录与六项 UI 修复](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261114.query1.2)（Debian amd64）。包含默认关闭的真实入口查询记录、采集时钟修复，以及查询分区、筛选保留、复制回退和手机布局改进。Redis 7.2.17、Unbound 1.26.2、DNSCrypt 2.1.20 combined 与定制 MosDNS 保持已验收的组件字节。源码、安装包摘要、同包验收与真实公开下载验证见[query1.2 发行记录](docs/native-query12-release-2026-11-14.md)。本项目尚未宣称稳定版或全面提速。
 
-`install.py` 默认下载仍固定 `.20261104.11`。选择新版时使用最新安装脚本并显式传入 `--version 0.1.0-dev.lovestdns-native.20261112.home2.1`；首次配置和实例参数见下方及[部署说明](docs/lovestdns-native-deployment.md)。原验收包与最终公开包摘要不同，以对应 Release 的校验文件为准。
+`install.py` 默认下载仍固定 `.20261104.11`。选择本预发布时使用最新安装脚本并显式传入 `--version 0.1.0-dev.lovestdns-native.20261114.query1.2`；首次配置和实例参数见下方及[部署说明](docs/lovestdns-native-deployment.md)。不同版本的摘要不能混用，以对应 Release 的校验文件为准。
 
-当前主线开发版本为 `0.1.0-dev.lovestdns-native.20261114.query1.2`：包含默认关闭、有容量上限的[真实入口查询记录](docs/query-recording-mvp-2026-11-12.md)、慢入口检查导致的误重置修复，以及查询分区、筛选保留、复制回退和手机布局等六项交互修复。本轮正从同一份干净提交准备包含全部 UI 修复的原生预发布包；此前源码与验证边界见[主线记录](docs/query11-mainline-2026-11-14.md)。正式资产与摘要以对应 GitHub Release 为准。
+当前应用版本为 `0.1.0-dev.lovestdns-native.20261114.query1.2`。公开安装包的应用与前端均来自提交 `48fcb96`，全部六项 UI 修复已包含在包中；[查询记录范围](docs/query-recording-mvp-2026-11-12.md)和此前[主线记录](docs/query11-mainline-2026-11-14.md)分别说明功能限制与历史验证。本次发行没有自动升级现有实例。
 
 首页、配置流程和监听采集见[首批实现](docs/home-console-implementation-2026-11-11.md)，实例身份、维护命令及来源见[本轮实现](docs/home2-installation-identity-2026-11-12.md)。原候选安装、升级、回退、测试实例部署和 15 分钟功能观察见[home2.1 验收](docs/home21-validation-results-2026-11-12.md)，公开包的额外验证另列在发行记录中。客户端系统 DNS 未切换。
 
@@ -21,7 +21,7 @@ curl -fL https://raw.githubusercontent.com/Lovest20018/LovestDNS/main/install.py
 curl -fL https://raw.githubusercontent.com/Lovest20018/LovestDNS/main/.env.native.example -o lovestdns-install.env
 chmod 600 lovestdns-install.env
 nano lovestdns-install.env
-sudo python3 install.py --config ./lovestdns-install.env
+sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.2 --config ./lovestdns-install.env
 sudo lovestdnsctl health
 sudo lovestdnsctl password
 ```

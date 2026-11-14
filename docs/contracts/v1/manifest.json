@@ -35,7 +35,7 @@
       "docker-compose.sidecar.yaml": "2e9bd7a32e43599b9aedbc8bae3ef9e7cd2b93379d642446016940903fc45609",
       "docs/lovestdns-native-deployment.md": "78c65f47ecf41c8391303ceefd85bbdec06969e7e4e1dfac866c0a5447f748ab",
       "install.py": "c2e0e5c8b9c55747c0883a5bab586d83813315dbf58a46da0560ab212b7dc4a9",
-      "integrated/README.md": "9d329de290306186b4b9032e4ccfe767b480abc834a46e5d9c46c5ca1e9e62e2",
+      "integrated/README.md": "3896cf70bc1ebc9119acccb62177af06b8a160cd4bd9b805dcdae43e32179aef",
       "integrated/backend/api_schema.py": "b4dc3be48d90a51e25f32fbc26147a5bd8c75715c7f6060513ab49e387883b17",
       "integrated/backend/api_v1.py": "150cd07a84cb0df016354461cc3a51ad7d677bde4d480d851a465e0a52b99a3e",
       "integrated/backend/browser_auth.py": "4e64b0f1554c4ba362e0d71e41e469a81d2ad5b8f24ae4af4110d8a88f69eeaa",
@@ -349,7 +349,7 @@
       "packaging/components.lock.json",
       "packaging/dnscrypt-source.lock.json"
     ],
-    "sha256": "1c332bb9748d820d2b78536123b5b0036f0cee50b6687e97310be78c2ea618f9"
+    "sha256": "c909c9f1af821571f6c4f7a92de847bf5f17aa7d4c6b151e62ed6d6f0e9ae793"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",
