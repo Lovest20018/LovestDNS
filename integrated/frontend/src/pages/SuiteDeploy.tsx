@@ -43,7 +43,7 @@ export default function SuiteDeploy() {
     ? nativeMaintenanceCommands(installed)
     : 'export WEB_UI_TOKEN=$(openssl rand -hex 32)\nexport DNS_HOST_PORT=1053\nexport WEB_HOST_PORT=18080\ndocker compose -f docker-compose.integrated.yaml build\ndocker compose -f docker-compose.integrated.yaml up -d';
   return <div className="suite-page">
-    <div className="suite-segment"><button className={!gatewayTab ? 'is-active' : ''} onClick={() => { if (confirmDiscard()) { setGatewayTab(false);window.history.replaceState(null, '', '#/settings'); } }}>服务信息</button><button className={gatewayTab ? 'is-active' : ''} onClick={() => { setGatewayTab(true);window.history.replaceState(null, '', '#/settings?tab=gateway'); }}>网关联动</button></div>
+    <div className="suite-segment"><button className={!gatewayTab ? 'is-active' : ''} onClick={() => { if (confirmDiscard()) { setGatewayTab(false);window.history.replaceState(null, '', '#/settings'); } }}>服务信息</button><button className={gatewayTab ? 'is-active' : ''} onClick={() => { if (confirmDiscard()) { setGatewayTab(true);window.history.replaceState(null, '', '#/settings?tab=gateway'); } }}>网关联动</button></div>
     {gatewayTab ? <GatewaySettings /> : <>
     <div className="suite-deploy-hero"><div><span className="suite-kicker">{native ? 'DEBIAN / SYSTEMD' : 'DOCKER / COMPOSE'}</span><h2>LovestDNS</h2><p>管理本机 DNS 解析、缓存与规则，查看服务状态并排查问题。</p></div><Server size={46} /></div>
     <Notice tone="info">{native ? '日常 DNS 参数与规则可直接在网页修改、保存和应用。软件更新可在下方检查并执行，监听端口变更由主机处理。' : '当前为 Docker 集成版。正式升级、端口切换和数据迁移由宿主机 Compose 执行。'}</Notice>

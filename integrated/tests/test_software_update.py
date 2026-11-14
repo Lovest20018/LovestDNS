@@ -174,6 +174,17 @@ def test_release_checksum_must_match_github_asset_digest(monkeypatch):
         update.checked_release('test.new')
 
 
+def test_metadata_and_checksum_share_explicit_update_transport(monkeypatch):
+    marker, seen = object(), []
+    def fetch(url, limit, *, opener):
+        seen.append(opener)
+        return (('a' * 64 + '  ' + update.ASSET).encode() if url.endswith('.sha256')
+                else json.dumps([release('test.new', '2026-02-01T00:00:00Z')]).encode())
+    monkeypatch.setattr(update, 'public_bytes', fetch)
+    assert update.checked_release(opener=marker)['version'] == 'test.new'
+    assert seen == [marker, marker]
+
+
 @pytest.mark.parametrize('url', ['http://github.com/file', 'https://other.example/file',
     'https://github.com:444/file', 'https://user:password@github.com/file'])
 def test_redirect_never_downgrades_tls_or_leaves_github(url):

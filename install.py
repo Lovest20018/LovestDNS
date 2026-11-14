@@ -11,11 +11,12 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 
 REPOSITORY = 'Lovest20018/LovestDNS'
-DEFAULT_VERSION = '0.1.0-dev.lovestdns-native.20261114.query1.4'
+DEFAULT_VERSION = '0.1.0-dev.lovestdns-native.20261114.query1.5'
 ASSET = 'lovestdns-native-debian-amd64.tar.gz'
 MAX_ARCHIVE = 256 * 1024 * 1024
 MAX_EXTRACTED = 768 * 1024 * 1024
@@ -31,22 +32,27 @@ class GitHubRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(request, fp, code, message, headers, newurl)
 
 
-def fetch(url, target, limit):
+def fetch(url, target, limit, *, opener=None):
     parsed = urllib.parse.urlparse(url)
-    if parsed.scheme != 'https' or parsed.hostname not in {'api.github.com', 'github.com'}:
+    if (parsed.scheme != 'https' or parsed.hostname not in {'api.github.com', 'github.com'}
+            or parsed.port not in {None, 443} or parsed.username or parsed.password):
         raise ValueError('Release downloads must use GitHub HTTPS')
     request = urllib.request.Request(url, headers={'User-Agent': 'LovestDNS-installer',
                                                   'Accept': 'application/octet-stream'})
-    with urllib.request.build_opener(GitHubRedirect()).open(request, timeout=60) as response, Path(target).open('wb') as output:
+    transport = opener or urllib.request.build_opener(GitHubRedirect())
+    deadline = time.monotonic() + 360
+    with transport.open(request, timeout=20) as response, Path(target).open('wb') as output:
         total = 0
-        while chunk := response.read(1024 * 1024):
+        while chunk := response.read1(64 * 1024):
+            if time.monotonic() > deadline:
+                raise TimeoutError('Release download deadline exceeded')
             total += len(chunk)
             if total > limit:
                 raise ValueError('Release download exceeds its size limit')
             output.write(chunk)
 
 
-def download(version, directory):
+def download(version, directory, *, opener=None):
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,119}', version):
         raise ValueError('Invalid release version')
     directory = Path(directory)
@@ -54,7 +60,7 @@ def download(version, directory):
     base = f'https://github.com/{REPOSITORY}/releases/download/{tag}/'
     for name, limit in ((ASSET, MAX_ARCHIVE), (ASSET + '.sha256', 4096)):
         # Exact public asset URLs avoid anonymous GitHub API rate limits.
-        fetch(base + name, directory / name, limit)
+        fetch(base + name, directory / name, limit, **({'opener': opener} if opener is not None else {}))
     checksum = (directory / (ASSET + '.sha256')).read_text().strip()
     match = re.fullmatch(r'([a-f0-9]{64})  ' + re.escape(ASSET), checksum)
     if not match:

@@ -147,7 +147,7 @@ class GitHubRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(request, fp, code, message, headers, newurl)
 
 
-def public_bytes(url, limit):
+def public_bytes(url, limit, *, opener=None):
     parsed = urllib.parse.urlsplit(url)
     if (parsed.scheme != 'https' or parsed.hostname not in {'api.github.com', 'github.com'}
             or parsed.port not in {None, 443} or parsed.username or parsed.password):
@@ -155,13 +155,22 @@ def public_bytes(url, limit):
     request = urllib.request.Request(url, headers={'User-Agent': 'LovestDNS-native-updater',
         'Accept': 'application/vnd.github+json' if parsed.hostname == 'api.github.com' else 'application/octet-stream'})
     try:
-        with urllib.request.build_opener(GitHubRedirect()).open(request, timeout=20) as response:
-            data = response.read(limit + 1)
+        transport = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}), GitHubRedirect())
+        deadline = time.monotonic() + 60
+        with transport.open(request, timeout=20) as response:
+            data = bytearray()
+            while True:
+                chunk = response.read1(min(64 * 1024, limit + 1 - len(data)))
+                if time.monotonic() > deadline:
+                    raise TimeoutError('Update metadata deadline exceeded')
+                data.extend(chunk)
+                if not chunk or len(data) > limit:
+                    break
     except (OSError, urllib.error.URLError) as exc:
-        raise UpdateError('无法从 GitHub 获取更新，请检查主机网络后重试') from exc
+        raise UpdateError('无法从 GitHub 获取更新，请检查更新专用代理或主机网络后重试') from exc
     if len(data) > limit:
         raise UpdateError('GitHub 更新信息超过大小限制')
-    return data
+    return bytes(data)
 
 
 def release_summary(value):
@@ -192,14 +201,16 @@ def release_summary(value):
             'github_digest': selected[ASSET].get('digest')}
 
 
-def checked_release(version=None):
+def checked_release(version=None, *, opener=None):
+    def fetch(url, limit):
+        return public_bytes(url, limit, **({'opener': opener} if opener is not None else {}))
     api = f'https://api.github.com/repos/{REPOSITORY}/releases'
     if version is not None:
         if not isinstance(version, str) or not VERSION.fullmatch(version):
             raise UpdateError('更新版本无效')
-        candidates = [json.loads(public_bytes(api + '/tags/v' + version, 1024 * 1024))]
+        candidates = [json.loads(fetch(api + '/tags/v' + version, 1024 * 1024))]
     else:
-        candidates = json.loads(public_bytes(api + '?per_page=20', 4 * 1024 * 1024))
+        candidates = json.loads(fetch(api + '?per_page=20', 4 * 1024 * 1024))
         if not isinstance(candidates, list):
             raise UpdateError('GitHub 版本列表格式无效')
     releases = [release for candidate in candidates if (release := release_summary(candidate))]
@@ -209,7 +220,7 @@ def checked_release(version=None):
         raise UpdateError('未找到完整发布的 Debian amd64 原生安装包')
     release = max(releases, key=lambda item: item['published_at'])
     url = f'https://github.com/{REPOSITORY}/releases/download/v{release["version"]}/{ASSET}.sha256'
-    checksum = public_bytes(url, 4096).decode('ascii').strip()
+    checksum = fetch(url, 4096).decode('ascii').strip()
     match = re.fullmatch(r'([a-f0-9]{64})  ' + re.escape(ASSET), checksum)
     if not match:
         raise UpdateError('发行版 SHA-256 文件格式无效')

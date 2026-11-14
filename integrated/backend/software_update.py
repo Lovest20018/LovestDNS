@@ -8,6 +8,7 @@ from werkzeug.exceptions import ServiceUnavailable
 
 from browser_auth import current_session, csrf_valid, WRITE_METHODS
 from runtime import software_update as protocol
+from runtime import update_network
 
 
 def update_root():
@@ -24,6 +25,29 @@ def update_in_progress():
 
 
 def register(server):
+    @server.app.route('/auth/software-update/network', methods=['GET', 'PUT'])
+    def software_update_network():
+        session = current_session(server.STATE_DIR)
+        if not session:
+            return jsonify({'error': '请先登录'}), 401
+        if session['initial']:
+            return jsonify({'error': '请先修改初始管理员密码'}), 403
+        if request.method == 'PUT' and not csrf_valid(session):
+            return jsonify({'error': '登录校验已失效，请刷新页面'}), 403
+        try:
+            root = update_root()
+            if root is None or not protocol.supported(root):
+                return jsonify({'error': '当前安装不支持更新网络设置，请先升级主机更新助手'}), 409
+            value = (update_network.save(root, request.get_json(silent=True), server.VERSION)
+                     if request.method == 'PUT' else update_network.public(update_network.load(root)))
+            return jsonify(value)
+        except protocol.UpdateBusy as exc:
+            return jsonify({'error': str(exc)}), 409
+        except protocol.UpdateError as exc:
+            return jsonify({'error': str(exc)}), 400
+        except (OSError, ValueError, sqlite3.Error):
+            return jsonify({'error': '更新网络设置暂不可用，请核对主机更新助手状态'}), 503
+
     @server.app.route('/auth/software-update', methods=['GET', 'POST'])
     def software_update():
         session = current_session(server.STATE_DIR)

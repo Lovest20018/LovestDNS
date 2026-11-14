@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { setBrowserCsrf, softwareUpdate } from '../src/suiteApi.ts';
+import { setBrowserCsrf, softwareUpdate, softwareUpdateNetwork } from '../src/suiteApi.ts';
 
 const status = { schema_version: 1, supported: true, current_version: 'test.old', phase: 'ready',
   release: { version: 'test.next', archive_sha256: 'a'.repeat(64), archive_bytes: 2000, prerelease: true,
@@ -46,4 +46,24 @@ test('unsupported deployments remain visible and request failures do not become 
   await assert.rejects(softwareUpdate({ action: 'check' }), /Already running/);
   globalThis.fetch = async () => { throw new TypeError('Connection reset'); };
   await assert.rejects(softwareUpdate(), /Connection reset/);
+});
+
+test('network settings use authenticated CSRF writes and reject secret-bearing responses', async (t) => {
+  const original = globalThis.fetch;
+  t.after(() => { globalThis.fetch = original; setBrowserCsrf(''); });
+  const value = { mode: 'socks5' as const, host: '192.0.2.10', port: 1080, username: 'fixture', password_configured: true };
+  setBrowserCsrf('fixture-csrf');
+  globalThis.fetch = async (url, init) => {
+    assert.equal(url, '/auth/software-update/network');
+    assert.equal(init?.method, 'PUT');
+    assert.equal(new Headers(init?.headers).get('X-CSRF-Token'), 'fixture-csrf');
+    assert.equal(init?.credentials, 'same-origin');
+    assert.deepEqual(JSON.parse(init?.body as string), { mode: 'socks5', host: value.host, port: 1080, username: 'fixture', password: 'synthetic-secret' });
+    return new Response(JSON.stringify(value));
+  };
+  assert.deepEqual(await softwareUpdateNetwork({ mode: 'socks5', host: value.host, port: 1080, username: 'fixture', password: 'synthetic-secret' }), value);
+  for (const bad of [{ ...value, password: 'must-not-return' }, { ...value, mode: 'system' }, { ...value, port: '1080' }, { ...value, password_configured: null }]) {
+    globalThis.fetch = async () => new Response(JSON.stringify(bad));
+    await assert.rejects(softwareUpdateNetwork(), /格式无效/);
+  }
 });

@@ -135,6 +135,28 @@ export interface SoftwareRelease {
   version: string; archive_sha256: string; archive_bytes: number;
   prerelease: boolean; published_at: string; url: string; notes: string;
 }
+export interface UpdateNetwork {
+  mode: 'direct' | 'http' | 'socks5'; host: string; port: number | null;
+  username: string; password_configured: boolean;
+}
+export type UpdateNetworkWrite = Omit<UpdateNetwork, 'password_configured'> & { password?: string; clear_password?: boolean };
+export async function softwareUpdateNetwork(body?: UpdateNetworkWrite, signal?: AbortSignal): Promise<UpdateNetwork> {
+  const deadline = AbortSignal.timeout(15000);
+  const response = await fetch('/auth/software-update/network', {
+    method: body ? 'PUT' : 'GET', credentials: 'same-origin', cache: 'no-store',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': browserCsrf },
+    body: body ? JSON.stringify(body) : undefined, signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+  });
+  if (response.status === 401) expireSession();
+  const value = await response.json();
+  if (!response.ok) throw new Error(value.error ?? '无法读取更新网络设置');
+  if (!value || !['direct', 'http', 'socks5'].includes(value.mode) || typeof value.host !== 'string'
+      || (value.port !== null && (!Number.isInteger(value.port) || value.port < 1 || value.port > 65535))
+      || typeof value.username !== 'string' || typeof value.password_configured !== 'boolean' || 'password' in value) {
+    throw new Error('更新网络设置格式无效');
+  }
+  return value;
+}
 export type SoftwareUpdatePhase = 'idle' | 'queued' | 'checking' | 'ready' | 'downloading' | 'verifying' | 'installing' | 'succeeded' | 'failed';
 export interface SoftwareUpdateStatus {
   schema_version: 1; supported: boolean; current_version: string; reason?: string;

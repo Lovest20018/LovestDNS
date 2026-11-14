@@ -12,6 +12,7 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 from runtime import software_update as protocol
+from runtime import update_network
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -71,9 +72,12 @@ def prepare(instance, archive, digest):
     return root, release
 
 
-def fixture_download(monkeypatch, worker, archive, digest):
-    def download(version, destination):
+def fixture_download(monkeypatch, worker, archive, digest, transports=None):
+    def download(version, destination, *, opener):
         assert version == 'test.next'
+        assert opener is not None
+        if transports is not None:
+            assert transports == [opener]
         target = Path(destination) / protocol.ASSET
         shutil.copyfile(archive, target)
         return target, digest
@@ -82,9 +86,18 @@ def fixture_download(monkeypatch, worker, archive, digest):
 
 def test_worker_installs_verified_archive_records_digest_and_removes_downloads(worker, instance, tmp_path, monkeypatch):
     archive, digest = bundle(tmp_path)
+    profile = {'mode': 'socks5', 'host': '192.0.2.10', 'port': 1080,
+               'username': 'fixture-user', 'password': 'synthetic-secret'}
+    update_network.save(instance['storage'] / 'updates', profile, 'test.old')
     root, release = prepare(instance, archive, digest)
-    monkeypatch.setattr(protocol, 'checked_release', lambda _: release)
-    fixture_download(monkeypatch, worker, archive, digest)
+    transports = []
+    def metadata(_, *, opener):
+        handlers = [h for h in opener.handlers if isinstance(h, update_network.TunnelHandler)]
+        assert len(handlers) == 1 and handlers[0].settings == profile
+        transports.append(opener)
+        return release
+    monkeypatch.setattr(protocol, 'checked_release', metadata)
+    fixture_download(monkeypatch, worker, archive, digest, transports)
     calls = []
     def install(args, package):
         assert json.loads((package / 'manifest.json').read_text())['version'] == 'test.next'
@@ -101,6 +114,8 @@ def test_worker_installs_verified_archive_records_digest_and_removes_downloads(w
     assert value['installed_version'] == 'test.next' and value['archive_sha256'] == digest
     assert not (root / 'request.json').exists() and not list(root.glob('work-*'))
     assert (instance['storage'] / 'data/custom_env.ini').read_text() == 'CNAUTO="yes"\n'
+    assert update_network.load(root) == profile
+    assert profile['password'].encode() not in (root / 'status.json').read_bytes()
 
 
 @pytest.mark.parametrize('fault', ['metadata', 'outer', 'inner', 'install'])
@@ -109,7 +124,7 @@ def test_failed_update_leaves_previous_version_and_reports_health(worker, instan
     if fault == 'outer':
         archive.write_bytes(archive.read_bytes() + b'corrupted')
     root, release = prepare(instance, archive, digest)
-    monkeypatch.setattr(protocol, 'checked_release', lambda _: {**release, 'archive_sha256': 'b' * 64} if fault == 'metadata' else release)
+    monkeypatch.setattr(protocol, 'checked_release', lambda _, **kwargs: {**release, 'archive_sha256': 'b' * 64} if fault == 'metadata' else release)
     fixture_download(monkeypatch, worker, archive, digest)
     calls = []
     def install(*_):
@@ -128,7 +143,7 @@ def test_failed_update_leaves_previous_version_and_reports_health(worker, instan
 def test_worker_check_does_not_install_or_stop_dns(worker, instance, monkeypatch):
     root = instance['storage'] / 'updates'
     protocol.queue(root, {'action': 'check'}, 'test.old')
-    monkeypatch.setattr(protocol, 'checked_release', lambda: {'version': 'test.old'})
+    monkeypatch.setattr(protocol, 'checked_release', lambda **kwargs: {'version': 'test.old'})
     monkeypatch.setattr(worker, 'apply', lambda *_: pytest.fail('Checking attempted installation'))
     worker.run(instance, 'fixture')
     value = protocol.read_json(root / 'status.json')
@@ -143,7 +158,7 @@ def test_corrupt_request_is_quarantined_without_path_trigger_loop(worker, instan
     if bad == 'json': (root / 'request.json').write_text('{invalid')
     elif bad == 'mismatched_job': protocol.atomic_json(root / 'request.json', {**job, 'job_id': 'a' * 32})
     else: protocol.atomic_json(root / 'request.json', {**job, 'command': 'not allowed'})
-    monkeypatch.setattr(protocol, 'checked_release', lambda: pytest.fail('Invalid request reached the network'))
+    monkeypatch.setattr(protocol, 'checked_release', lambda **kwargs: pytest.fail('Invalid request reached the network'))
     worker.run(instance, 'fixture')
     assert not (root / 'request.json').exists() and (root / 'rejected-request.json').exists()
     assert protocol.read_json(root / 'status.json')['phase'] == 'failed'

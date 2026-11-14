@@ -21,7 +21,7 @@ from installation import read_object, recorded, installation_summary, provenance
 app = base.app
 if os.environ.get("SUITE_DIST_DIR"):
     app.static_folder = os.environ["SUITE_DIST_DIR"]
-VERSION = "0.1.0-dev.lovestdns-native.20261114.query1.4"
+VERSION = "0.1.0-dev.lovestdns-native.20261114.query1.5"
 STATE_DIR = Path(os.environ.get("SUITE_STATE_DIR", "/var/lib/paopaodns-suite"))
 RUN_DIR = Path(os.environ.get("SUITE_RUN_DIR", "/run/paopaodns-suite"))
 history = History(STATE_DIR)
