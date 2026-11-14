@@ -15,10 +15,20 @@ import urllib.parse
 import urllib.request
 
 REPOSITORY = 'Lovest20018/LovestDNS'
-DEFAULT_VERSION = '0.1.0-dev.lovestdns-native.20261104.11'
+DEFAULT_VERSION = '0.1.0-dev.lovestdns-native.20261114.query1.3'
 ASSET = 'lovestdns-native-debian-amd64.tar.gz'
 MAX_ARCHIVE = 256 * 1024 * 1024
 MAX_EXTRACTED = 768 * 1024 * 1024
+
+
+class GitHubRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, message, headers, newurl):
+        parsed = urllib.parse.urlsplit(newurl)
+        if (parsed.scheme != 'https' or parsed.hostname not in {'api.github.com', 'github.com',
+                'release-assets.githubusercontent.com', 'objects.githubusercontent.com'}
+                or parsed.port not in {None, 443} or parsed.username or parsed.password):
+            raise ValueError('Unsafe release download redirect')
+        return super().redirect_request(request, fp, code, message, headers, newurl)
 
 
 def fetch(url, target, limit):
@@ -27,7 +37,7 @@ def fetch(url, target, limit):
         raise ValueError('Release downloads must use GitHub HTTPS')
     request = urllib.request.Request(url, headers={'User-Agent': 'LovestDNS-installer',
                                                   'Accept': 'application/octet-stream'})
-    with urllib.request.urlopen(request, timeout=60) as response, Path(target).open('wb') as output:
+    with urllib.request.build_opener(GitHubRedirect()).open(request, timeout=60) as response, Path(target).open('wb') as output:
         total = 0
         while chunk := response.read(1024 * 1024):
             total += len(chunk)

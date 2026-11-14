@@ -1,6 +1,6 @@
 # LovestDNS 集成版开发说明
 
-当前应用版本：`0.1.0-dev.lovestdns-native.20261114.query1.2`，包含[真实查询观测 MVP](../docs/query-recording-mvp-2026-11-12.md)、采集时钟修复与六项交互修复；同源原生预发布包已公开，固定源码、归档摘要和同包验证见[query1.2 发行记录](../docs/native-query12-release-2026-11-14.md)。此前[主线记录](../docs/query11-mainline-2026-11-14.md)保留 query1.1 阶段的验证范围。默认安装入口仍固定 `.11`，选择本预发布需显式传入版本。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md) 与源码构建的 Docker 集成版。固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)，源码分区见 [结构说明](../docs/project-layout.md)。
+当前应用源码版本：`0.1.0-dev.lovestdns-native.20261114.query1.3`，在[query1.2](../docs/native-query12-release-2026-11-14.md) 的查询记录、采集时钟修复与六项 UI 修复上，新增 Debian 原生版的网页软件更新。检查、确认和结果位于“设置 → 服务信息 → 软件更新”；独立主机任务在网页重启后继续，安装前校验并备份，失败尝试恢复原版本。默认安装入口固定 query1.3，实际公开发行状态以项目首页及 Release 为准。此前[主线记录](../docs/query11-mainline-2026-11-14.md)保留 query1.1 阶段的验证范围。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md) 与源码构建的 Docker 集成版。固定契约、样例、摘要和复核命令见 [v1 提供方基线](../docs/contracts/v1/README.md)，源码分区见 [结构说明](../docs/project-layout.md)。
 
 历史版本号、镜像和容器标识用于对应已有契约和验收证据。API `kind`、报告类型、数据文件名和内部运行路径沿用原值，保持兼容。
 
@@ -19,6 +19,7 @@
 - `/api/v1/` 提供版本化集成接口，支持实例识别、能力发现、只读观测 Token、请求编号、OpenAPI 契约和外部 DNS 联调；接口说明见 [集成 API](../docs/integration-api.md)。
 - 首次接入保留已知用户输入的副本，不执行上游删除底层配置的初始化步骤；保持 `redis_dns_v2.rdb` 和逻辑 DB 0/1。
 - 缓存预算考虑 cgroup 内存上限并预留面板运行空间。
+- Debian 原生版可在网页检查并升级官方安装包；权限限于浏览器管理员与 CSRF，安装进程独立于 Web 服务，结果持久保存，下载不长期累积。Docker 仍使用主机 Compose。
 
 `config_apply` 与 `redis_snapshot` 按实际运行模式和维护服务就绪状态返回；配置中心可预览并应用 custom_mod，系统页可提交受控 Redis 后台快照。初始化环境变量和 Unbound 模板修改仍需按提示重启服务。保存、恢复和任务完成不声称已经验证每条规则生效。能力接口新增 `deployment=native/container` 和实际 DNS 查询端口，原生版 Web 使用同一套管理接口。
 

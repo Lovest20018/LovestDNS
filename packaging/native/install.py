@@ -151,6 +151,7 @@ Environment=SUITE_STATE_DIR={state}
 Environment=SUITE_RUN_DIR={p['run']}
 Environment=SUITE_DIST_DIR={current}/dist
 Environment=SUITE_BUILD_INFO={current}/build-info.json
+Environment=LOVESTDNS_UPDATE_DIR={p['storage']}/updates
 Environment=DNS_TEST_PORT={config['SUITE_DNS_PORT']}
 Environment=DNS_TEST_SERVER={dns_probe}
 Environment=PYTHONPATH={current}/app/backend:{current}/app/base:{current}/app
@@ -309,6 +310,63 @@ def installation_receipt(p, release, archive_sha256=None):
     return receipt
 
 
+def configure_online_updater(p, release):
+    """The privileged installer owns the fixed worker units and protocol path."""
+    root = p['storage'] / 'updates'
+    path_unit = p['unit'].with_name(p['name'] + '-update.path')
+    worker_unit = p['unit'].with_name(p['name'] + '-update.service')
+    if not (release / 'app/native/update_worker.py').is_file():
+        # A rollback to a release predating browser updates must not leave a
+        # watcher invoking code that is no longer part of the active package.
+        command(['systemctl', 'disable', '--now', path_unit.name], check=False, capture=True)
+        (root / 'protocol.json').unlink(missing_ok=True)
+        return
+    root.mkdir(exist_ok=True, mode=0o700)
+    instance = p['name'].removeprefix('lovestdns').removeprefix('-')
+    invocation = f'{release}/venv/bin/python -m native.update_worker --instance {shlex.quote(instance)}'
+    atomic(worker_unit, f"""[Unit]
+Description=LovestDNS verified software update ({p['name']})
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+Environment=PYTHONPATH={release}/app
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart={invocation}
+ExecStopPost={invocation} --recover
+TimeoutStartSec=1200
+TimeoutStopSec=300
+KillMode=mixed
+UMask=0077
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=read-only
+ProtectSystem=strict
+ReadWritePaths={p['home']} {p['storage']} {p['config'].parent} /etc/systemd/system /usr/local/sbin
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+MemoryMax=768M
+CPUQuota=100%
+""", 0o644)
+    atomic(path_unit, f"""[Unit]
+Description=LovestDNS software update requests ({p['name']})
+
+[Path]
+PathExists={root}/request.json
+Unit={worker_unit.name}
+
+[Install]
+WantedBy=multi-user.target
+""", 0o644)
+    atomic(root / 'protocol.json', json.dumps({'schema_version': 1, 'service_name': worker_unit.name}))
+    command(['systemctl', 'daemon-reload'])
+    command(['systemctl', 'enable', '--now', path_unit.name])
+    command(['systemctl', 'is-active', '--quiet', path_unit.name])
+
+
 def install(args, package):
     manifest = verify_package(package)
     p = paths(args.instance)
@@ -348,7 +406,8 @@ def install(args, package):
         changed = False
         try:
             if old:
-                size = sum(f.stat().st_size for f in p['storage'].rglob('*') if f.is_file() and 'backups' not in f.relative_to(p['storage']).parts)
+                size = sum(f.stat().st_size for name in ('data', 'state')
+                           for f in (p['storage'] / name).rglob('*') if f.is_file())
                 if shutil.disk_usage(p['storage']).free < size * 2 + 256 * 1024 * 1024:
                     raise ValueError('Not enough space for a consistent rollback backup')
                 if was_active:
@@ -374,6 +433,7 @@ def install(args, package):
             command(['systemctl', 'reset-failed', p['name'] + '.service'], check=False, capture=True)
             command(['systemctl', 'enable', '--now', p['name'] + '.service'])
             result = healthy(p)
+            configure_online_updater(p, release)
             if backup:
                 atomic(p['home'] / 'rollback.json', json.dumps({'backup': str(backup)}))
             ctl = '#!/bin/sh\nexec /usr/bin/python3 ' + shlex.quote(str(p['home'] / 'current/install.py')) + ' --instance ' + shlex.quote(args.instance) + ' "$@"\n'
@@ -408,6 +468,7 @@ def restore(p, backup):
     shutil.copyfile(backup / 'service.env', p['config'])
     shutil.copyfile(backup / 'service.unit', p['unit'])
     switch(p['home'] / 'current', old)
+    configure_online_updater(p, old)
     command(['systemctl', 'daemon-reload'])
     command(['systemctl', 'reset-failed', p['name'] + '.service'], check=False, capture=True)
 

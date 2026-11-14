@@ -99,6 +99,7 @@ def refresh(base, expected, frontend, output):
             for path in target.rglob('*.py'):
                 path.write_bytes(path.read_bytes().replace(b'\r\n', b'\n'))
         shutil.rmtree(package / 'dist')
+        (package / 'app/native/release_download.py').write_bytes((ROOT / 'install.py').read_bytes().replace(b'\r\n', b'\n'))
         shutil.copytree(frontend, package / 'dist')
         for relative, destination in (('web/backend/app.py', 'app/base/app.py'), ('packaging/native/install.py', 'install.py'),
                                       ('docs/lovestdns-native-deployment.md', 'README.md')):

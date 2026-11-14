@@ -21,7 +21,7 @@ from installation import read_object, recorded, installation_summary, provenance
 app = base.app
 if os.environ.get("SUITE_DIST_DIR"):
     app.static_folder = os.environ["SUITE_DIST_DIR"]
-VERSION = "0.1.0-dev.lovestdns-native.20261114.query1.2"
+VERSION = "0.1.0-dev.lovestdns-native.20261114.query1.3"
 STATE_DIR = Path(os.environ.get("SUITE_STATE_DIR", "/var/lib/paopaodns-suite"))
 RUN_DIR = Path(os.environ.get("SUITE_RUN_DIR", "/run/paopaodns-suite"))
 history = History(STATE_DIR)
@@ -481,3 +481,5 @@ from api_v1 import register
 register(sys.modules[__name__])
 from browser_auth import register as register_browser_auth
 register_browser_auth(sys.modules[__name__])
+from software_update import register as register_software_update
+register_software_update(sys.modules[__name__])

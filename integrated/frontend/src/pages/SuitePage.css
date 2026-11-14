@@ -23,3 +23,12 @@
 
 .suite-settings-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 @media(max-width:1000px) { .suite-settings-grid { grid-template-columns:1fr; } }
+.suite-software-versions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-bottom: 14px; }
+.suite-software-versions > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.suite-software-versions span { color: var(--suite-muted); font-size: 12px; }
+.suite-software-versions strong { overflow-wrap: anywhere; font-size: 14px; }
+.suite-update-notes { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 13px; max-height: 280px; overflow: auto; }
+.suite-update-actions { margin-top: 16px; }
+.suite-update-confirm { padding: 14px; border: 1px solid var(--suite-line); border-radius: 10px; }
+.suite-update-confirm > div { display: flex; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 640px) { .suite-software-versions { grid-template-columns: 1fr; } }

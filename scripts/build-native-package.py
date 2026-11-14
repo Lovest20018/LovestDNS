@@ -130,6 +130,7 @@ def main():
         server = app / 'backend/server.py'
         server.write_text(re.sub(r'^VERSION = "[^"]+"', f'VERSION = "{version}"', server.read_text(), count=1, flags=re.M))
         shutil.copytree(ROOT / 'packaging/native/runtime', app / 'native', ignore=shutil.ignore_patterns('__pycache__'))
+        shutil.copyfile(ROOT / 'install.py', app / 'native/release_download.py')
         (app / 'base').mkdir()
         shutil.copyfile(ROOT / 'web/backend/app.py', app / 'base/app.py')
         shutil.copytree(args.frontend_dist, package / 'dist')

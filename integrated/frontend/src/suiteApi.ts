@@ -131,6 +131,44 @@ export async function externalApiSetting(enabled?: boolean): Promise<boolean> {
   return body.enabled;
 }
 
+export interface SoftwareRelease {
+  version: string; archive_sha256: string; archive_bytes: number;
+  prerelease: boolean; published_at: string; url: string; notes: string;
+}
+export type SoftwareUpdatePhase = 'idle' | 'queued' | 'checking' | 'ready' | 'downloading' | 'verifying' | 'installing' | 'succeeded' | 'failed';
+export interface SoftwareUpdateStatus {
+  schema_version: 1; supported: boolean; current_version: string; reason?: string;
+  phase?: SoftwareUpdatePhase; job_id?: string | null; action?: 'check' | 'apply' | null;
+  release?: SoftwareRelease | null; checked_at?: number | null; message?: string;
+  installed_version?: string; previous_version_healthy?: boolean; healthy?: boolean;
+}
+export async function softwareUpdate(body?: { action: 'check' } | { action: 'apply'; version: string; archive_sha256: string }, signal?: AbortSignal): Promise<SoftwareUpdateStatus> {
+  const deadline = AbortSignal.timeout(15000);
+  const response = await fetch('/auth/software-update', {
+    method: body ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': browserCsrf },
+    body: body ? JSON.stringify(body) : undefined, signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+  });
+  if (response.status === 401) expireSession();
+  const value = await response.json();
+  if (!response.ok) throw new Error(value.error ?? '无法读取软件更新状态');
+  const release = value?.release;
+  const releaseValid = release == null || (typeof release === 'object'
+    && typeof release.version === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,119}$/.test(release.version)
+    && typeof release.archive_sha256 === 'string' && /^[a-f0-9]{64}$/.test(release.archive_sha256)
+    && typeof release.archive_bytes === 'number' && Number.isSafeInteger(release.archive_bytes) && release.archive_bytes > 0
+    && typeof release.prerelease === 'boolean' && typeof release.notes === 'string'
+    && typeof release.published_at === 'string'
+    && release.url === `https://github.com/Lovest20018/LovestDNS/releases/tag/v${release.version}`);
+  if (!value || value.schema_version !== 1 || typeof value.supported !== 'boolean' || typeof value.current_version !== 'string'
+      || (value.reason !== undefined && typeof value.reason !== 'string')
+      || (value.supported && (!releaseValid || (value.message !== undefined && typeof value.message !== 'string')
+          || !['idle', 'queued', 'checking', 'ready', 'downloading', 'verifying', 'installing', 'succeeded', 'failed'].includes(value.phase)))) {
+    throw new Error('软件更新状态格式无效');
+  }
+  return value;
+}
+
 export interface RuntimeSnapshot {
   schema_version: 1; sampled_at: number; interval_seconds?: number; core_healthy: boolean; ready: boolean;
   error?: string;

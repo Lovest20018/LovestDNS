@@ -16,7 +16,7 @@ sudo lovestdnsctl health
 sudo lovestdnsctl password
 ```
 
-根目录 `install.py` 默认选择已经验收的 `.11`，按精确标签 `v0.1.0-dev.lovestdns-native.20261104.11` 下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`，核对归档、路径、清单和载荷后再执行包内安装器。摘要与归档来自同一发布渠道，可检测传输损坏，不代替对发布账号的信任。可使用 `--version <不含v的版本>` 选择其他已发布版本；预发布包仍需先验收自己的环境。
+根目录 `install.py` 默认选择 `0.1.0-dev.lovestdns-native.20261114.query1.3`，按精确标签下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`，核对归档、路径、清单和载荷后再执行包内安装器。摘要与归档来自同一发布渠道，可检测传输损坏，不代替对发布账号的信任。可使用 `--version <不含v的版本>` 选择其他已发布版本；发行状态以项目首页及对应 Release 为准，预发布包仍需先验收自己的环境。
 
 只下载且验证、不安装：
 
@@ -30,7 +30,7 @@ python3 install.py --download-only ./verified-release
 sudo python3 install.py --package ./lovestdns-native-debian-amd64.tar.gz --sha256 <已核对的SHA-256> --config ./lovestdns-install.env
 ```
 
-`--instance validation` 创建命名实例，`--import-data /path/to/offline-copy` 只用于首次导入一致化的独立副本。安装入口不会替你停止旧 DNS 或 Docker，也不会为迁移读取旧生产目录。现有 LovestDNS 仍建议使用下文的控制命令升级和回退。
+`--instance validation` 创建命名实例，`--import-data /path/to/offline-copy` 只用于首次导入一致化的独立副本。安装入口不会替你停止其他 DNS 或 Docker，也不会为迁移读取旧生产目录。已有 LovestDNS 的同实例升级会执行下文的备份和短暂重启流程。
 
 ## 开发者构建安装包
 
@@ -59,7 +59,7 @@ python3 -m venv .build/native-tools
 ```sh
 sha256sum -c lovestdns-native.tar.gz.sha256
 tar -xzf lovestdns-native.tar.gz
-cd lovestdns-0.1.0-dev.lovestdns-native.20261104.11
+cd lovestdns-0.1.0-dev.lovestdns-native.20261114.query1.3
 cp native.env.example /root/lovestdns-install.env
 chmod 600 /root/lovestdns-install.env
 nano /root/lovestdns-install.env
@@ -91,6 +91,7 @@ sudo lovestdns-validationctl health
 | `/var/lib/lovestdns/data` | 完整 DNS 配置、规则、Redis RDB |
 | `/var/lib/lovestdns/state` | 面板历史、实例身份、任务及轮转日志 |
 | `/var/lib/lovestdns/backups` | 升级前的一致备份和回退时保留的被替换数据 |
+| `/var/lib/lovestdns/updates` | 网页更新任务、结果与最多五份私有安装日志；下载文件临时保存 |
 
 systemd 仅在服务自己的挂载命名空间内将持久化数据映射到 `/data`，并隔离 `/tmp`。不会修改宿主机 `/etc/resolv.conf`；内部 DNSCrypt 与 Unbound 监听回环地址，DNS 对外地址由实例配置决定。Web 不挂 Docker socket。
 
@@ -99,6 +100,22 @@ systemd 仅在服务自己的挂载命名空间内将持久化数据映射到 `/
 Web 编辑的 `custom_env.ini` 用于 DNS 参数与规则变量。原生版禁止其覆盖 PATH、Python/动态加载器变量及服务运行目录、绑定端口、Web 认证等保留变量；这些参数应在 `/etc/lovestdns/lovestdns.env` 中修改，再执行控制命令重启。普通自定义规则变量仍可使用。
 
 ## 日常维护、升级与回退
+
+从 query1.3 起，Debian 原生安装包含网页更新助手。在 **设置 → 服务信息 → 软件更新** 点击“检查更新”，核对版本及发行说明，再点击“更新到此版本 → 确认更新并重启”。页面会区分下载、校验、备份安装和最终结果；重启期间继续重连，关闭网页不会取消主机任务，重新进入此页可查看结果。没有后台自动升级。
+
+检查更新从官方 `Lovest20018/LovestDNS` 最近 20 个发行版中选择发布时间最新、同时包含 amd64 原生包和 SHA-256 文件的公开版本，包含明确标注的预发布版。只接受固定仓库和精确标签；确认时绑定已检查的归档摘要，安装前重新核对发行信息、外层归档及包内每个文件。版本列表或下载失败会如实报错，尚未安装的失败不停止 DNS。
+
+首次从不含更新助手的版本迁移，需要通过当前安装入口升级一次，并保留实际实例名；之后可在前端完成同实例软件升级：
+
+```sh
+sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.3 --instance <实例名>
+```
+
+默认实例省略 `--instance`。Docker 部署继续由宿主机 Compose 管理。网页更新仅允许已修改初始密码的管理员会话与 CSRF 校验，不接受外部管理/只读 Token、任意 URL、主机命令或其他实例参数。更新开始后暂停配置、认证设置和维护任务写入，DNS 查询与状态读取仍可用；有未保存草稿时请先保存或还原。
+
+原生安装器为当前实例安装独立的 `lovestdns[-实例名]-update.path` 和 `-update.service`：前者监听私有更新请求，后者运行包校验与原生安装器。助手独立于 DNS/Web 服务，按实例限制可写目录；任务与结果位于 `updates`，不随 `state` 回退而丢失。正常结束时清除临时下载，保留最近五份安装日志和原有升级备份。意外中断不会自动重放安装；结果恢复会重新核对当前版本、摘要收据与健康状态。磁盘不足会在停止 DNS 前拒绝安装，备份仍需由主机按保留策略管理。
+
+控制命令与显式回退继续可用：
 
 ```sh
 sudo lovestdnsctl status
