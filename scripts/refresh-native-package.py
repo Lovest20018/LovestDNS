@@ -33,7 +33,13 @@ def extract(archive, target):
             modes['/'.join(path.parts[1:])] = item.mode & 0o777
         if len(roots) != 1:
             raise ValueError('Expected one native package root')
-        source.extractall(target, filter='data')
+        if callable(getattr(tarfile, 'data_filter', None)):
+            source.extractall(target, filter='data')
+        else:
+            # Debian 12's original Python 3.11.2 has no extraction filters.
+            # Entries above are restricted to regular files/directories under
+            # one root; links, special files and parent traversal are rejected.
+            source.extractall(target)
     return target / roots.pop(), modes
 
 
@@ -66,7 +72,7 @@ def refresh(base, expected, frontend, output):
     if ui['source_commit'] != commit:
         raise ValueError('Frontend and refresh must use the same source commit')
     installer = runpy.run_path(str(ROOT / 'packaging/native/install.py'))
-    version = re.search(r'^VERSION = "([^"]+)"', (ROOT / 'integrated/backend/server.py').read_text(), re.M)[1]
+    version = re.search(r'^VERSION = "([^"]+)"', (ROOT / 'integrated/backend/server.py').read_text(encoding='utf-8'), re.M)[1]
     with tempfile.TemporaryDirectory(prefix='native-refresh-') as temporary:
         package, modes = extract(base, Path(temporary))
         old = installer['verify_package'](package)

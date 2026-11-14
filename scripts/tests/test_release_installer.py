@@ -2,6 +2,7 @@
 import hashlib
 import importlib.util
 import io
+import inspect
 import json
 from pathlib import Path
 import subprocess
@@ -75,7 +76,8 @@ def test_debian_12_original_python_without_tar_extraction_filters(monkeypatch, t
     original = tarfile.TarFile.extractall
     monkeypatch.delattr(tarfile, 'data_filter', raising=False)
     def legacy_extractall(self, path='.', members=None, *, numeric_owner=False):
-        return original(self, path, members=members, numeric_owner=numeric_owner, filter=lambda member, path: member)
+        extra = {'filter': lambda member, path: member} if 'filter' in inspect.signature(original).parameters else {}
+        return original(self, path, members=members, numeric_owner=numeric_owner, **extra)
     monkeypatch.setattr(tarfile.TarFile, 'extractall', legacy_extractall)
     root = installer.unpack(package, digest, tmp_path / 'output')
     assert (root / 'install.py').is_file()

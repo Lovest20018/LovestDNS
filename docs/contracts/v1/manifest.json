@@ -217,7 +217,7 @@
       "scripts/build-components.py": "6d3a0ed57bf7f4f1d08812e70390562993787e4890e6c993d290d04838298be4",
       "scripts/build-dnscrypt-container-trial.py": "3acd5e624dca6a090b82ac805b7ec04c00b1ed72336ca3eb44ed228f1994814c",
       "scripts/build-dnscrypt-diagnostic.py": "4be34d5e1c01deb2b4df74211511c312b88c7bbccddfea5ca3fdf339869ee905",
-      "scripts/build-dnscrypt-native-trial.py": "fca2a28e54a273431d5d6e6bdb9471a38b400b51df1a7e3fa794a0391f621b7c",
+      "scripts/build-dnscrypt-native-trial.py": "fdfec83853a4b58d8c425c97f46231933fe365be13691982d32d405308d9fdc3",
       "scripts/build-dnscrypt-source.py": "4fb413a80e46cb255292930510f76c75e49e865440969737f8f20b306f5dc1f4",
       "scripts/build-dnsperf-trace.py": "3a8aececd115d63538ff95e8851155f047a2829bd7df48414d4a532c5cc2e0d7",
       "scripts/build-integrated-ui.py": "06c2d35d6a7d62f4f014d1d04d4c48c5a5d4a2097c711e53ff4b2e2833777980",
@@ -243,7 +243,7 @@
       "scripts/prepare-cachedb-upgrade.py": "6b7d82b1251c3718ee091759ce3d12539378717b469fe8657830c024ce62e80e",
       "scripts/profile-dnscrypt.py": "e0675d61c38e853072d74c6dcf3e21b40fc9bc957d5d7415325b4fab966506db",
       "scripts/query-records-fixture.py": "08e37c4da47d580a9799ebf64fc291fcef091de3c0e56e988c173bdf44317c69",
-      "scripts/refresh-native-package.py": "0f3313194d1d5f817d855b8f275f35b49075153f33e801da4f458b51df08bc03",
+      "scripts/refresh-native-package.py": "447399b9f34873114231e65d67d5b22c3ed61f7786dabd681d176c0b202d196f",
       "scripts/report-dns-benchmark.py": "85ad49fb14ac39e541ea967facbc0ccb1bdf7ec7ed857e5b253707e30a3ff98f",
       "scripts/report-dnscrypt-chain.py": "4d168687dbb8e8d4db0c6890b3b7b25f0d241bc6de2985a71e2f4959a1575c6e",
       "scripts/test-cache-compatibility.py": "8e7d90862cd27effb031f68a2ce4159d3e39ce8f2296ee410c2f089a5968c81e",
@@ -294,7 +294,7 @@
       "scripts/tests/test_native_rule_updates.py": "d404054e061c2994228eb6dd176cb39b4b10d10143bb64a6f39a212a95b9173b",
       "scripts/tests/test_prepare_frontend.py": "c7fca37cb74ff1648374ca101be3ebebe4fa5d795315d9cc56d2057a6419bf49",
       "scripts/tests/test_public_privacy.py": "e2250b33558ad167ae9549a1eeb93a9042c5deaa5cb115e70766515aca68b50f",
-      "scripts/tests/test_release_installer.py": "26bdd7291f6b751e6e6f564c30395c96eb40e9b75f769d3679177a5894fc08d7",
+      "scripts/tests/test_release_installer.py": "8c3d6acd84e20fdecb3f525a5b8f661b4ae230de2668432dab61f5512df1547f",
       "scripts/tests/test_standalone_freeze.py": "2b2a3685cd33c8d399cf206845a294cd02e71fcbd9edee720c36c9c94f2d9c4e",
       "scripts/ui-optimization-fixture.py": "380ecd560c22269bdae78a428c6dc720718c444fb3c84f5b92c81ea4cd38a9b2",
       "scripts/validate-query-recording.py": "45dee1a16753955045361f43b2c8fcc117152c772a7a607361a35a93d027acc4",
@@ -362,7 +362,7 @@
       "packaging/components.lock.json",
       "packaging/dnscrypt-source.lock.json"
     ],
-    "sha256": "f907fdc49a4c16fa84a9927154e63a346531c3dc7cb1dc0d2b09b85d5896ca13"
+    "sha256": "f68ea794e14ed1d0261e634c4bf9bad33e9d00e86cd3bd4042e501c07db77af7"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

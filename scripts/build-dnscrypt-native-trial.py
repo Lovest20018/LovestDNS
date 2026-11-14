@@ -33,7 +33,12 @@ def extract_base(archive, target):
             roots.add(name.parts[0])
         if len(roots) != 1:
             raise ValueError('Expected one native package root')
-        src.extractall(target, filter='data')
+        if callable(getattr(tarfile, 'data_filter', None)):
+            src.extractall(target, filter='data')
+        else:
+            # Python 3.11.2 on Debian 12 predates extraction filters; all
+            # entries above have already been limited to files/directories.
+            src.extractall(target)
     package = target/roots.pop()
     manifest = installer['verify_package'](package)
     if manifest.get('components') or (package/'components').exists():
