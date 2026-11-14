@@ -2,11 +2,11 @@
 
 LovestDNS 是基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS) 的 DNS 服务与 Web 管理面板。DNS 核心、面板、采集器和维护服务可通过 Debian 原生 systemd 服务或 Docker 集成镜像独立运行。
 
-当前预发布为 [home2.1：组件更新与新控制台](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261112.home2.1)（Debian amd64）。Redis 7.2.17、Unbound 1.26.2、DNSCrypt 2.1.20 combined 与新控制台一同交付，保留定制 MosDNS。公开源码、安装包摘要及实际下载验证见[发行记录](docs/native-home21-release-2026-11-12.md)。真实查询事件、来源 IP 和逐请求分流仍待后续；本次尚未宣称稳定版或全面提速。
+最新公开安装包为 [home2.1：组件更新与新控制台](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261112.home2.1)（Debian amd64）。Redis 7.2.17、Unbound 1.26.2、DNSCrypt 2.1.20 combined 与新控制台一同交付，保留定制 MosDNS。公开源码、安装包摘要及实际下载验证见[发行记录](docs/native-home21-release-2026-11-12.md)。该安装包不含下述查询记录功能；本项目尚未宣称稳定版或全面提速。
 
 `install.py` 默认下载仍固定 `.20261104.11`。选择新版时使用最新安装脚本并显式传入 `--version 0.1.0-dev.lovestdns-native.20261112.home2.1`；首次配置和实例参数见下方及[部署说明](docs/lovestdns-native-deployment.md)。原验收包与最终公开包摘要不同，以对应 Release 的校验文件为准。
 
-当前开发源码为 `20261112.query1`，新增默认关闭、有容量上限的[真实入口查询记录](docs/query-recording-mvp-2026-11-12.md)。该源码候选尚未发布安装包；公开 home2.1 不含此功能。
+当前主线开发版本为 `0.1.0-dev.lovestdns-native.20261113.query1.1`：包含默认关闭、有容量上限的[真实入口查询记录](docs/query-recording-mvp-2026-11-12.md)、慢入口检查导致的误重置修复，以及查询分区、筛选保留、复制回退和手机布局等六项交互修复。源码状态与验证边界见[本轮主线记录](docs/query11-mainline-2026-11-14.md)。query1 / query1.1 本地候选包已有安装与试用验证，尚未上传公开 Release；最新 UI 修复尚未打入原生安装包。
 
 首页、配置流程和监听采集见[首批实现](docs/home-console-implementation-2026-11-11.md)，实例身份、维护命令及来源见[本轮实现](docs/home2-installation-identity-2026-11-12.md)。原候选安装、升级、回退、测试实例部署和 15 分钟功能观察见[home2.1 验收](docs/home21-validation-results-2026-11-12.md)，公开包的额外验证另列在发行记录中。客户端系统 DNS 未切换。
 
@@ -34,6 +34,7 @@ sudo lovestdnsctl password
 - 配置历史、差异、下载与单文件恢复；受控应用 custom_mod，失败时回退旧运行配置。
 - 组件状态、两路 Unbound 的 QPS 与命中率、Redis 内存及持久化信息。
 - DNS 查询、UDP/TCP 链路对照、诊断报告导入导出与受控 Redis 快照任务。
+- 真实入口查询记录默认关闭，仅管理员可查看；来源、域名、类型筛选与分页有界，缓存命中与实际分流路径保持未知。
 - 可选的 `/api/v1/` 外部接入，提供管理/只读 Token、实例身份、能力发现、运行指标和 OpenAPI，默认关闭。
 
 网页登录后，在“服务信息 → API 与 Token”开启或关闭外部接入，设置立即生效并保留。关闭不影响网页和 DNS。原生默认实例的 Token 在主机 `/etc/lovestdns/lovestdns.env` 中配置：`SUITE_READ_TOKEN` 用于只读与诊断，`WEB_UI_TOKEN` 用于配置和维护；它们与网页管理员密码独立。详见 [API 认证与角色](docs/integration-api.md#认证与角色)。

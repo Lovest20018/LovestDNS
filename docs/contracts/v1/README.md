@@ -1,11 +1,11 @@
 # LovestDNS API v1 开发候选基线
 
-候选：`0.1.0-dev.lovestdns-native.20261106.opt5`，API 主版本：`1`。这是可追踪的开发基线，**不是稳定发行**。[公开验证范围](../../verification.md)不含现场主机资料。能力接口提供 `deployment=native/container`，DNS 默认地址与端口由当前部署参数发现；配置条件保存与应用记录由独立能力字段发现。外部 Token 接入默认关闭，开启方式见 [API 说明](../../integration-api.md)。
+候选：`0.1.0-dev.lovestdns-native.20261113.query1.1`，API 主版本：`1`。这是可追踪的开发基线，**不是稳定发行**。本轮源码及安装包范围见[主线记录](../../query11-mainline-2026-11-14.md)，[公开验证范围](../../verification.md)不含现场主机资料。能力接口提供 `deployment=native/container`，DNS 默认地址与端口由当前部署参数发现；配置条件保存与应用记录由独立能力字段发现。外部 Token 接入默认关闭，开启方式见 [API 说明](../../integration-api.md)。
 
 ## 文件与身份
 
 - `openapi.json`：真实 `/api/v1/openapi.json` 处理函数导出的 OpenAPI 3.1 文档，直接返回文档，不包 `data/meta`。
-- `samples.json`：26 组请求/响应，保存路径、HTTP 方法/状态/追踪头、角色与场景来源，不含凭据。
+- `samples.json`：32 组请求/响应，保存路径、HTTP 方法/状态/追踪头、角色与场景来源，不含凭据；包含管理员查询记录与权限拒绝用例。
 - `manifest.json`：API/候选版本、源码文件 SHA-256 清单及汇总、契约/样例摘要及历史运行验收的提交与范围。
 
 在本仓库根目录执行以下命令取得包含该基线的本地提交：
