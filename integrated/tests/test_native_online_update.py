@@ -87,11 +87,12 @@ def fixture_download(monkeypatch, worker, archive, digest, transports=None):
 def test_worker_installs_verified_archive_records_digest_and_removes_downloads(worker, instance, tmp_path, monkeypatch):
     archive, digest = bundle(tmp_path)
     profile = {'mode': 'socks5', 'host': '192.0.2.10', 'port': 1080,
-               'username': 'fixture-user', 'password': 'synthetic-secret'}
+               'username': 'fixture-user', 'password': 'synthetic-secret', 'channel': 'preview'}
     update_network.save(instance['storage'] / 'updates', profile, 'test.old')
     root, release = prepare(instance, archive, digest)
     transports = []
-    def metadata(_, *, opener):
+    def metadata(_, *, opener, channel):
+        assert channel == 'preview'
         handlers = [h for h in opener.handlers if isinstance(h, update_network.TunnelHandler)]
         assert len(handlers) == 1 and handlers[0].settings == profile
         transports.append(opener)

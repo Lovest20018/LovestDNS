@@ -25,9 +25,9 @@ unshare --net sh -c 'ip link set lo up && exec python3 scripts/test-dnscrypt-sou
   --work /tmp/source-function --cases upstream,combined'
 ```
 
-默认覆盖 HTTP/1.1/HTTP/2、直连/实际 SOCKS、三个缓存容量、短 TTL 和冻结 MosDNS 的受控分流；baseline-home 只提供只读组件，测试数据全部新建。该工具不生成 CPU、吞吐或延迟验收结论，详见 [组合验证方案](../../../docs/dnscrypt-combined-plan-2026-11-09.md)。UDP 权限入口可显式选择 `--cases upstream,combined`；没有选择 cache 时不要求 `--cache-candidate`。
+默认覆盖 HTTP/1.1/HTTP/2、直连/实际 SOCKS、三个缓存容量、短 TTL 和冻结 MosDNS 的受控分流；baseline-home 只提供只读组件，测试数据全部新建。该工具不生成 CPU、吞吐或延迟验收结论，详见 [组合验证方案](../../../docs/archive/2026-11/dnscrypt-combined-plan-2026-11-09.md)。UDP 权限入口可显式选择 `--cases upstream,combined`；没有选择 cache 时不要求 `--cache-candidate`。
 
-组合已完成两次可复现构建、30 组功能、八组 UDP 权限及三组源码 race 检查；结论和未覆盖范围见 [组合验证结果](../../../docs/dnscrypt-combined-results-2026-11-09.md)。功能通过不等于默认安装或性能验收通过。
+组合已完成两次可复现构建、30 组功能、八组 UDP 权限及三组源码 race 检查；结论和未覆盖范围见 [组合验证结果](../../../docs/archive/2026-11/dnscrypt-combined-results-2026-11-09.md)。功能通过不等于默认安装或性能验收通过。
 
 ## 原生整包隔离候选
 
@@ -50,9 +50,9 @@ ip netns exec lovestdns-dnstrial python3 scripts/test-dnscrypt-native-trial.py \
 ip netns delete lovestdns-dnstrial
 ```
 
-当前工具按 41 的 Debian 13 amd64、CPU 4–7、768 MiB 实例上限编排，主机依赖必须预先齐全；它不会主动安装系统依赖。夹具须由当前源码重建，显式 `--route both` 支持同一原生模板启动直连/SOCKS 两路，并继续按来源地址分别计数；夹具默认仍只接受 direct。实际 DoH/ALPN、源路径和答案都会核对。范围及隔离要求见 [原生验收方案](../../../docs/dnscrypt-native-trial-plan-2026-11-09.md)。
+当前工具按 41 的 Debian 13 amd64、CPU 4–7、768 MiB 实例上限编排，主机依赖必须预先齐全；它不会主动安装系统依赖。夹具须由当前源码重建，显式 `--route both` 支持同一原生模板启动直连/SOCKS 两路，并继续按来源地址分别计数；夹具默认仍只接受 direct。实际 DoH/ALPN、源路径和答案都会核对。范围及隔离要求见 [原生验收方案](../../../docs/archive/2026-11/dnscrypt-native-trial-plan-2026-11-09.md)。
 
-Debian 13 amd64 实测完成 17 个检查点、434 次查询，包括旧 RDB/新写入复用和两类恢复。输入准备失败记录、包摘要与未完成关卡见 [原生验收结果](../../../docs/dnscrypt-native-trial-results-2026-11-09.md)。默认升级及性能验收仍未放行。
+Debian 13 amd64 实测完成 17 个检查点、434 次查询，包括旧 RDB/新写入复用和两类恢复。输入准备失败记录、包摘要与未完成关卡见 [原生验收结果](../../../docs/archive/2026-11/dnscrypt-native-trial-results-2026-11-09.md)。默认升级及性能验收仍未放行。
 
 ## Debian 12 用户态与容器候选
 
@@ -72,13 +72,13 @@ python3 scripts/test-integrated-container.py \
 
 离线分流模式须另传 `--fixture-container NAME --fixture-dir /new/fixture`；专用夹具容器必须已按 `network=none` 启动，使用 `scripts/fixtures/dnscrypt-container.py`、当前 DoH 夹具与一次性证书生成该目录。项目测试容器共享此隔离 namespace，HTTP 经 `docker exec` 访问，不发布端口；该脚本不会自行拉起或清理调用者提供的夹具。可用 `--cpuset-cpus` 和 `--cpus` 指定试验资源。测试只创建带标记的新 volumes/容器，校验 control 到 combined 及返回 control；RDB 标记保留不是完整 DNS 缓存命中证明。`--evidence-dir` 要求全新私有目录，会在收尾时复制本轮合成数据、配置和日志，再清理测试容器及 volumes；该目录不应公开发布。
 
-本轮范围见 [容器兼容方案](../../../docs/dnscrypt-container-compat-plan-2026-11-09.md)，不能据此批准性能或默认升级。
+本轮范围见 [容器兼容方案](../../../docs/archive/2026-11/dnscrypt-container-compat-plan-2026-11-09.md)，不能据此批准性能或默认升级。
 
-实测 Debian 12 用户态 30 组、13,574 次查询及 Alpine 完整容器升级/显式切回均通过，期间修复了管理面自动重载争锁；原失败、工具修正及未完成关卡见 [兼容结果](../../../docs/dnscrypt-container-compat-results-2026-11-09.md)。
+实测 Debian 12 用户态 30 组、13,574 次查询及 Alpine 完整容器升级/显式切回均通过，期间修复了管理面自动重载争锁；原失败、工具修正及未完成关卡见 [兼容结果](../../../docs/archive/2026-11/dnscrypt-container-compat-results-2026-11-09.md)。
 
 同目录的 `doh-fixture` 与 `fixture-manifest.json` 用于验证实际 HTTP/1.1 / HTTP/2 和 ALPN；`paced-udp` 与 `generator-manifest.json` 固定发送器。发送器用单调时钟安排请求，明显落后时顺延，不追发错过的时隙。
 
-`benchmark-dnscrypt-source.py --help` 列出独立网络命名空间中的运行参数，默认使用新发送器；`--load-generator dnsperf --dnsperf /path/to/dnsperf` 仅用于显式对照原发送器。每组同时检查答案、TLS、实际 SOCKS 路由、协议及内核逐包发送节奏。验证次序和预先固定的门槛见 [普通候选方案](../../../docs/dnscrypt-source-candidate-plan-2026-11-09.md)。
+`benchmark-dnscrypt-source.py --help` 列出独立网络命名空间中的运行参数，默认使用新发送器；`--load-generator dnsperf --dnsperf /path/to/dnsperf` 仅用于显式对照原发送器。每组同时检查答案、TLS、实际 SOCKS 路由、协议及内核逐包发送节奏。验证次序和预先固定的门槛见 [普通候选方案](../../../docs/archive/2026-11/dnscrypt-source-candidate-plan-2026-11-09.md)。
 
 ## DNSCrypt 2.1.20 Linux UDP 接收队列
 
@@ -107,7 +107,7 @@ unshare --net sh -c 'ip link set lo up && exec python3 scripts/test-dnscrypt-udp
   --work /tmp/udp-runtime'
 ```
 
-候选目录应有当前源码锁对应的 upstream/buffer/udp、DoH 夹具及清单，cache 单独指定；缓存候选按同锁 `--variants cache` 显式构建。旧强制小队列组预计会丢包，`passed` 表示复现预定契约，`lossless` 才表示该组没有丢包。20 组普通制品的实际结果和单内核边界见 [权限验证报告](../../../docs/dnscrypt-udp-runtime-results-2026-11-09.md)。没有修改全局 sysctl，也未批准默认安装。
+候选目录应有当前源码锁对应的 upstream/buffer/udp、DoH 夹具及清单，cache 单独指定；缓存候选按同锁 `--variants cache` 显式构建。旧强制小队列组预计会丢包，`passed` 表示复现预定契约，`lossless` 才表示该组没有丢包。20 组普通制品的实际结果和单内核边界见 [权限验证报告](../../../docs/archive/2026-11/dnscrypt-udp-runtime-results-2026-11-09.md)。没有修改全局 sysctl，也未批准默认安装。
 
 ## DNSCrypt 2.1.20 UDP 报文分配
 

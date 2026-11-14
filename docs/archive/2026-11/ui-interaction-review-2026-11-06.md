@@ -223,19 +223,19 @@ TTL 规则需要醒目显示当前 RULES_TTL 值、是否依赖智能分流、�
 
 | 主题 | 位置 |
 | --- | --- |
-| 认证失效与编辑页卸载 | [App.tsx](../integrated/frontend/src/App.tsx#L132)、[unsaved.ts](../integrated/frontend/src/unsaved.ts#L3)、[suiteApi.ts](../integrated/frontend/src/suiteApi.ts#L36) |
-| 模式切换重写内容 | [DomainListPage.tsx](../integrated/frontend/src/pages/DomainListPage.tsx#L192)、[TTL 序列化](../integrated/frontend/src/pages/TtlRulesPage.tsx#L88) |
-| 暂停与过期行为 | [SuiteProvider.tsx](../integrated/frontend/src/SuiteProvider.tsx#L84) |
-| TTL 说明先于操作区 | [TtlRulesPage.tsx](../integrated/frontend/src/pages/TtlRulesPage.tsx#L259) |
-| 分流分类与信息密度 | [DomainListPage.tsx](../integrated/frontend/src/pages/DomainListPage.tsx#L301) |
-| 保存按钮与反馈 | [EditorToolbar.tsx](../integrated/frontend/src/components/EditorToolbar.tsx#L3)、[ConfigFeedback.tsx](../integrated/frontend/src/components/ConfigFeedback.tsx#L4) |
-| 冲突时人工复制合并 | [configSave.ts](../integrated/frontend/src/configSave.ts#L12) |
-| 基础设置共享文件与校验 | [EnvConfigPage.tsx](../integrated/frontend/src/pages/EnvConfigPage.tsx#L33)、[AdvancedConfigPage.tsx](../integrated/frontend/src/pages/AdvancedConfigPage.tsx#L323) |
-| 配置中心与状态含义 | [SuiteConfig.tsx](../integrated/frontend/src/pages/SuiteConfig.tsx#L20)、[ConfigState.tsx](../integrated/frontend/src/components/ConfigState.tsx#L7) |
-| 应用预览、重启与后续操作 | [SuiteMaintenance.tsx](../integrated/frontend/src/components/SuiteMaintenance.tsx#L87) |
-| 状态页排序与日志跳转 | [SuiteDashboard.tsx](../integrated/frontend/src/pages/SuiteDashboard.tsx#L26)、[SuiteSystem.tsx](../integrated/frontend/src/pages/SuiteSystem.tsx#L12) |
-| 诊断上下文与结果 | [SuiteDiagnostics.tsx](../integrated/frontend/src/pages/SuiteDiagnostics.tsx#L13) |
-| 主题、移动端与固定操作条 | [suite.css](../integrated/frontend/src/suite.css#L136)、[SuitePage.css](../integrated/frontend/src/pages/SuitePage.css#L1) |
+| 认证失效与编辑页卸载 | [App.tsx](../../../integrated/frontend/src/App.tsx#L132)、[unsaved.ts](../../../integrated/frontend/src/unsaved.ts#L3)、[suiteApi.ts](../../../integrated/frontend/src/suiteApi.ts#L36) |
+| 模式切换重写内容 | [DomainListPage.tsx](../../../integrated/frontend/src/pages/DomainListPage.tsx#L192)、[TTL 序列化](../../../integrated/frontend/src/pages/TtlRulesPage.tsx#L88) |
+| 暂停与过期行为 | [SuiteProvider.tsx](../../../integrated/frontend/src/SuiteProvider.tsx#L84) |
+| TTL 说明先于操作区 | [TtlRulesPage.tsx](../../../integrated/frontend/src/pages/TtlRulesPage.tsx#L259) |
+| 分流分类与信息密度 | [DomainListPage.tsx](../../../integrated/frontend/src/pages/DomainListPage.tsx#L301) |
+| 保存按钮与反馈 | [EditorToolbar.tsx](../../../integrated/frontend/src/components/EditorToolbar.tsx#L3)、[ConfigFeedback.tsx](../../../integrated/frontend/src/components/ConfigFeedback.tsx#L4) |
+| 冲突时人工复制合并 | [configSave.ts](../../../integrated/frontend/src/configSave.ts#L12) |
+| 基础设置共享文件与校验 | [EnvConfigPage.tsx](../../../integrated/frontend/src/pages/EnvConfigPage.tsx#L33)、[AdvancedConfigPage.tsx](../../../integrated/frontend/src/pages/AdvancedConfigPage.tsx#L323) |
+| 配置中心与状态含义 | [SuiteConfig.tsx](../../../integrated/frontend/src/pages/SuiteConfig.tsx#L20)、[ConfigState.tsx](../../../integrated/frontend/src/components/ConfigState.tsx#L7) |
+| 应用预览、重启与后续操作 | [SuiteMaintenance.tsx](../../../integrated/frontend/src/components/SuiteMaintenance.tsx#L87) |
+| 状态页排序与日志跳转 | [SuiteDashboard.tsx](../../../integrated/frontend/src/pages/SuiteDashboard.tsx#L26)、[SuiteSystem.tsx](../../../integrated/frontend/src/pages/SuiteSystem.tsx#L12) |
+| 诊断上下文与结果 | [SuiteDiagnostics.tsx](../../../integrated/frontend/src/pages/SuiteDiagnostics.tsx#L13) |
+| 主题、移动端与固定操作条 | [suite.css](../../../integrated/frontend/src/suite.css#L136)、[SuitePage.css](../../../integrated/frontend/src/pages/SuitePage.css#L1) |
 
 建议保留的现有基础：文件版本条件写入、配置历史及恢复确认、应用预览校验、维护任务幂等标识、真实采样缺失的表达、移动导航焦点管理，以及“保存不等于已生效”的明确边界。
 
@@ -441,18 +441,18 @@ P01–P03 的最小可靠性修复和故障回归估计另需 **4–6 人日**�
 
 | 主题 | 当前本地位置 |
 | --- | --- |
-| 文件/历史失败窗口 | [server.py](../integrated/backend/server.py#L53)、[历史事务](../integrated/backend/history.py#L35)、[原地写入](../web/backend/app.py#L369) |
-| 任务合并与幂等 | [tasks.py](../integrated/runtime/tasks.py#L63) |
-| 执行线程健康 | [manager.py](../integrated/runtime/manager.py#L51) |
-| 超时、类型和错误 | [suiteApi.ts](../integrated/frontend/src/suiteApi.ts#L22) |
-| 运行状态重复来源 | [SuiteProvider.tsx](../integrated/frontend/src/SuiteProvider.tsx#L45)、[TTL 条件](../integrated/frontend/src/pages/TtlRulesPage.tsx#L107) |
-| 本机持久化范围 | [旧 store](../web/src/store.ts#L151)（当前构建复用，修复应写在覆盖层） |
-| 重复轮询与读取 | [配置轮询](../integrated/frontend/src/components/ConfigState.tsx#L22)、[任务轮询](../integrated/frontend/src/components/SuiteMaintenance.tsx#L44)、[能力读取](../integrated/backend/server.py#L136) |
-| 配置状态摘要与锁 | [config_state.py](../integrated/runtime/config_state.py#L15)、[manager 分发](../integrated/runtime/manager.py#L38) |
-| 重启备份内存 | [restart.py](../packaging/native/runtime/restart.py#L55) |
-| 采样时间与周期 | [observer.py](../integrated/runtime/observer.py#L148) |
-| 构建覆盖与字符串适配 | [prepare_frontend.py](../packaging/integrated/prepare_frontend.py#L7)、[build-integrated-ui.py](../scripts/build-integrated-ui.py#L19) |
-| 当前测试未覆盖的相邻位置 | [历史失败测试](../integrated/tests/test_integrated_api.py#L103)、[任务重试测试](../integrated/tests/test_maintenance.py#L93) |
+| 文件/历史失败窗口 | [server.py](../../../integrated/backend/server.py#L53)、[历史事务](../../../integrated/backend/history.py#L35)、[原地写入](../../../web/backend/app.py#L369) |
+| 任务合并与幂等 | [tasks.py](../../../integrated/runtime/tasks.py#L63) |
+| 执行线程健康 | [manager.py](../../../integrated/runtime/manager.py#L51) |
+| 超时、类型和错误 | [suiteApi.ts](../../../integrated/frontend/src/suiteApi.ts#L22) |
+| 运行状态重复来源 | [SuiteProvider.tsx](../../../integrated/frontend/src/SuiteProvider.tsx#L45)、[TTL 条件](../../../integrated/frontend/src/pages/TtlRulesPage.tsx#L107) |
+| 本机持久化范围 | [旧 store](../../../web/src/store.ts#L151)（当前构建复用，修复应写在覆盖层） |
+| 重复轮询与读取 | [配置轮询](../../../integrated/frontend/src/components/ConfigState.tsx#L22)、[任务轮询](../../../integrated/frontend/src/components/SuiteMaintenance.tsx#L44)、[能力读取](../../../integrated/backend/server.py#L136) |
+| 配置状态摘要与锁 | [config_state.py](../../../integrated/runtime/config_state.py#L15)、[manager 分发](../../../integrated/runtime/manager.py#L38) |
+| 重启备份内存 | [restart.py](../../../packaging/native/runtime/restart.py#L55) |
+| 采样时间与周期 | [observer.py](../../../integrated/runtime/observer.py#L148) |
+| 构建覆盖与字符串适配 | [prepare_frontend.py](../../../packaging/integrated/prepare_frontend.py#L7)、[build-integrated-ui.py](../../../scripts/build-integrated-ui.py#L19) |
+| 当前测试未覆盖的相邻位置 | [历史失败测试](../../../integrated/tests/test_integrated_api.py#L103)、[任务重试测试](../../../integrated/tests/test_maintenance.py#L93) |
 
 ## 15. 实施结果（2026-11-06）
 

@@ -8,17 +8,21 @@ import urllib.request
 
 from runtime import software_update as protocol
 
-DEFAULT = {'mode': 'direct', 'host': '', 'port': None, 'username': '', 'password': ''}
+DEFAULT = {'mode': 'direct', 'host': '', 'port': None, 'username': '', 'password': '', 'channel': 'stable'}
 
 
 def validate(value):
+    if isinstance(value, dict) and 'channel' not in value:
+        value = {**value, 'channel': 'stable'}
     if not isinstance(value, dict) or set(value) != set(DEFAULT):
         raise protocol.UpdateError('更新网络配置格式无效')
+    if not isinstance(value['channel'], str) or value['channel'] not in {'stable', 'preview'}:
+        raise protocol.UpdateError('请选择正式版或预览更新通道')
     mode = value['mode']
     if not isinstance(mode, str) or mode not in {'direct', 'http', 'socks5'}:
         raise protocol.UpdateError('请选择直连、HTTP 或 SOCKS5 代理')
     if mode == 'direct':
-        return dict(DEFAULT)
+        return {**DEFAULT, 'channel': value['channel']}
     if not isinstance(value['host'], str):
         raise protocol.UpdateError('代理地址必须是 IPv4 或 IPv6 地址')
     try:
@@ -51,9 +55,9 @@ def public(value):
 
 
 def save(root, body, current_version):
-    fields = set(DEFAULT) - {'password'}
+    fields = set(DEFAULT) - {'password', 'channel'}
     if (not isinstance(body, dict) or not fields <= set(body)
-            or set(body) - fields - {'password', 'clear_password'}
+            or set(body) - fields - {'password', 'clear_password', 'channel'}
             or not isinstance(body.get('password', ''), str)
             or type(body.get('clear_password', False)) is not bool
             or (body.get('password') and body.get('clear_password'))):
@@ -64,6 +68,7 @@ def save(root, body, current_version):
             raise protocol.UpdateBusy('更新任务进行中，完成后才能修改更新网络')
         old = load(root)
         value = {key: body[key] for key in fields}
+        value['channel'] = body.get('channel', old['channel'])
         # Empty password keeps the existing secret only for the same identity.
         same = all(value[key] == old[key] for key in ('mode', 'host', 'port', 'username'))
         value['password'] = (body.get('password') or (old['password'] if same else ''))

@@ -19,7 +19,7 @@
 | 家用受控试验 | 同一选定组件组合，30 分钟、18,854 条查询正确；保留四次超过 100 ms 的应答及调度停顿 | 私有网络与合成分流不是实际终端接入或长期使用验收 |
 | 局域网预检 | 现有服务高位端口 A 查询通过；53 端口的监听者为 sniffbox，与 15453 的答案不同 | 完整转发策略和实际终端路径未核对，不能将两者当作同一服务 |
 
-证据：[console4.1 部署记录](console-validation-2026-11-09.md)、[组合候选](unbound-completion-results-2026-11-10.md)、[家用受控结果](home-use-results-2026-11-11.md)、[单设备准备状态](home-single-device-trial.md)。
+证据：[console4.1 部署记录](console-validation-2026-11-09.md)、[组合候选](unbound-completion-results-2026-11-10.md)、[家用受控结果](home-use-results-2026-11-11.md)、[单设备准备状态](../../home-single-device-trial.md)。
 
 ## 2. 后续顺序和完成条件
 

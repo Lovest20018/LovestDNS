@@ -33,7 +33,7 @@
 - TypeScript、Vite 构建、ESLint 和冻结 WebUI 的 39 文件核验通过。使用已有开发依赖，不作为可发布包的锁文件复现构建。
 - 隔离本地合成服务与独立 Chrome 完成六入口、单一刷新、保存→确认应用→任务→样本查询、新草稿与远端文件变化使样本失效、配置核对失败、监听预设及 1360/390/320 宽度检查，无页面异常。窄屏顶栏保持单行；桌面浅色和手机深色截图已复核。实际维护操作由合成任务替代，未运行真实 DNS 重启。
 
-浏览器回归已加入 [`scripts/test-home-console.mjs`](../scripts/test-home-console.mjs)，配套 [`scripts/home-console-fixture.py`](../scripts/home-console-fixture.py) 只绑定本机回环地址，文件与任务均在 `.build/` 合成目录。先按开发说明安装测试依赖和构建前端，再运行：
+浏览器回归已加入 [`scripts/test-home-console.mjs`](../../../scripts/test-home-console.mjs)，配套 [`scripts/home-console-fixture.py`](../../../scripts/home-console-fixture.py) 只绑定本机回环地址，文件与任务均在 `.build/` 合成目录。先按开发说明安装测试依赖和构建前端，再运行：
 
 ```sh
 python -m pytest integrated/tests/test_dns_listeners.py integrated/tests/test_runtime.py integrated/tests/test_config_state.py integrated/tests/test_api_contract.py integrated/tests/test_api_v1.py -q

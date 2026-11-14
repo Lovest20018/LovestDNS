@@ -52,6 +52,6 @@ python3 scripts/test-redis-persistence-upgrade.py \
 
 前者用真实 RSA DNSSEC 签名、错误签名、签名过期、CNAME 中间项、A/AAAA/TXT、负应答及两数据库验证新旧查询和回退。签名过期夹具对两版都显式设定零时钟容差，避免默认容差将短期过期继续视为有效；正式配置不变。相关语义见 [Unbound 官方配置文档](https://unbound.docs.nlnetlabs.nl/en/latest/manpages/unbound.conf.html#term-val-sig-skew-min)。后者以受控二进制值和六种 Redis 类型验证新版后台快照、重载、旧版读取以及原快照恢复。
 
-这两个工具只给出各自范围的兼容结果，不签署真实全量历史缓存回放、容量压力、AOF、崩溃恢复或 DNS 性能通过。本轮结果见 [组件收尾记录](component-closure-results-2026-11-10.md)。
+这两个工具只给出各自范围的兼容结果，不签署真实全量历史缓存回放、容量压力、AOF、崩溃恢复或 DNS 性能通过。本轮结果见 [组件收尾记录](archive/2026-11/component-closure-results-2026-11-10.md)。
 
 另有 `scripts/test-cachedb-history-replay.py` 和 [Go 回放辅助工具](../scripts/fixtures/history-replay/README.md)，用于在仅有 loopback 的独立网络命名空间中，从私有准备副本导出完整可核对的问题集，对比新旧普通 Unbound 的真实应答。两数据库、原字节及原时间保持不变；删除标记、无法核对的键、缺失目标和完整 DNS 解码失败分别计数。普通应答比较所有 RR 内容与重数、负应答 authority 和 AD 标志，明确忽略 TTL 及 DNS 名称展示大小写；原始零寿命或 CNAME 中间项的特定刷新差异单列。已识别的解码失败输入要求新旧原始应答逐字节一致，不据此认定报文合法。历史 TTL 已过期不会被改成新鲜数据，该入口也不提供性能或部署批准。

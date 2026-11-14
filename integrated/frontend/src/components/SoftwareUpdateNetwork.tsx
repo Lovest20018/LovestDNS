@@ -4,9 +4,9 @@ import type { UpdateNetwork } from '../suiteApi';
 import { Notice } from './SuiteUI';
 import { useUnsavedChanges } from '../unsaved';
 
-type Draft = { mode: UpdateNetwork['mode']; host: string; port: string; username: string; password: string; clear_password: boolean };
+type Draft = { mode: UpdateNetwork['mode']; channel: UpdateNetwork['channel']; host: string; port: string; username: string; password: string; clear_password: boolean };
 const draftOf = (value: UpdateNetwork): Draft => ({ mode: value.mode, host: value.host, username: value.username,
-  port: value.port?.toString() ?? '', password: '', clear_password: false });
+  channel: value.channel, port: value.port?.toString() ?? '', password: '', clear_password: false });
 
 export default function SoftwareUpdateNetwork({ busy, onDraftChange, onSaved }: {
   busy: boolean; onDraftChange: (dirty: boolean) => void; onSaved: () => Promise<void>;
@@ -33,7 +33,7 @@ export default function SoftwareUpdateNetwork({ busy, onDraftChange, onSaved }: 
     setSaving(true); setError('');
     try {
       const value = await softwareUpdateNetwork(draft.mode === 'direct'
-        ? { mode: 'direct', host: '', port: null, username: '', clear_password: true }
+        ? { mode: 'direct', host: '', port: null, username: '', clear_password: true, channel: draft.channel }
         : { ...draft, port: Number(draft.port) });
       setSaved(value); setDraft(draftOf(value));
       await onSaved();
@@ -42,10 +42,14 @@ export default function SoftwareUpdateNetwork({ busy, onDraftChange, onSaved }: 
   };
   const edit = (value: Partial<Draft>) => setDraft(current => current && { ...current, ...value });
   return <details className="suite-update-network suite-debug">
-    <summary>更新网络 · {saved ? saved.mode === 'direct' ? '直连' : saved.mode === 'http' ? 'HTTP 代理' : 'SOCKS5 代理' : '正在读取'}</summary>
+    <summary>更新网络与通道 · {saved ? saved.channel === 'stable' ? '正式版' : '预览版' : '正在读取'}</summary>
     <p className="suite-muted">仅软件版本检查、校验文件和安装包下载使用此设置。SOCKS5 由代理解析 GitHub 域名。保存后会检查官方发行版，连接失败会保留错误结果。</p>
     {draft && <form onSubmit={event => { event.preventDefault(); void save(); }}>
       <fieldset disabled={busy || saving}>
+        <label>更新通道<select value={draft.channel} onChange={event => edit({ channel: event.target.value as Draft['channel'] })}>
+          <option value="stable">正式版（推荐）</option><option value="preview">包含预览版</option>
+        </select></label>
+        {draft.channel === 'preview' && <p className="suite-muted">预览通道可能包含尚在测试的新版本，确认升级前请阅读发行说明。</p>}
         <label>连接方式<select value={draft.mode} onChange={event => edit({ mode: event.target.value as Draft['mode'] })}>
           <option value="direct">直连</option><option value="http">HTTP 代理（CONNECT）</option><option value="socks5">SOCKS5 代理</option>
         </select></label>

@@ -57,7 +57,13 @@ def preserve_provenance(package, archive_sha256):
             (package / name).rename(history / name)
 
 
-def refresh(base, expected, frontend, output):
+def release_flags(version, release):
+    if release and not re.fullmatch(r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)', version):
+        raise ValueError('Formal releases require an unqualified semantic version')
+    return {'candidate_only': not release, 'release_approved': release, 'performance_acceptance': False}
+
+
+def refresh(base, expected, frontend, output, *, release=False):
     base, frontend, output = map(Path, (base, frontend, output))
     if output.exists() or output.with_suffix(output.suffix + '.sha256').exists():
         raise ValueError('Use a new output filename')
@@ -73,6 +79,7 @@ def refresh(base, expected, frontend, output):
         raise ValueError('Frontend and refresh must use the same source commit')
     installer = runpy.run_path(str(ROOT / 'packaging/native/install.py'))
     version = re.search(r'^VERSION = "([^"]+)"', (ROOT / 'integrated/backend/server.py').read_text(encoding='utf-8'), re.M)[1]
+    flags = release_flags(version, release)
     with tempfile.TemporaryDirectory(prefix='native-refresh-') as temporary:
         package, modes = extract(base, Path(temporary))
         old = installer['verify_package'](package)
@@ -91,7 +98,7 @@ def refresh(base, expected, frontend, output):
         candidate = runpy.run_path(str(ROOT / 'packaging/components/dnscrypt_candidate.py'))['verify'](package / 'components/dnscrypt')
         if components.get('source_candidate', {}).get('binary_sha256') != candidate['binary_sha256']:
             raise ValueError('Base DNSCrypt component metadata differs from its binary')
-        components = {**components, 'lock_sha256': components.get('lock_sha256') or components.get('bundle_lock_sha256')}
+        components = {**components, 'lock_sha256': components.get('lock_sha256') or components.get('bundle_lock_sha256'), **flags}
         bundle = runpy.run_path(str(ROOT / 'packaging/components/bundle.py'))
         if components['lock_sha256'] != bundle['lock_digest'](lock):
             raise ValueError('Base component lock mismatch')
@@ -115,7 +122,7 @@ def refresh(base, expected, frontend, output):
         provenance = {'format_version': 1, 'method': 'verified-components-with-current-app-ui', 'source_commit': commit,
                       'source_sha256': source['sha256'], 'base_archive_sha256': expected, 'base_version': old['version'],
                       'inherited_files': inherited, 'frontend_build_manifest_sha256': digest(frontend / 'build-manifest.json'),
-                      'candidate_only': True, 'release_approved': False, 'performance_acceptance': False}
+                      **flags}
         info = json.loads((package / 'build-info.json').read_text())
         if 'native_trial' in info:
             info['base_native_trial'] = info.pop('native_trial')
@@ -128,7 +135,7 @@ def refresh(base, expected, frontend, output):
                  if p.is_file() and p != package / 'manifest.json'}
         write_json(package / 'manifest.json', {**old, 'version': version, 'files': files, 'components': components,
                                               'installation_receipt_v1': True,
-                                              'candidate_only': True, 'release_approved': False, 'performance_acceptance': False})
+                                              **flags})
         installer['verify_package'](package)
         prefix = 'lovestdns-' + version
         def permissions(item):
@@ -149,5 +156,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('base', 'frontend', 'output'): parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--base-sha256', required=True)
+    parser.add_argument('--release', action='store_true', help='Mark an explicitly approved stable functional release; does not claim performance acceptance')
     args = parser.parse_args()
-    print(json.dumps(refresh(args.base, args.base_sha256, args.frontend, args.output)))
+    print(json.dumps(refresh(args.base, args.base_sha256, args.frontend, args.output, release=args.release)))

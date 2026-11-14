@@ -201,7 +201,9 @@ def release_summary(value):
             'github_digest': selected[ASSET].get('digest')}
 
 
-def checked_release(version=None, *, opener=None):
+def checked_release(version=None, *, opener=None, channel='stable'):
+    if channel not in {'stable', 'preview'}:
+        raise UpdateError('更新通道无效')
     def fetch(url, limit):
         return public_bytes(url, limit, **({'opener': opener} if opener is not None else {}))
     api = f'https://api.github.com/repos/{REPOSITORY}/releases'
@@ -209,15 +211,20 @@ def checked_release(version=None, *, opener=None):
         if not isinstance(version, str) or not VERSION.fullmatch(version):
             raise UpdateError('更新版本无效')
         candidates = [json.loads(fetch(api + '/tags/v' + version, 1024 * 1024))]
+    elif channel == 'stable':
+        candidates = [json.loads(fetch(api + '/latest', 1024 * 1024))]
     else:
         candidates = json.loads(fetch(api + '?per_page=20', 4 * 1024 * 1024))
         if not isinstance(candidates, list):
             raise UpdateError('GitHub 版本列表格式无效')
     releases = [release for candidate in candidates if (release := release_summary(candidate))]
+    if channel == 'stable':
+        releases = [release for release in releases if not release['prerelease']]
     if version is not None:
         releases = [release for release in releases if release['version'] == version]
     if not releases:
-        raise UpdateError('未找到完整发布的 Debian amd64 原生安装包')
+        raise UpdateError('未找到完整发布的正式版 Debian amd64 原生安装包' if channel == 'stable'
+                          else '未找到完整发布的 Debian amd64 原生安装包')
     release = max(releases, key=lambda item: item['published_at'])
     url = f'https://github.com/{REPOSITORY}/releases/download/v{release["version"]}/{ASSET}.sha256'
     checksum = fetch(url, 4096).decode('ascii').strip()

@@ -9,6 +9,15 @@ import pytest
 refresh = runpy.run_path(str(Path(__file__).resolve().parents[2] / 'scripts/refresh-native-package.py'))
 
 
+def test_formal_release_flag_requires_stable_version_and_keeps_performance_unclaimed():
+    assert refresh['release_flags']('0.1.0', True) == {
+        'candidate_only': False, 'release_approved': True, 'performance_acceptance': False}
+    assert refresh['release_flags']('0.1.0-dev.example', False)['candidate_only']
+    for version in ('0.1.0-dev.example', '01.1.0', '1.0', 'v1.0.0'):
+        with pytest.raises(ValueError, match='semantic version'):
+            refresh['release_flags'](version, True)
+
+
 def test_extract_retains_linux_executable_mode(tmp_path):
     archive = tmp_path / 'base.tar'
     with tarfile.open(archive, 'w') as target:

@@ -6,9 +6,9 @@
 
 ## 已完成的剩余代码
 
-- 集成版拥有独立 package/lock，删除未使用的直接 js-yaml 依赖，更新兼容依赖并固定修复后的 minimatch；完整 `npm audit` **0 告警**。构建、Docker、CI 使用集成版清单，冻结独立版 39 文件保持不变。[依赖说明](frontend-dependencies.md)。
+- 集成版拥有独立 package/lock，删除未使用的直接 js-yaml 依赖，更新兼容依赖并固定修复后的 minimatch；完整 `npm audit` **0 告警**。构建、Docker、CI 使用集成版清单，冻结独立版 39 文件保持不变。[依赖说明](../../frontend-dependencies.md)。
 - 两个 Web worker 各四个线程，内核文件锁跨 worker 限制同时两个诊断请求；单查、对照、健康诊断及旧/v1 API 共用额度。容量满快速返回 503/UNAVAILABLE，附 Retry-After。
-- manager 的预览/配置状态共用单个检查名额，零等待队列；维护锁最多等待约 50 ms，任务和能力读取保持独立。[容量说明](control-capacity.md)。
+- manager 的预览/配置状态共用单个检查名额，零等待队列；维护锁最多等待约 50 ms，任务和能力读取保持独立。[容量说明](../../control-capacity.md)。
 - 每次初始化/重启计算 cgroup 当前及祖先剩余内存，扣除维护预留，再应用 CACHE_BUDGET_MB 上限。内存不足时拒绝本次初始化，保留已有回退流程。不会持续调整运行中的缓存。
 - 前端清单和原生包带源码摘要集合。Docker 增加可选 FRONTEND_IMAGE 构建参数；默认仍为 Node 22 Alpine，本次使用官方镜像公开镜像源的固定摘要构建，未修改主机 Docker 配置。
 

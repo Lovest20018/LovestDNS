@@ -81,7 +81,7 @@ def space_for_install(p, package):
         raise protocol.UpdateError('磁盘可用空间不足，尚未停止 DNS 服务；请先清理旧文件')
 
 
-def apply(root, p, value, instance, *, opener):
+def apply(root, p, value, instance, *, opener, channel='stable'):
     if (not isinstance(value.get('version'), str) or not protocol.VERSION.fullmatch(value['version'])
             or not isinstance(value.get('archive_sha256'), str)
             or not protocol.DIGEST.fullmatch(value['archive_sha256'])):
@@ -89,7 +89,7 @@ def apply(root, p, value, instance, *, opener):
     previous = installed_version(p['home'])
     if previous != value['previous_version'] or previous == value['version']:
         raise protocol.UpdateError('当前安装版本已变化，请重新检查更新')
-    release = protocol.checked_release(value['version'], opener=opener)
+    release = protocol.checked_release(value['version'], opener=opener, channel=channel)
     if release['archive_sha256'] != value['archive_sha256']:
         raise protocol.UpdateError('发行版摘要在确认后发生变化，请重新检查更新')
     if shutil.disk_usage(root).free < release['archive_bytes'] * 2 + 384 * 1024 * 1024:
@@ -148,14 +148,15 @@ def run(p, instance):
     if value is None:
         return
     try:
-        transport = update_network.opener(update_network.load(root))
+        profile = update_network.load(root)
+        transport = update_network.opener(profile)
         if value['action'] == 'check':
-            release = protocol.checked_release(opener=transport)
+            release = protocol.checked_release(opener=transport, channel=profile['channel'])
             current = installed_version(p['home'])
             change(root, value, 'ready', '已是最新发布版本' if release['version'] == current else '发现可更新版本',
                    release=release, checked_at=time.time(), finished_at=time.time())
         else:
-            apply(root, p, value, instance, opener=transport)
+            apply(root, p, value, instance, opener=transport, channel=profile['channel'])
     except BaseException as exc:
         message = str(exc) if isinstance(exc, protocol.UpdateError) else (
             '检查更新失败，请稍后重试' if value['action'] == 'check' else '更新未完成，请核对结果后重试')

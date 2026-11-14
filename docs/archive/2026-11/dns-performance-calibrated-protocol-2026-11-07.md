@@ -32,7 +32,7 @@ python3 scripts/report-dns-benchmark.py /path/to/new-comparison/results.json \
   --output /path/to/new-comparison/report.json
 ```
 
-测量需要 Linux `CAP_NET_RAW`；需要创建网络命名空间时另需相应权限。组件与历史缓存兼容说明仍以 [组件构建文档](../packaging/components/README.md) 为准。运行实例、缓存和全局内核缓冲参数不参与这些隔离实验。
+测量需要 Linux `CAP_NET_RAW`；需要创建网络命名空间时另需相应权限。组件与历史缓存兼容说明仍以 [组件构建文档](../../../packaging/components/README.md) 为准。运行实例、缓存和全局内核缓冲参数不参与这些隔离实验。
 
 ## 冷查询较多场景的容量校准
 

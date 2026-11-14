@@ -16,7 +16,7 @@ sudo lovestdnsctl health
 sudo lovestdnsctl password
 ```
 
-根目录 `install.py` 默认选择 `0.1.0-dev.lovestdns-native.20261114.query1.4`，按精确标签下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`，核对归档、路径、清单和载荷后再执行包内安装器。摘要与归档来自同一发布渠道，可检测传输损坏，不代替对发布账号的信任。可使用 `--version <不含v的版本>` 选择其他已发布版本；发行状态以项目首页及对应 Release 为准，预发布包仍需先验收自己的环境。
+根目录 `install.py` 默认选择 `0.1.0`，按精确标签下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`，核对归档、路径、清单和载荷后再执行包内安装器。摘要与归档来自同一发布渠道，可检测传输损坏，不代替对发布账号的信任。可使用 `--version <不含v的版本>` 选择其他已发布版本；发行状态以项目首页及对应 Release 为准，首次部署应先验收自己的环境。
 
 只下载且验证、不安装：
 
@@ -50,7 +50,7 @@ python3 -m venv .build/native-tools
 
 需要将已验收的 DNSCrypt `combined` 源码候选加入独立试用包时，在上述原生打包命令中显式增加 `--dnscrypt-source-candidate /path/to/normal/combined`。该目录必须包含正常静态 amd64 二进制与对应 `source-manifest.json`。打包器核对源码锁、三个补丁、工具链声明和二进制摘要，拒绝诊断构建及其他变体；保留输入组件清单，另写实际载荷清单和补丁来源。该参数不更改默认组件来源，新包保留候选、未批准发布及性能未验收标记。
 
-已有核验过的新组件原生包时，也可用 `scripts/refresh-native-package.py --base <原包> --base-sha256 <可信摘要> --frontend .build/integrated-web/dist --output <新包>` 更新应用与界面。脚本要求当前源码干净且已提交，前端为同提交的 `npm ci` 构建；上游锁、模板适配脚本、组件锁和 Python 依赖改变时拒绝刷新。所有核心、私有库、组件与 wheels 保持原字节，Linux 执行权限从原归档保留；新包分别记录继承来源与当前源码，不声称重新编译了组件。默认安装入口不会改变。
+已有核验过的新组件原生包时，也可用 `scripts/refresh-native-package.py --base <原包> --base-sha256 <可信摘要> --frontend .build/integrated-web/dist --output <新包>` 更新应用与界面。脚本要求当前源码干净且已提交，前端为同提交的 `npm ci` 构建；上游锁、模板适配脚本、组件锁和 Python 依赖改变时拒绝刷新。所有核心、私有库、组件与 wheels 保持原字节，Linux 执行权限从原归档保留；新包分别记录继承来源与当前源码，不声称重新编译了组件。正式发行时可显式增加 `--release`，仅接受不带开发后缀的 `主.次.修订` 版本，并记录功能发行批准；性能验收标记仍为 false，不由该开关推导性能结论。默认省略该参数保持候选标记。
 
 ## 首次安装
 
@@ -59,7 +59,7 @@ python3 -m venv .build/native-tools
 ```sh
 sha256sum -c lovestdns-native.tar.gz.sha256
 tar -xzf lovestdns-native.tar.gz
-cd lovestdns-0.1.0-dev.lovestdns-native.20261114.query1.4
+cd lovestdns-0.1.0
 cp native.env.example /root/lovestdns-install.env
 chmod 600 /root/lovestdns-install.env
 nano /root/lovestdns-install.env
@@ -111,22 +111,22 @@ Web 编辑的 `custom_env.ini` 用于 DNS 参数与规则变量。原生版禁�
 
 从 query1.3 起，Debian 原生安装包含网页更新助手。在 **设置 → 服务信息 → 软件更新** 点击“检查更新”，核对版本及发行说明，再点击“更新到此版本 → 确认更新并重启”。页面会区分下载、校验、备份安装和最终结果；重启期间继续重连，关闭网页不会取消主机任务，重新进入此页可查看结果。没有后台自动升级。
 
-检查更新从官方 `Lovest20018/LovestDNS` 最近 20 个发行版中选择发布时间最新、同时包含 amd64 原生包和 SHA-256 文件的公开版本，包含明确标注的预发布版。只接受固定仓库和精确标签；确认时绑定已检查的归档摘要，安装前重新核对发行信息、外层归档及包内每个文件。版本列表或下载失败会如实报错，尚未安装的失败不停止 DNS。
+默认从官方 `Lovest20018/LovestDNS` 最新正式发行版中检查更新，要求同时包含 amd64 原生包和 SHA-256 文件。主动选择预览通道后，会检查最近 20 个完整发行版，包含明确标注的预发布版。只接受固定仓库和精确标签；确认时绑定已检查的归档摘要，安装前重新核对发行信息、外层归档及包内每个文件。版本列表或下载失败会如实报错，尚未安装的失败不停止 DNS。
 
-### 软件更新专用代理（待发行）
+### 更新网络与通道
 
-当前源码在“软件更新 → 更新网络”提供直连、HTTP CONNECT 和 SOCKS5。填写代理 IPv4/IPv6 地址、端口及可选认证，点击“保存并检查更新”，以真实官方发行版检查结果判断连通性。SOCKS5 将 GitHub 域名交给代理解析；HTTP 使用 CONNECT 后校验目标站点 TLS。版本检查、SHA-256 文件、安装包及允许的 GitHub 重定向全部使用同一配置，代理失败不会转为直连。直连模式不读取主机代理环境变量；命令行独立安装入口仍沿用自己的网络环境。
+v0.1.0 在“软件更新 → 更新网络与通道”提供正式版/预览通道，以及直连、HTTP CONNECT 和 SOCKS5。填写代理 IPv4/IPv6 地址、端口及可选认证，点击“保存并检查更新”，以真实官方发行版检查结果判断连通性。SOCKS5 将 GitHub 域名交给代理解析；HTTP 使用 CONNECT 后校验目标站点 TLS。版本检查、SHA-256 文件、安装包及允许的 GitHub 重定向全部使用同一配置，代理失败不会转为直连。直连模式不读取主机代理环境变量；命令行独立安装入口仍沿用自己的网络环境。
 
 这项配置只供软件更新助手使用，不修改主机默认网关、DNS 分流、规则数据更新器或其他组件的代理。规则更新继续采用上文的既有下载机制。代理端点仅接受 IP 地址；账号密码通过代理协议交给指定服务器，应选择受信任的代理及网络。HTTPS 内容仍端到端验证，认证握手本身不提供额外链路加密。
 
 设置由已修改初始密码的管理员会话和 CSRF 校验写入私有 `updates/network.json`，文件权限为 `0600`，接口不回传密码。相同协议、IP、端口和账号下密码留空保留；修改其中任一项须重新填写认证信息。清除认证时，SOCKS5 同时清除账号；选择直连清除全部代理信息。任务运行期间不可改设置；保存会清除旧的版本检查结果，安装前须重新检查。设置保留在 `updates`，不随 `state` 数据回退恢复旧值。
 
-此功能尚未包含在 query1.4 公开安装包中。源码测试和真实代理出口测试不能代替新制品的安装、网页升级及回退验收；正式发布条件见[发布收尾清单](stable-release-readiness-2026-11-14.md)。
+该功能包含在 v0.1.0；旧 query1.4 及更早版本需要先升级才能使用。正式版通道默认开启，预览通道需显式选择；变更通道会使旧检查失效，重新检查后才能确认安装。验证范围与未完成项见[发行说明](releases/v0.1.0.md)及[已知限制](roadmap.md)。
 
 首次从不含更新助手的版本迁移，需要通过当前安装入口升级一次，并保留实际实例名；之后可在前端完成同实例软件升级：
 
 ```sh
-sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.4 --instance <实例名>
+sudo python3 install.py --version 0.1.0 --instance <实例名>
 ```
 
 默认实例省略 `--instance`。Docker 部署继续由宿主机 Compose 管理。网页更新仅允许已修改初始密码的管理员会话与 CSRF 校验，不接受外部管理/只读 Token、任意 URL、主机命令或其他实例参数。更新开始后暂停配置、认证设置和维护任务写入，DNS 查询与状态读取仍可用；有未保存草稿时请先保存或还原。

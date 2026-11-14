@@ -149,7 +149,7 @@ def test_latest_native_release_includes_prereleases_and_ignores_incomplete_or_dr
         return (('a' * 64 + '  ' + update.ASSET + '\n').encode()
                 if url.endswith('.sha256') else json.dumps(values).encode())
     monkeypatch.setattr(update, 'public_bytes', fetch)
-    result = update.checked_release()
+    result = update.checked_release(channel='preview')
     assert result['version'] == 'test.new' and result['prerelease'] is True and result['archive_sha256'] == 'a' * 64
     assert urls[1] == f'https://github.com/{update.REPOSITORY}/releases/download/vtest.new/{update.ASSET}.sha256'
 
@@ -171,7 +171,7 @@ def test_release_checksum_must_match_github_asset_digest(monkeypatch):
     monkeypatch.setattr(update, 'public_bytes', lambda url, limit: (
         ('a' * 64 + '  ' + update.ASSET).encode() if url.endswith('.sha256') else json.dumps(value).encode()))
     with pytest.raises(update.UpdateError, match='摘要'):
-        update.checked_release('test.new')
+        update.checked_release('test.new', channel='preview')
 
 
 def test_metadata_and_checksum_share_explicit_update_transport(monkeypatch):
@@ -179,10 +179,27 @@ def test_metadata_and_checksum_share_explicit_update_transport(monkeypatch):
     def fetch(url, limit, *, opener):
         seen.append(opener)
         return (('a' * 64 + '  ' + update.ASSET).encode() if url.endswith('.sha256')
-                else json.dumps([release('test.new', '2026-02-01T00:00:00Z')]).encode())
+                else json.dumps(release('test.new', '2026-02-01T00:00:00Z', prerelease=False)).encode())
     monkeypatch.setattr(update, 'public_bytes', fetch)
     assert update.checked_release(opener=marker)['version'] == 'test.new'
     assert seen == [marker, marker]
+
+
+def test_stable_channel_uses_latest_official_release_and_never_accepts_prerelease(monkeypatch):
+    urls = []
+    value = release('0.1.0', '2026-02-01T00:00:00Z', prerelease=False)
+    def fetch(url, limit):
+        urls.append(url)
+        return (('a' * 64 + '  ' + update.ASSET).encode() if url.endswith('.sha256')
+                else json.dumps(value).encode())
+    monkeypatch.setattr(update, 'public_bytes', fetch)
+    assert update.checked_release()['version'] == '0.1.0'
+    assert urls[0].endswith('/releases/latest')
+    value['prerelease'] = True
+    with pytest.raises(update.UpdateError, match='正式版'):
+        update.checked_release()
+    with pytest.raises(update.UpdateError, match='正式版'):
+        update.checked_release('0.1.0')
 
 
 @pytest.mark.parametrize('url', ['http://github.com/file', 'https://other.example/file',

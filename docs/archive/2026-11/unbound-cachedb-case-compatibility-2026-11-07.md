@@ -100,4 +100,4 @@ python3 scripts/test-cachedb-upgrade-rewarm.py \
 
 ## 离线兼容补充
 
-2026-11-10 新增只操作 RDB 副本的 [大小写键兼容准备工具](cachedb-offline-upgrade.md)。保留原字节和时刻，已有小写目标、冲突大小写组、CNAME 中间项等范围分别处理；真实签名、负应答和新旧版回退结果见 [本轮记录](component-closure-results-2026-11-10.md)。上述历史数据和限制不追改，工具本身不表示默认组件已获准升级。
+2026-11-10 新增只操作 RDB 副本的 [大小写键兼容准备工具](../../cachedb-offline-upgrade.md)。保留原字节和时刻，已有小写目标、冲突大小写组、CNAME 中间项等范围分别处理；真实签名、负应答和新旧版回退结果见 [本轮记录](component-closure-results-2026-11-10.md)。上述历史数据和限制不追改，工具本身不表示默认组件已获准升级。

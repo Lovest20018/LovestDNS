@@ -165,7 +165,7 @@ def _get_process_status() -> dict:
 - 支持 UDP 截断后 TCP 回退、直接 TCP 查询，以及最多 4 个 API 目标的并行对照（页面提供三条可编辑链路）。
 - 支持版本化 JSON 报告导出、本地报告导入及宿主机统计快照展示；导入不上传、不执行、不写入配置。
 - 可选宿主机脚本 `scripts/paopaodns-health-snapshot.py` 以 `stats_noreset` 采集统计，WebUI 继续无需 Docker socket。
-- 使用、部署边界和测试说明见 [DNS 诊断与宿主机快照](docs/dns-diagnostics.md)。
+- 使用、部署边界和测试说明见 [DNS 诊断与宿主机快照](../dns-diagnostics.md)。
 
 **安全注意**：
 - 域名、记录类型、DNS 服务和端口都在后端校验。

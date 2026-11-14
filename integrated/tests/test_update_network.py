@@ -10,7 +10,7 @@ from test_integrated_api import client, AUTH
 from test_software_update import checked, updates
 
 PROFILE = {'mode': 'socks5', 'host': '192.0.2.10', 'port': 1080,
-           'username': 'fixture-user', 'password': 'synthetic-secret'}
+           'username': 'fixture-user', 'password': 'synthetic-secret', 'channel': 'stable'}
 URL = '/auth/software-update/network'
 
 
@@ -73,8 +73,21 @@ def test_network_cannot_change_during_check_or_install(updates):
     assert not (updates / 'network.json').exists()
 
 
+def test_legacy_proxy_defaults_to_stable_and_channel_change_invalidates_check(updates):
+    legacy = {key: value for key, value in PROFILE.items() if key != 'channel'}
+    protocol.atomic_json(updates / 'network.json', legacy)
+    assert network.load(updates) == PROFILE
+    checked(updates)
+    changed = network.save(updates, {**legacy, 'password': '', 'channel': 'preview'}, '0.1.0')
+    assert changed['channel'] == 'preview' and changed['password_configured'] is True
+    assert protocol.status(updates, '0.1.0')['release'] is None
+    assert network.load(updates)['password'] == PROFILE['password']
+    changed = network.save(updates, {**network.DEFAULT, 'channel': 'preview'}, '0.1.0')
+    assert changed['channel'] == 'preview' and changed['mode'] == 'direct'
+
+
 @pytest.mark.parametrize('changes', [
-    {'mode': []}, {'mode': 'system'}, {'host': 'github.com'}, {'host': 123}, {'host': '0.0.0.0'},
+    {'mode': []}, {'mode': 'system'}, {'channel': 'nightly'}, {'channel': []}, {'host': 'github.com'}, {'host': 123}, {'host': '0.0.0.0'},
     {'host': 'fe80::1'}, {'host': 'ff02::1'}, {'port': True}, {'port': 0},
     {'port': 65536}, {'username': 'header\r\ninjected'}, {'username': 'user:name'},
     {'password': 'a' * 256}, {'password': 'secret\x00'}, {'arbitrary_url': 'https://foreign.example'},

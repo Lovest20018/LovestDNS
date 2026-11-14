@@ -137,7 +137,7 @@ export interface SoftwareRelease {
 }
 export interface UpdateNetwork {
   mode: 'direct' | 'http' | 'socks5'; host: string; port: number | null;
-  username: string; password_configured: boolean;
+  username: string; password_configured: boolean; channel: 'stable' | 'preview';
 }
 export type UpdateNetworkWrite = Omit<UpdateNetwork, 'password_configured'> & { password?: string; clear_password?: boolean };
 export async function softwareUpdateNetwork(body?: UpdateNetworkWrite, signal?: AbortSignal): Promise<UpdateNetwork> {
@@ -150,7 +150,7 @@ export async function softwareUpdateNetwork(body?: UpdateNetworkWrite, signal?: 
   if (response.status === 401) expireSession();
   const value = await response.json();
   if (!response.ok) throw new Error(value.error ?? '无法读取更新网络设置');
-  if (!value || !['direct', 'http', 'socks5'].includes(value.mode) || typeof value.host !== 'string'
+  if (!value || !['direct', 'http', 'socks5'].includes(value.mode) || !['stable', 'preview'].includes(value.channel) || typeof value.host !== 'string'
       || (value.port !== null && (!Number.isInteger(value.port) || value.port < 1 || value.port > 65535))
       || typeof value.username !== 'string' || typeof value.password_configured !== 'boolean' || 'password' in value) {
     throw new Error('更新网络设置格式无效');

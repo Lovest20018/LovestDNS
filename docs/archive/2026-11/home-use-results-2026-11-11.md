@@ -43,6 +43,6 @@
 
 另导出只含汇总和来源摘要的监视记录，SHA-256 `41c506804daab9e7d0b65c86fcd4e5e03bb2e2d930d5e075d921b0dd89213ad1`；远端流式核对了 165,354 个心跳样本及全部健康记录，本地下载摘要与收尾计数一致。原始在用 DNS 探测输出留在私有环境，未导出现场配置、账户、实际缓存或 TLS 私钥。
 
-执行方法见 [`scripts/test-home-dns.py`](../scripts/test-home-dns.py)，实际冻结 SHA-256 为 `7d04affda20ccfe91c5a43317ef7444ee259ac2572cc7194052f3870c6aa6b7f`；上传的 57 文件输入包 SHA-256 为 `23e12d02a9d51893c53cd244b37a37f05da2f17b245603e23052bd7053f5a3f8`。
+执行方法见 [`scripts/test-home-dns.py`](../../../scripts/test-home-dns.py)，实际冻结 SHA-256 为 `7d04affda20ccfe91c5a43317ef7444ee259ac2572cc7194052f3870c6aa6b7f`；上传的 57 文件输入包 SHA-256 为 `23e12d02a9d51893c53cd244b37a37f05da2f17b245603e23052bd7053f5a3f8`。
 
 已有历史缓存、安装升级与回退结果继续按[原生组合验收](unbound-completion-results-2026-11-10.md)的范围解释；[原性能停止结果](unbound-thread-affinity-results-2026-11-11.md)及其他失败记录不变。此次家用方向收口后，优先在实际局域网核对 DNS 下发、常用网站、所需分流、配置恢复与日常使用，再按实际问题回归；不自动追加微秒排名研究。本轮没有切换在用组件、修改默认模板或公开发布候选。

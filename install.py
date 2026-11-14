@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 
 REPOSITORY = 'Lovest20018/LovestDNS'
-DEFAULT_VERSION = '0.1.0-dev.lovestdns-native.20261114.query1.5'
+DEFAULT_VERSION = '0.1.0'
 ASSET = 'lovestdns-native-debian-amd64.tar.gz'
 MAX_ARCHIVE = 256 * 1024 * 1024
 MAX_EXTRACTED = 768 * 1024 * 1024

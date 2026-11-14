@@ -44,6 +44,6 @@ af6fb9ec65a4de98fbd9dadf99aa3a50bc96ceef0bff82e98598ce72d42dec86
 sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261112.home2.1 --instance <实例名>
 ```
 
-默认实例省略 `--instance`。首次安装需要私有配置并传 `--config`；既有实例省略配置参数时保留原配置。安装、备份和回退见[部署说明](lovestdns-native-deployment.md)。不要把原候选或任何草稿包的摘要用于当前公开资产。
+默认实例省略 `--instance`。首次安装需要私有配置并传 `--config`；既有实例省略配置参数时保留原配置。安装、备份和回退见[部署说明](../../lovestdns-native-deployment.md)。不要把原候选或任何草稿包的摘要用于当前公开资产。
 
 本次仍是家用及小规模试用的预发布。真实查询来源 IP、逐请求分流与入口延迟分布尚未交付；新旧整链性能提升、严格内存容量保证和长期稳定性尚未验收。默认下载入口保留旧版，后续根据真实终端持续使用反馈决定是否切换。

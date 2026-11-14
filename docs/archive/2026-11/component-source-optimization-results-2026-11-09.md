@@ -54,7 +54,7 @@ SOCKS 另做只改变夹具 TCP_NODELAY 的 10 秒短对照，旧版 / 候选二
 - 两个 socket 正向条件、两个并发所有权正向条件通过；原小队列与故意共享报文的反例按预期失败，分别保存，不计入通过项。
 - 41 在用 `lovestdns-validation` 始终为 PID 1047426、NRestarts=0；诊断任务已经结束，无诊断进程残留。收尾核对其实际 MosDNS 入口 15453，公开域名查询为 NOERROR、8ms；误探默认 loopback 53 的拒绝连接不代表该实例异常。旧版正式机 本轮未操作。
 
-补丁、独立 Go 契约测试及复现方法见 [补丁目录](../packaging/components/patches/README.md)。`build-dnscrypt-diagnostic.py` 校验上游归档摘要、固定 Go 版本、使用 vendor，支持分别或组合应用补丁；所有产物标记为诊断专用，不能部署。`profile-dnscrypt.py` 校验二进制摘要、隔离命名空间、实际队列和协议，分别输出 CPU / 分配 / 存活堆证据。
+补丁、独立 Go 契约测试及复现方法见 [补丁目录](../../../packaging/components/patches/README.md)。`build-dnscrypt-diagnostic.py` 校验上游归档摘要、固定 Go 版本、使用 vendor，支持分别或组合应用补丁；所有产物标记为诊断专用，不能部署。`profile-dnscrypt.py` 校验二进制摘要、隔离命名空间、实际队列和协议，分别输出 CPU / 分配 / 存活堆证据。
 
 本轮没有改变组件锁或默认构建流程。Unbound 仍固定旧版，其离线兼容契约已写入方案，迁移工具尚未实现；Redis 保持独立候选，没有追加原条件长压测。
 

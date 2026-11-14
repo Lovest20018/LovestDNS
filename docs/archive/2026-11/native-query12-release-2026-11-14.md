@@ -61,6 +61,6 @@ sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.2 -
 sudo python3 install.py --version 0.1.0-dev.lovestdns-native.20261114.query1.2 --instance <实例名>
 ```
 
-默认实例省略 `--instance`。既有实例不传配置时保留原配置；升级前确认备份与空间，操作流程见[原生部署说明](lovestdns-native-deployment.md)。本次发布没有自动升级已有试用实例。
+默认实例省略 `--instance`。既有实例不传配置时保留原配置；升级前确认备份与空间，操作流程见[原生部署说明](../../lovestdns-native-deployment.md)。本次发布没有自动升级已有试用实例。
 
 本次是功能与发行验收，不代表修复后已完成长期稳定性、真实终端接入或新旧整链性能验收。查询记录仍遵守管理员权限和 24 小时／100,000 条及存储容量上限；缓存命中和实际逐请求分流保持未知。

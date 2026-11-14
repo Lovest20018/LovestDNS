@@ -1,6 +1,6 @@
-# query1.5 原生预发布记录
+# query1.5 未发布候选记录
 
-发布：`0.1.0-dev.lovestdns-native.20261114.query1.5`，Debian 12/13 amd64，仍为 Pre-release。[发行页](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0-dev.lovestdns-native.20261114.query1.5)。
+query1.5 是 v0.1.0 正式发布前的本地验收候选，未公开创建 GitHub Release。其功能和构建来源用于后续正式包，候选阶段的测试按下列范围保留。
 
 原生版软件更新可单独配置直连、HTTP CONNECT 或 SOCKS5。版本检查、校验文件、安装包与 GitHub 允许的重定向共用该配置，SOCKS5 由代理解析域名；保留 TLS、官方来源和外层/包内摘要校验。代理失败如实终止，读取有分块体积与耗时限制。设置不改变主机默认网关、DNS 分流、规则数据更新器或其他组件。
 
