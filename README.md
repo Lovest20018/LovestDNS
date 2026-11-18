@@ -2,7 +2,7 @@
 
 LovestDNS 基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS)，将 DNS 解析、缓存、规则配置和运行诊断集中到一个 Web 面板，支持独立的 Debian 原生部署。
 
-[下载 v0.1.0](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.0) · [安装与升级](docs/lovestdns-native-deployment.md) · [发行说明](docs/releases/v0.1.0.md) · [全部文档](docs/README.md)
+[下载 v0.1.1](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.1) · [安装与升级](docs/lovestdns-native-deployment.md) · [发行说明](docs/releases/v0.1.1.md) · [全部文档](docs/README.md)
 
 ## 功能
 
@@ -19,11 +19,11 @@ LovestDNS 基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS)，将 DNS 解�
 正式发行包支持 **Debian 12 / 13、amd64、systemd**，运行时无需 Docker。其他架构暂不提供发行包。
 
 ```sh
-curl -fL https://github.com/Lovest20018/LovestDNS/releases/download/v0.1.0/install.py -o install.py
+curl -fL https://github.com/Lovest20018/LovestDNS/releases/download/v0.1.1/install.py -o install.py
 curl -fL https://raw.githubusercontent.com/Lovest20018/LovestDNS/main/.env.native.example -o lovestdns-install.env
 chmod 600 lovestdns-install.env
 nano lovestdns-install.env
-sudo python3 install.py --version 0.1.0 --config ./lovestdns-install.env
+sudo python3 install.py --version 0.1.1 --config ./lovestdns-install.env
 sudo lovestdnsctl health
 ```
 
@@ -33,21 +33,21 @@ sudo lovestdnsctl health
 
 ## 升级与更新代理
 
-在 **设置 → 服务信息 → 软件更新** 检查并确认升级。安装前备份现有配置与数据，DNS 和网页会短暂重启；失败时尝试恢复原版，关闭网页不会取消任务。
+在 **维护 → 软件更新** 检查并确认升级。v0.1.0 的入口在 **设置 → 服务信息 → 软件更新**。安装前备份现有配置与数据，DNS 和网页会短暂重启。失败时尝试恢复原版，关闭网页后主机继续执行任务。
 
-在 **更新网络与通道** 选择正式版或预览版，配置直连、HTTP CONNECT 或 SOCKS5。该代理只用于版本信息、校验文件和软件安装包，SOCKS5 由代理解析目标域名；DNS 分流和规则更新继续使用各自配置。
+在 **设置 → 更新通道与代理** 选择正式版或预览版，配置直连、HTTP CONNECT 或 SOCKS5。v0.1.0 在软件更新卡片中提供“更新网络与通道”。该代理只用于版本信息、校验文件和软件安装包，SOCKS5 由代理解析目标域名。DNS 分流和规则更新使用各自配置。
 
 旧版本无法直连 GitHub 时，可先传入已校验的安装包升级一次，再配置更新代理。主机升级保留实际实例名：
 
 ```sh
-sudo python3 install.py --version 0.1.0 --instance <实例名>
+sudo python3 install.py --version 0.1.1 --instance <实例名>
 ```
 
 默认实例省略 `--instance`。摘要以同一 Release 附件为准，旧版本与新版本的摘要不能混用。
 
 ## 使用范围
 
-- v0.1.0 面向小规模家庭与局域网 DNS。Docker 提供[源码构建兼容方案](docs/lovestdns-pve-deployment.md)，当前没有公开预构建镜像。
+- LovestDNS 面向小规模家庭与局域网 DNS。Docker 提供[源码构建兼容方案](docs/lovestdns-pve-deployment.md)，当前没有公开预构建镜像。
 - 查询记录默认关闭；逐请求缓存命中、实际分流路径缺少证据时显示未知。
 - 软件更新需用户确认。升级备份由主机管理，应保留可用回退点和足够磁盘空间。
 - 正常失败恢复与回退已验证；强制终止、断电各阶段及长期负载仍有[已知限制](docs/roadmap.md)，不宣称全面性能提升。

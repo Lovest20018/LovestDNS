@@ -1,3 +1,4 @@
+from contextlib import nullcontext
 import hashlib
 import importlib.util
 import json
@@ -5,6 +6,7 @@ from pathlib import Path, PurePosixPath
 import sys
 import shutil
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -105,6 +107,68 @@ def test_install_receipts_live_outside_packages_and_survive_release_selection(tm
     assert receipt1['manifest_sha256'] != receipt2['manifest_sha256']
     assert json.loads((tmp_path / 'receipts/test.1.json').read_text()) == receipt1
     assert json.loads((tmp_path / 'receipts/test.2.json').read_text()) == receipt2
+
+
+@pytest.mark.parametrize('failure', ['readiness', 'updater'])
+def test_failed_first_install_can_retry_same_version(tmp_path, monkeypatch, failure):
+    package_dir = package(tmp_path)
+    source = tmp_path / 'import'
+    source.mkdir()
+    (source / 'rules').write_text('original imported rules')
+    unit = tmp_path / 'systemd/lovestdns-test.service'
+    unit.parent.mkdir()
+    paths = {'name': 'lovestdns-test', 'home': tmp_path / 'home', 'storage': tmp_path / 'storage',
+             'config': tmp_path / 'etc/service.env', 'unit': unit, 'run': tmp_path / 'run',
+             'ctl': tmp_path / 'lovestdns-testctl'}
+    paths['home'].mkdir()
+    args = SimpleNamespace(instance='test', config=None, import_data=source)
+    calls, selected = [], []
+    active = False
+
+    def command(argv, **_):
+        nonlocal active
+        calls.append(argv)
+        if argv == ['systemctl', 'enable', '--now', unit.name]:
+            active = True
+        elif argv == ['systemctl', 'disable', '--now', unit.name]:
+            active = False
+
+    def switch(current, release):
+        selected.append(release)
+        shutil.copytree(release, current, dirs_exist_ok=True)
+
+    def probe(_):
+        if failure == 'readiness' and len(selected) == 1:
+            raise RuntimeError(failure)
+        return {'dns_responded': True}
+
+    def updater(_, release):
+        if failure == 'updater' and len(selected) == 1:
+            unit.with_name('lovestdns-test-update.path').write_text('# partial updater setup')
+            raise RuntimeError(failure)
+
+    for name, fixture in {
+        'paths': lambda _: paths, 'dependencies': lambda: None, 'install_lock': lambda _: nullcontext(),
+        'is_active': lambda _: active, 'preflight_ports': lambda _: None, 'command': command,
+        'switch': switch, 'healthy': probe, 'configure_online_updater': updater,
+    }.items():
+        monkeypatch.setattr(install, name, fixture)
+
+    with pytest.raises(RuntimeError, match=failure):
+        install.install(args, package_dir)
+    assert not active and not paths['ctl'].exists()
+    assert (paths['home'] / 'current/manifest.json').is_file()
+    if failure == 'updater':
+        assert ['systemctl', 'disable', '--now', 'lovestdns-test-update.path'] in calls
+
+    (source / 'rules').write_text('changed import source')
+    install.install(args, package_dir)
+    assert active and paths['ctl'].is_file()
+    assert selected[0].name == 'test.1' and selected[1].name.startswith('test.1-retry-')
+    assert (paths['storage'] / 'data/rules').read_text() == 'original imported rules'
+    assert not (paths['home'] / 'rollback.json').exists()
+    with pytest.raises(ValueError, match='version is already active'):
+        install.install(args, package_dir)
 
 
 def test_native_unit_keeps_host_resolver_and_uses_private_data_mount():

@@ -3,8 +3,8 @@ import { Download, ExternalLink, RefreshCw } from 'lucide-react';
 import { errorText, softwareUpdate } from '../suiteApi';
 import type { SoftwareUpdateStatus } from '../suiteApi';
 import { dirtyFileDrafts, subscribeFileDraft } from '../fileDrafts';
+import { useUpdateNetwork } from '../updateNetworkContext';
 import { Notice, Section } from './SuiteUI';
-import SoftwareUpdateNetwork from './SoftwareUpdateNetwork';
 
 const BUSY = new Set(['queued', 'checking', 'downloading', 'verifying', 'installing']);
 const PHASES: Record<string, string> = { queued: '等待执行', checking: '检查更新中', downloading: '下载安装包',
@@ -16,11 +16,13 @@ export default function SoftwareUpdate({ loadedVersion }: { loadedVersion: strin
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [confirmDigest, setConfirmDigest] = useState('');
-  const [networkDirty, setNetworkDirty] = useState(false);
   const epoch = useRef(0);
   const reading = useRef(false);
   const pollingActive = useRef(false);
   const unsaved = useSyncExternalStore(useCallback(listener => subscribeFileDraft('*', listener), []), dirtyFileDrafts);
+  const { dirty: networkDirty, saving: networkSaving } = useUpdateNetwork();
+  const networkBlocked = networkDirty || networkSaving;
+  const applyBlocked = unsaved || networkBlocked;
   const refresh = useCallback(async (signal?: AbortSignal) => {
     if (reading.current) return;
     reading.current = true;
@@ -45,12 +47,12 @@ export default function SoftwareUpdate({ loadedVersion }: { loadedVersion: strin
     };
     void poll();
     return () => { abort.abort(); clearTimeout(timer); };
-  }, [refresh, jobId]);
+  }, [refresh, jobId, networkSaving]);
   const release = status?.release;
   const available = phase === 'ready' && !!release && release.version !== status?.current_version;
-  const confirm = available && !networkDirty && release?.archive_sha256 === confirmDigest;
-  const submit = async (action: 'check' | 'apply', networkSaved = false) => {
-    if (active || submitting || (networkDirty && !networkSaved) || (action === 'apply' && (!available || unsaved))) return;
+  const confirm = available && release?.archive_sha256 === confirmDigest;
+  const submit = async (action: 'check' | 'apply') => {
+    if (active || submitting || networkBlocked || (action === 'apply' && (!available || applyBlocked))) return;
     epoch.current++;
     setSubmitting(true); setError(''); setConfirmDigest('');
     try {
@@ -64,7 +66,7 @@ export default function SoftwareUpdate({ loadedVersion }: { loadedVersion: strin
     } finally { setSubmitting(false); }
   };
   return <Section title="软件更新" subtitle="官方 GitHub 发行版 · Debian amd64" icon={Download}
-    actions={<button className="btn btn-secondary" disabled={active || submitting || networkDirty || status?.supported === false}
+    actions={<button className="btn btn-secondary" disabled={active || submitting || networkBlocked || status?.supported !== true}
       onClick={() => void submit('check')}><RefreshCw size={14} />{active && status?.action === 'check' ? '正在检查…' : '检查更新'}</button>}>
     {!status && !error && <p className="suite-muted">正在读取更新状态…</p>}
     {status?.supported === false && <Notice tone="info">{status.reason}</Notice>}
@@ -72,7 +74,8 @@ export default function SoftwareUpdate({ loadedVersion }: { loadedVersion: strin
       <div className="suite-software-versions"><div><span>当前版本</span><strong>{status.current_version}</strong></div>
         {release && <div><span>最新发布{release.prerelease ? ' · 预发布版' : ''}</span><strong>{release.version}</strong></div>}</div>
       <p className="suite-muted">安装前校验官方安装包并备份现有配置与数据。升级时 DNS 和网页会短暂重启，失败时尝试恢复原版本；关闭网页不会中断任务。</p>
-      <SoftwareUpdateNetwork busy={active || submitting} onDraftChange={setNetworkDirty} onSaved={() => submit('check', true)} />
+      <p><a href="#/settings?tab=updates">设置更新通道与代理</a></p>
+      {networkBlocked && <Notice tone="warning">{networkSaving ? '正在保存更新设置并提交检查。' : '更新设置有未保存的修改。请保存或还原后继续。'}</Notice>}
       {(active || status.message) && <Notice tone={phase === 'failed' ? 'error' : 'info'}>
         {active && <strong>{PHASES[phase]} · </strong>}{status.message}
         {active && error && <span> 正在等待服务恢复，页面会继续读取结果。</span>}
@@ -84,9 +87,9 @@ export default function SoftwareUpdate({ loadedVersion }: { loadedVersion: strin
         {unsaved && <Notice tone="warning">有未保存的配置草稿，请先保存或还原，再更新软件。</Notice>}
         {confirm ? <div className="suite-update-confirm" role="group" aria-label="确认软件更新">
           <p>确认更新到 <strong>{release!.version}</strong>？{release!.prerelease && '这是预发布版本。'}升级会短暂重启 DNS 与网页服务。</p>
-          <div><button className="btn btn-primary" disabled={submitting || unsaved || networkDirty} onClick={() => void submit('apply')}>确认更新并重启</button>
+          <div><button className="btn btn-primary" disabled={submitting || applyBlocked} onClick={() => void submit('apply')}>确认更新并重启</button>
             <button className="btn btn-secondary" disabled={submitting} onClick={() => setConfirmDigest('')}>取消</button></div>
-        </div> : <button className="btn btn-primary" disabled={submitting || unsaved || networkDirty} onClick={() => setConfirmDigest(release!.archive_sha256)}>更新到此版本</button>}
+        </div> : <button className="btn btn-primary" disabled={submitting || applyBlocked} onClick={() => setConfirmDigest(release!.archive_sha256)}>更新到此版本</button>}
       </div>}
       {phase === 'succeeded' && status.current_version !== versionAtMount && <button className="btn btn-primary" onClick={() => window.location.reload()}>刷新页面使用新版本</button>}
     </>}

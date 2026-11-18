@@ -13,9 +13,10 @@ interface Evidence {
   result: SuiteDnsResult; versions: ConfigurationVersions; process: string | null;
   consistent: boolean; generation: number; instance: string;
 }
-export default function ConfigVerification({ file }: { file?: string }) {
+export default function ConfigVerification({ file, initialDomain = '' }: { file?: string; initialDomain?: string }) {
   const { caps, runtime, paused, runtimeStale, error: connectionError } = useSuite();
-  const [domain, setDomain] = useState('');
+  const [enteredDomain, setDomain] = useState<string | null>(null);
+  const domain = enteredDomain ?? initialDomain;
   const [record, setRecord] = useState('A');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -98,7 +99,7 @@ export default function ConfigVerification({ file }: { file?: string }) {
   return <section className="suite-inline-query" aria-label="配置样本查询">
     <h3>样本查询</h3><p className="suite-note">从服务端向默认诊断目标查询；取得记录后，仍需核对预期答案和实际分流。</p>
     <form onSubmit={(event) => { event.preventDefault(); void run(); }}>
-      <label>验证域名<input className="form-input" required maxLength={253} value={domain} disabled={busy} onChange={(event) => setDomain(event.target.value)} placeholder="输入需要验证的域名" /></label>
+      <label>验证域名<input id="config-query-domain" className="form-input" required maxLength={253} value={domain} disabled={busy} onChange={(event) => setDomain(event.target.value)} placeholder="输入需要验证的域名" /></label>
       <label>类型<select className="form-select" value={record} disabled={busy} onChange={(event) => setRecord(event.target.value)}><option>A</option><option>AAAA</option></select></label>
       <button className="btn btn-secondary" disabled={busy || unsaved || !domain.trim() || !caps?.permissions.diagnose || !caps.permissions.configure || !!connectionError}>{busy ? '查询与核对中…' : '验证样本查询'}</button>
     </form>

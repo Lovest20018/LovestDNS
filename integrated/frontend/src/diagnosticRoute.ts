@@ -1,4 +1,4 @@
-export type DiagnosticTab = 'records' | 'query' | 'compare';
+export type DiagnosticTab = 'records' | 'query' | 'compare' | 'device';
 export interface DiagnosticRoute {
   tab: DiagnosticTab;
   source: string;
@@ -22,7 +22,7 @@ export function parseDiagnosticRoute(hash: string, remembered = '', canRecord = 
       if (!params.has(key) && previous.has(key)) params.set(key, previous.get(key)!);
     }
   }
-  const tab = requested === 'compare' || requested === 'query' ? requested
+  const tab = requested === 'compare' || requested === 'query' || requested === 'device' ? requested
     : requested === 'records' && canRecord ? 'records'
       : params.has('domain') || !canRecord ? 'query' : 'records';
   const cursor = params.get('before') ?? '';

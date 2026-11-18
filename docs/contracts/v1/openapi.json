@@ -3001,7 +3001,7 @@
   "info": {
     "description": "DNS 专用接口。Unix 时间戳单位秒；interval_seconds 为目标采集周期，window_seconds 为实际比较窗口。过期数据返回 503。详见 docs/integration-api.md。",
     "title": "LovestDNS Integration API",
-    "version": "0.1.0"
+    "version": "0.1.1"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -9954,7 +9954,7 @@
             "BearerToken": []
           }
         ],
-        "summary": "按任务编号查询状态与结果",
+        "summary": "按任务编号或原请求编号查询状态与结果",
         "x-allowed-roles": [
           "admin"
         ]

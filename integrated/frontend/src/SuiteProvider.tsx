@@ -28,6 +28,7 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
   const statusAt = useRef(0);
   const generation = useRef(0);
   const inFlight = useRef(false);
+  const refreshQueued = useRef<(() => void) | null>(null);
   const request = useRef<AbortController | null>(null);
   const sampleClock = useRef<{ serverAt: number; receivedAt: number } | null>(null);
 
@@ -36,7 +37,7 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
     if (clock) setSamples((old) => appendTrend(old, null, clock.serverAt + (performance.now() - clock.receivedAt) / 1000));
   }, []);
 
-  useEffect(() => () => { generation.current++; request.current?.abort(); request.current = null; inFlight.current = false; }, []);
+  useEffect(() => () => { generation.current++; request.current?.abort(); request.current = null; inFlight.current = false; refreshQueued.current = null; }, []);
 
   const read = useCallback(async (force = false) => {
     if (inFlight.current) return;
@@ -100,10 +101,19 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
       useStore.getState().setConnected(false);
     } finally {
       if (request.current === abort) { inFlight.current = false; request.current = null; }
-      if (current === generation.current) { setLoading(false); setRefreshing(false); }
+      if (current === generation.current) {
+        setLoading(false);
+        setRefreshing(false);
+        const next = refreshQueued.current;
+        refreshQueued.current = null;
+        next?.();
+      }
     }
   }, [appendGap]);
-  const refresh = useCallback(() => read(true), [read]);
+  const refresh = useCallback(async () => {
+    if (inFlight.current) { refreshQueued.current = () => void read(true); return; }
+    await read(true);
+  }, [read]);
 
   useEffect(() => {
     let stopped = false;

@@ -136,4 +136,5 @@ class TaskStore:
         if not isinstance(task_id, str) or not ID.fullmatch(task_id):
             raise ValueError("任务编号无效")
         with self.connect() as db:
-            return self.value(db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())
+            row = db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            return self.value(row if row is not None else self.submission(db, task_id))

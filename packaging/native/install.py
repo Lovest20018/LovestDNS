@@ -372,10 +372,17 @@ def install(args, package):
     p = paths(args.instance)
     dependencies()
     with install_lock(p):
+        current = p['home'] / 'current'
+        previous = current.resolve() if current.exists() else None
+        was_active = is_active(p)
+        # The control wrapper is installed after readiness checks succeed. A
+        # failed first install can leave an inactive release linked at current.
+        incomplete_install = (previous is not None and not was_active and not p['ctl'].is_file()
+                              and not (p['home'] / 'rollback.json').exists())
+        old = None if incomplete_install else previous
         release = p['home'] / 'releases' / manifest['version']
         if release.exists():
-            current = p['home'] / 'current'
-            if current.exists() and json.loads((current / 'manifest.json').read_text())['version'] == manifest['version']:
+            if old and json.loads((old / 'manifest.json').read_text())['version'] == manifest['version']:
                 raise ValueError('This version is already active; use the installed control command')
             # Retrying after a failed upgrade or explicit rollback must not
             # overwrite an earlier release or its venv.
@@ -390,8 +397,6 @@ def install(args, package):
         if args.config:
             values.update(read_env(args.config))
         validate_config(values)
-        old = (p['home'] / 'current').resolve() if (p['home'] / 'current').exists() else None
-        was_active = is_active(p)
         if not was_active:
             preflight_ports(values)
         shutil.copytree(package, release)
@@ -422,13 +427,17 @@ def install(args, package):
                 backup = candidate_backup
             elif args.import_data:
                 source = Path(args.import_data).resolve(strict=True)
-                if not source.is_dir() or any((p['storage'] / 'data').iterdir()):
+                populated = any((p['storage'] / 'data').iterdir())
+                if not source.is_dir() or (populated and not incomplete_install):
                     raise ValueError('Import requires a directory and an empty target data directory')
-                shutil.copytree(source, p['storage'] / 'data', dirs_exist_ok=True, symlinks=True)
+                if populated:
+                    print('Retaining data from the previous installation attempt.', file=sys.stderr)
+                else:
+                    shutil.copytree(source, p['storage'] / 'data', dirs_exist_ok=True, symlinks=True)
             changed = True
             write_env(p['config'], values)
             atomic(p['unit'], service_unit(p, values), 0o644)
-            switch(p['home'] / 'current', release)
+            switch(current, release)
             command(['systemctl', 'daemon-reload'])
             command(['systemctl', 'reset-failed', p['name'] + '.service'], check=False, capture=True)
             command(['systemctl', 'enable', '--now', p['name'] + '.service'])
@@ -450,6 +459,9 @@ def install(args, package):
                     healthy(p)
                 print('Previous release and its data/configuration restored.', file=sys.stderr)
             else:
+                path_unit = p['unit'].with_name(p['name'] + '-update.path')
+                if path_unit.exists():
+                    command(['systemctl', 'disable', '--now', path_unit.name], check=False, capture=True)
                 command(['systemctl', 'disable', '--now', p['name'] + '.service'], check=False, capture=True)
             raise
 

@@ -52,12 +52,12 @@ try {
   await send('Page.navigate', { url: origin });
   const login = async () => { await wait("document.querySelector('input[name=password]')"); await change('input[name=password]', 'synthetic-browser-password'); await evaluate("document.querySelector('.suite-login-submit').click()"); await wait("document.querySelector('.suite-page-heading')"); };
   await login();
-  await wait("document.querySelectorAll('.suite-status-component').length===7");
-  assert(await evaluate("[...document.querySelectorAll('.suite-section h2')].findIndex(x=>x.textContent.includes('每秒'))<[...document.querySelectorAll('.suite-section h2')].findIndex(x=>x.textContent.includes('各项服务'))"));
-  await control({ age: 24 }); await click('暂停自动刷新'); await click('立即刷新'); await sleep(1600);
-  assert((await evaluate('document.body.textContent')).includes('采样时正常'));
-  assert(!(await evaluate('document.body.textContent')).includes('运行采集暂不可用'));
-  await control({ age: 0 }); await click('恢复自动刷新');
+  await wait("document.querySelectorAll('.suite-home-component').length===8");
+  assert(await evaluate("!document.querySelector('.suite-home-details').open"));
+  await evaluate("document.querySelector('.suite-home-details summary').click()");
+  await control({ age: 24 }); await click('暂停自动刷新'); await click('刷新'); await sleep(1600);
+  assert((await evaluate('document.body.textContent')).includes('显示历史快照'));
+  await control({ age: 0 }); await click('恢复自动刷新', '.suite-refresh-paused');
 
   await go('#/lists', '域名分流'); await wait("document.querySelector('textarea')?.value.includes('domain:example.com')");
   const originalList = await evaluate("document.querySelector('textarea').value");
@@ -128,9 +128,9 @@ try {
     await evaluate('(()=>{const state=window.__saveOrder;state.release?.();window.fetch=state.fetch;window.confirm=state.confirm;delete window.__saveOrder;})()');
   }
 
-  await go('#/system?component=updater', '维护与日志'); await wait("document.querySelector('.suite-log')?.textContent.includes('synthetic updater')");
+  await go('#/system?component=updater', '维护'); await wait("document.querySelector('.suite-log')?.textContent.includes('synthetic updater')");
   assert.equal(await evaluate("document.querySelector('[aria-label=日志组件]').value"), 'updater');
-  await go('#/system?component=manager', '维护与日志');
+  await go('#/system?component=manager', '维护');
   await wait("document.querySelector('.suite-log')?.textContent.includes('synthetic manager')");
   assert.equal(await evaluate("document.querySelector('[aria-label=日志组件]').value"), 'manager');
   await evaluate('history.back()');
@@ -143,12 +143,12 @@ try {
   await wait("document.querySelector('.suite-report-heading')?.textContent.includes('本次')||![...document.querySelectorAll('button')].some(x=>x.textContent.includes('查询中'))");
 
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 860, deviceScaleFactor: 1, mobile: false });
-  for (const [hash, title] of [['#/ttl', 'TTL 规则'], ['#/lists', '域名分流'], ['#/advanced', '高级配置'], ['#/', '服务状态']]) {
+  for (const [hash, title] of [['#/ttl', 'TTL 规则'], ['#/lists', '域名分流'], ['#/advanced', '高级配置'], ['#/', '概览']]) {
     await go(hash, title); await assertFits(title);
     if (hash === '#/ttl') { await wait("document.querySelector('textarea')"); assert(await evaluate("document.querySelector('textarea').getBoundingClientRect().top<800"), 'TTL editor is too far down'); }
     await screenshot(hash === '#/' ? 'dashboard-mobile.png' : title + '-mobile.png');
   }
-  await evaluate("document.querySelector('[aria-label=切换主题]').click()"); await assertFits('dark dashboard');
+  await evaluate("document.querySelector('[aria-label^=主题]').click()"); await assertFits('dark dashboard');
   assert.equal(errors.length, 0, JSON.stringify(errors));
   console.log('PASS: pause semantics, editor round trips, retained/shared/auth-recovered drafts, revision save/conflict, out-of-order save responses, YAML comment preservation, same-page/history log navigation, retained diagnostic results, mobile/dark layouts, no runtime exceptions.');
   console.log('Screenshots: ' + output);

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ScrollText, Server } from 'lucide-react';
+import { ScrollText } from 'lucide-react';
 import { useSuite } from '../suiteContext';
 import { suiteFetch, errorText } from '../suiteApi';
-import ConfigState from '../components/ConfigState';
 import SuiteHistory from '../components/SuiteHistory';
 import SuiteMaintenance from '../components/SuiteMaintenance';
+import SoftwareUpdate from '../components/SoftwareUpdate';
 import { Empty, Notice, Permission, Section } from '../components/SuiteUI';
 import './SuitePage.css';
 
@@ -13,9 +13,15 @@ function componentFromHash() {
   const value = new URLSearchParams(window.location.hash.split('?')[1]).get('component');
   return value && COMPONENTS.includes(value) ? value : COMPONENTS[0];
 }
+function tabFromHash() {
+  const params = new URLSearchParams(window.location.hash.split('?')[1]);
+  if (params.has('component') || params.get('tab') === 'logs') return 'logs';
+  if (params.get('tab') === 'history') return 'history';
+  return params.get('tab') === 'updates' ? 'updates' : 'tasks';
+}
 export default function SuiteSystem() {
   const { caps, runtime } = useSuite();
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const [tab, setTab] = useState(tabFromHash);
   const [component, setComponent] = useState(componentFromHash);
   const [logs, setLogs] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
   const request = useRef<AbortController | null>(null);
@@ -25,6 +31,7 @@ export default function SuiteSystem() {
   useEffect(() => {
     const sync = () => {
       if (window.location.hash.split('?')[0] !== '#/system') return;
+      setTab(tabFromHash());
       const value = componentFromHash();
       if (value !== component) changeComponent(value);
     };
@@ -48,20 +55,24 @@ export default function SuiteSystem() {
   }, [component]);
   const allowed = caps?.permissions.maintain;
   useEffect(() => {
-    if (!allowed) return;
+    if (!allowed || tab !== 'logs') return;
     const timer = setTimeout(() => void loadLogs(), 0);
     return () => { clearTimeout(timer); request.current?.abort(); };
-  }, [allowed, loadLogs]);
-  useEffect(() => { if (new URLSearchParams(window.location.hash.split('?')[1]).get('tab') === 'apply') document.getElementById('config-apply')?.scrollIntoView({ block: 'start' }); }, [caps]);
+  }, [allowed, loadLogs, tab]);
   if (!caps) return <Empty title="等待 DNS 实例连接">连接后可查看维护任务和组件日志。</Empty>;
-  return <div className="suite-page"><Permission allowed={caps.permissions.maintain} kind="maintain">
-    <div className="suite-local-links"><a className="btn btn-secondary btn-sm" href="#/deploy">服务信息与主机命令</a><a className="btn btn-secondary btn-sm" href="#/status">服务状态</a></div>
-    <div id="config-apply"><ConfigState /><SuiteMaintenance caps={caps} runtime={runtime} /></div><details className="suite-config-history" onToggle={(event) => setHistoryOpen(event.currentTarget.open)}><summary>配置历史与恢复</summary>{historyOpen && <SuiteHistory />}</details>
-    <div id="component-logs"><Section title="组件日志" subtitle="最近 200 行，后端会脱敏 Token 和敏感环境变量" icon={ScrollText}>
+  return <div className="suite-page">
+    <nav className="suite-page-tabs" aria-label="维护分区">
+      {caps.permissions.maintain && <>{[['tasks', '任务'], ['logs', '组件日志'], ['history', '配置历史'], ...(caps.deployment === 'native' ? [['updates', '软件更新']] : [])].map(([key, label]) =>
+        <a key={key} aria-current={tab === key ? 'page' : undefined} href={`#/system?tab=${key}`}>{label}</a>)}</>}
+      <a href="#/cache">缓存与快照</a>
+    </nav>
+    <Permission allowed={caps.permissions.maintain} kind="maintain">
+    {tab === 'tasks' && <SuiteMaintenance caps={caps} runtime={runtime} />}
+    {tab === 'history' && <Section title="配置历史与恢复" actions={<a href="#/config?tab=apply">前往应用配置</a>}><SuiteHistory /></Section>}
+    {tab === 'updates' && (caps.deployment === 'native' ? <SoftwareUpdate loadedVersion={caps.version} /> : <Empty title="通过主机更新容器">请参阅服务信息中的部署说明。<a href="#/deploy">查看说明</a></Empty>)}
+    {tab === 'logs' && <div id="component-logs"><Section title="组件日志" subtitle="最近 200 行，后端会脱敏 Token 和敏感环境变量" icon={ScrollText}>
       <div className="suite-query-form"><label>组件<select aria-label="日志组件" className="form-select" disabled={busy} value={component} onChange={(e) => { window.location.hash = `#/system?component=${encodeURIComponent(e.target.value)}`; }}>{COMPONENTS.map((name) => <option key={name}>{name}</option>)}</select></label><button className="btn btn-secondary" disabled={busy} onClick={() => void loadLogs()}><ScrollText size={16} />{busy ? '读取中…' : '读取日志'}</button></div>
       {error && <Notice tone="error">{error}</Notice>}{logs && <pre className="suite-log">{logs}</pre>}
-    </Section></div>
-  </Permission><Section title="当前实例信息" subtitle="查看本机版本、实例标识与核心来源" icon={Server}>
-    <dl className="suite-kpi-list"><div><dt>实例 ID</dt><dd><code>{caps.instance_id}</code></dd></div><div><dt>版本</dt><dd>{caps.version}</dd></div><div><dt>核心来源</dt><dd><code>{caps.core.source_commit}</code></dd></div><div><dt>Redis</dt><dd>{runtime?.redis?.available ? '可采集' : '不可用'}</dd></div></dl>
-  </Section></div>;
+    </Section></div>}
+  </Permission><div className="suite-local-links"><a href="#/deploy">服务信息与主机命令</a><a href="#/config?tab=apply">应用解析配置</a></div></div>;
 }

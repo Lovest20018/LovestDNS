@@ -147,6 +147,8 @@ def test_coalesced_request_alias_survives_completion_and_restart(tmp_path):
     store.claim()
     store.finish(task["id"], "succeeded", {"state": "saved"})
     reopened = TaskStore(tmp_path)
+    assert reopened.get(first["request_id"])["id"] == task["id"]
+    assert reopened.get(alias["request_id"])["state"] == "succeeded"
     assert reopened.submit(alias)["id"] == task["id"]
     assert reopened.previous_submission(alias)["state"] == "succeeded"
     with pytest.raises(ValueError, match="不同任务"):
@@ -197,6 +199,28 @@ def test_worker_claim_failure_is_visible_and_recoverable(tmp_path, monkeypatch):
     monkeypatch.setattr(manager.store, "claim", claim)
     manager.step()
     assert manager.phase == "idle" and not manager.degraded
+
+
+def test_capabilities_keep_worker_available_while_restart_initializes_core(tmp_path, monkeypatch):
+    core = FakeCore(tmp_path)
+    manager = Manager(core, TaskStore(core.state))
+    monkeypatch.setenv("LOVESTDNS_SYSTEMD", "1")
+    monkeypatch.setattr(manager, "healthy", lambda: True)
+    manager.phase = "executing"
+    ready = core.run / "ready"
+    ready.unlink()
+
+    request = {"operation": "capabilities"}
+    caps = manager.dispatch(request)
+    assert caps["worker"] == {"available": True, "phase": "executing"}
+    assert not caps["restart_dns_core"] and not caps["save_redis_snapshot"] and not caps["apply_custom_mod"]
+    with pytest.raises(ValueError, match="核心尚未完成初始化"):
+        manager.dispatch({"operation": "submit", "task": {"action": "restart_dns_core", "request_id": "a" * 32,
+                                                           "expected_sha256": None}})
+
+    ready.touch()
+    caps = manager.dispatch(request)
+    assert caps["restart_dns_core"] and caps["save_redis_snapshot"] and caps["apply_custom_mod"]
 
 
 def test_claim_commit_response_loss_never_replays_or_leaves_running_forever(tmp_path, monkeypatch):

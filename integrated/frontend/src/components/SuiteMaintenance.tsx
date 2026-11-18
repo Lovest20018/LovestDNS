@@ -1,150 +1,163 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { CheckCircle, Clock, Database, FileCheck, RefreshCw } from 'lucide-react';
-import { suiteFetch, errorText } from '../suiteApi';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Clock, Database, FileCheck, RefreshCw } from 'lucide-react';
+import { bytes, errorText, suiteFetch, when } from '../suiteApi';
 import { useSuite } from '../suiteContext';
-import { maintenanceRequestId, acknowledgeMaintenanceRequest } from '../maintenanceRequests';
-import { dirtyFileDrafts, subscribeFileDraft } from '../fileDrafts';
+import { dirtyFileDrafts, dirtyFileNames, subscribeFileDraft } from '../fileDrafts';
+import { configFileLabel, configFileLink } from '../configFiles';
+import { isActiveTask, requestExpired, taskLabel, TASK_NAMES, useMaintenance } from '../maintenanceContext';
 import type { ApplyPlan, Capabilities, MaintenanceTask, RuntimeSnapshot } from '../suiteApi';
 
-const STATES = { queued: '等待执行', running: '执行中', succeeded: '已完成', failed: '失败', interrupted: '已中断' };
-const WORKER_PHASES: Record<string, string> = { result_unconfirmed: '任务已执行，结果记录待核对；请勿重复提交', journal_unavailable: '任务记录暂不可用', starting: '执行器正在启动' };
+const WORKER_PHASES: Record<string, string> = {
+  result_unconfirmed: '正在核对任务记录', journal_unavailable: '暂时无法读取任务记录', starting: '管理服务正在启动',
+};
 const subscribeDrafts = (listener: () => void) => subscribeFileDraft('*', listener);
 
-function bytes(value: number | undefined | null) {
-  return typeof value === 'number' ? `${(value / 1024 / 1024).toFixed(1)} MiB` : '未采集';
+const logLink = (task: MaintenanceTask) => `#/system?component=${task.action === 'save_redis_snapshot' ? 'redis' : task.action === 'apply_custom_mod' ? 'mosdns' : 'bootstrap'}`;
+
+function TaskResult({ task, historical = false, next = '#/diagnostics?tab=query' }: { task: MaintenanceTask; historical?: boolean; next?: string }) {
+  return <div className={`suite-task-result is-${historical ? 'historical' : task.state}`}>
+    <strong>{historical ? '上次看到 · ' : ''}{taskLabel(task)}</strong>
+    <small>{when(task.updated)} · 任务 {task.id.slice(0, 12)}</small>
+    {task.result?.message && <p>{task.result.message}</p>}
+    {task.result?.error && <p>{task.result.error}</p>}
+    {task.result?.rollback && <p>运行配置{task.result.rollback.runtime_restored ? '已恢复' : '恢复待确认'}。DNS 服务{task.result.rollback.service_running ? '已启动' : '需检查'}。{task.result.rollback.error}</p>}
+    {task.result?.saved_at && <p>{when(task.result.saved_at)} 保存了 {bytes(task.result.bytes)}</p>}
+    {task.state === 'succeeded' && task.action !== 'save_redis_snapshot' && <a href={next} onClick={next.startsWith('#/') ? undefined : (event) => {
+      event.preventDefault();
+      const field = document.getElementById('config-query-domain');
+      field?.scrollIntoView({ block: 'center' });
+      field?.focus({ preventScroll: true });
+    }}>验证目标域名</a>}
+    {['failed', 'interrupted'].includes(task.state) && <div className="suite-local-links"><a href={logLink(task)}>查看相关日志</a><a href="#/config">检查配置</a></div>}
+  </div>;
 }
 
 export default function SuiteMaintenance({ caps, runtime, mode = 'system', configAction = 'all' }: { caps: Capabilities; runtime: RuntimeSnapshot | null; mode?: 'config' | 'system' | 'cache'; configAction?: 'all' | 'restart' | 'apply' }) {
-  const { refresh: refreshRuntime, error: connectionError } = useSuite();
+  const { error: connectionError } = useSuite();
+  const { tasks, loaded, readError, reading, refresh, submission, pending, lookupMissing, submit, dismissExpired } = useMaintenance();
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [pollError, setPollError] = useState('');
-  const [taskRefreshing, setTaskRefreshing] = useState(false);
-  const knownTasks = useRef(new Map<string, string>());
   const [plan, setPlan] = useState<ApplyPlan | null>(null);
-  const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const [validating, setValidating] = useState(false);
   const [confirmRestart, setConfirmRestart] = useState(false);
-  const unsaved = useSyncExternalStore(subscribeDrafts, dirtyFileDrafts);
-  const reading = useRef(false);
-  const pollingActive = useRef(false);
-  const enabled = caps.deployment === 'native' || caps.features.config_apply || caps.features.redis_snapshot;
-  const active = tasks.some((task) => task.state === 'queued' || task.state === 'running');
-  const recentResult = tasks.find((task) => !['queued', 'running'].includes(task.state));
-  const visibleTasks = tasks.filter((task) => task === recentResult || ['queued', 'running'].includes(task.state));
-  const hiddenCount = tasks.length - visibleTasks.length;
-
-  const receiveTasks = useCallback((items: MaintenanceTask[]) => {
-    const completed = items.some((task) => ['queued', 'running'].includes(knownTasks.current.get(task.id) ?? '') && ['succeeded', 'failed', 'interrupted'].includes(task.state));
-    items.forEach((task) => knownTasks.current.set(task.id, task.state));
-    setTasks(items); setPollError('');
-    pollingActive.current = items.some((task) => ['queued', 'running'].includes(task.state));
-    if (completed) { setPlan(null); window.dispatchEvent(new Event('lovestdns-config-changed')); }
-  }, []);
-  const refresh = useCallback(async (signal?: AbortSignal) => {
-    if (reading.current) return;
-    reading.current = true;
-    setTaskRefreshing(true);
-    try { const result = await suiteFetch<{ tasks: MaintenanceTask[] }>('/api/maintenance/tasks', { signal }); if (!signal?.aborted) receiveTasks(result.tasks); }
-    catch (e) { if (!signal?.aborted) setPollError(errorText(e)); }
-    finally { reading.current = false; if (!signal?.aborted) setTaskRefreshing(false); }
-  }, [receiveTasks]);
+  const draftNames = useSyncExternalStore(subscribeDrafts, dirtyFileNames);
+  const unsaved = !!draftNames;
+  const restartResult = useRef<HTMLDivElement>(null);
+  const applyResult = useRef<HTMLDivElement>(null);
+  const cacheResult = useRef<HTMLDivElement>(null);
+  const active = tasks.find(isActiveTask);
+  const blocked = !loaded || !!readError || !!connectionError || !!active || !!pending || validating;
+  const relevant = (action: MaintenanceTask['action']) => mode === 'cache' ? action === 'save_redis_snapshot'
+    : mode === 'system' || (action === 'restart_dns_core' && configAction !== 'apply' && caps.deployment === 'native') || (action === 'apply_custom_mod' && configAction !== 'restart');
+  const canRetry = Boolean(pending && lookupMissing && !requestExpired(pending) && !active && !connectionError && !readError
+    && (pending.action === 'save_redis_snapshot' || !unsaved) && submission?.phase !== 'sending');
 
   useEffect(() => {
-    if (!enabled) return;
-    const abort = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      if (!document.hidden) await refresh(abort.signal);
-      if (!abort.signal.aborted) timer = setTimeout(poll, document.hidden ? 60000 : pollingActive.current ? 3000 : 20000);
-    };
-    void poll();
-    const invalidate = () => { setPlan(null); void refresh(abort.signal); };
+    const invalidate = () => { setPlan(null); setPreviewError(''); };
     window.addEventListener('lovestdns-config-changed', invalidate);
-    return () => { abort.abort(); clearTimeout(timer); window.removeEventListener('lovestdns-config-changed', invalidate); };
-  }, [enabled, refresh, active]);
+    return () => window.removeEventListener('lovestdns-config-changed', invalidate);
+  }, []);
 
   const preview = async () => {
-    if (dirtyFileDrafts() || busy || active || !caps.permissions.maintain) return;
-    setBusy(true); setError(''); setPlan(null);
+    if (dirtyFileDrafts() || blocked || !caps.features.config_apply) return;
+    setValidating(true); setPreviewError(''); setPlan(null);
     try { setPlan(await suiteFetch<ApplyPlan>('/api/config/apply-plan')); }
-    catch (e) { setError(errorText(e)); }
-    finally { setBusy(false); }
+    catch (error) { setPreviewError(errorText(error)); }
+    finally { setValidating(false); }
   };
 
-  const submit = async (action: MaintenanceTask['action']) => {
-    if (busy || active || !caps.permissions.maintain || (action !== 'save_redis_snapshot' && dirtyFileDrafts())) return;
-    if (!(action === 'apply_custom_mod' ? caps.features.config_apply : action === 'restart_dns_core' ? caps.features.restart_dns_core : caps.features.redis_snapshot)) return;
-    const expected = action === 'apply_custom_mod' ? plan?.sha256 : null;
-    if (action === 'apply_custom_mod' && !expected) return;
-    setBusy(true); setError('');
-    const key = action + (expected ?? '');
-    const id = maintenanceRequestId(caps.instance_id, key);
-    try {
-      const response = await suiteFetch<{ task: MaintenanceTask }>('/api/maintenance/tasks', { method: 'POST',
-        body: JSON.stringify({ action, request_id: id, expected_sha256: expected }) });
-      knownTasks.current.set(response.task.id, response.task.state);
-      if (['succeeded', 'failed'].includes(response.task.state)) void refreshRuntime();
-      if (['succeeded', 'failed', 'interrupted'].includes(response.task.state)) window.dispatchEvent(new Event('lovestdns-config-changed'));
-      setTasks((old) => [response.task, ...old.filter((task) => task.id !== response.task.id)].slice(0, 20));
-      pollingActive.current = ['queued', 'running'].includes(response.task.state);
-      acknowledgeMaintenanceRequest(caps.instance_id, key);
-      void refresh();
+  const perform = async (action: MaintenanceTask['action'], result: HTMLDivElement | null, expected?: string) => {
+    if (blocked || (action !== 'save_redis_snapshot' && dirtyFileDrafts())) return;
+    result?.focus({ preventScroll: true });
+    if (await submit(action, expected)) {
       setConfirmRestart(false);
-      if (action === 'apply_custom_mod') setPlan(null);
-    } catch (e) { setError(errorText(e)); }
-    finally { setBusy(false); }
+      setPlan(null);
+    }
+  };
+
+  const feedback = (action: MaintenanceTask['action']) => {
+    if (submission?.action === action) {
+      if (submission.phase === 'sending') return <strong>正在提交{TASK_NAMES[action]}请求…</strong>;
+      if (submission.phase === 'failed') return <p>提交失败。{submission.detail}</p>;
+      return <div className="suite-task-result">
+        <strong>{pending?.retryRejected ? '重试被拒绝，正在核对原请求' : lookupMissing ? '暂未查到受理记录' : '暂无法确认是否已受理，正在核对原请求'}</strong>
+        {pending && <small>请求 {pending.request_id.slice(0, 12)}</small>}
+        {submission.detail && <details><summary>请求详情</summary>{submission.detail}</details>}
+        {canRetry && <button className="btn btn-secondary btn-sm" onClick={() => void submit(action, pending?.expected_sha256)}>用原编号重试{TASK_NAMES[action]}</button>}
+        {pending && lookupMissing && requestExpired(pending) && <button className="btn btn-secondary btn-sm" onClick={dismissExpired}>关闭已过期的请求</button>}
+      </div>;
+    }
+    const recent = tasks.find(task => task.action === action);
+    if (recent) return <TaskResult task={recent} historical={!!readError || !!connectionError} next={mode === 'config' ? '#config-query-domain' : undefined} />;
+    return null;
+  };
+
+  const blockedReason = () => {
+    if (connectionError || readError) return '连接暂不可用，恢复后可提交。';
+    if (!loaded) return '正在读取任务状态…';
+    if (active) return relevant(active.action) ? '' : `${TASK_NAMES[active.action]}正在处理，请等待任务结束。`;
+    if (pending && !relevant(pending.action)) return '上一条请求仍待核对。';
+    return '';
   };
 
   return <>
-    {mode !== 'cache' && unsaved && <p className="suite-note" role="status">有未保存草稿，请先保存或还原草稿，再应用配置。</p>}
-    {caps.maintenance && !caps.maintenance.available && <div className="suite-notice is-warning" role="status"><div>维护执行器暂不可用：{WORKER_PHASES[caps.maintenance.phase] ?? '请检查管理服务'}。<a href="#/system?component=manager">查看管理日志</a></div></div>}
+    {mode === 'config' && unsaved && <div className="suite-notice is-warning" role="status"><div>请先保存或还原以下草稿。<div className="suite-local-links">{draftNames.split(',').map(name => <a key={name} href={configFileLink(name)}>{configFileLabel(name)}</a>)}</div></div></div>}
+    {blockedReason() && <p className="suite-note" role="status">{blockedReason()} <a href="#/system?tab=tasks">查看维护任务</a></p>}
+    {!active && (loaded || readError) && caps.maintenance && !caps.maintenance.available && <div className="suite-notice is-warning" role="status"><div>{WORKER_PHASES[caps.maintenance.phase] ?? '暂时无法提交维护操作'}。<a href="#/system?component=manager">查看管理日志</a></div></div>}
     <div className={mode === 'config' ? 'suite-apply-options' : 'suite-maintenance-options'}>
-    {mode !== 'cache' && configAction !== 'apply' && caps.deployment === 'native' && <div className="card"><div className="card-title"><RefreshCw size={17} />重启 DNS 核心</div>
-      <p className="suite-note">保存基础设置、custom_env.ini 或 Unbound 配置后，在此重新生成运行配置。解析会短暂中断，页面和登录会话保持可用；任务完成后仍需查询目标域名验证。</p>
-      {!confirmRestart ? <button className="btn btn-secondary" disabled={!caps.permissions.maintain || !caps.features.restart_dns_core || busy || active || unsaved || !!connectionError} onClick={() => setConfirmRestart(true)}>查看重启范围</button> : <div className="suite-apply-plan" role="alert"><p>即将保存 Redis 快照并重启 DNS 组件，应用所有已保存的初始化配置。解析会短暂中断；初始化失败会尝试恢复旧运行配置，编辑文件仍保留。</p><div className="suite-local-links"><button className="btn btn-primary" disabled={!caps.permissions.maintain || !caps.features.restart_dns_core || busy || active || unsaved || !!connectionError} onClick={() => void submit('restart_dns_core')}>确认重启</button><button className="btn btn-secondary" disabled={busy} onClick={() => setConfirmRestart(false)}>取消</button></div></div>}
-      {!caps.features.restart_dns_core && <p className="suite-note">维护服务尚未准备好，请稍后刷新或检查组件日志。</p>}
-    </div>}
-    {mode !== 'cache' && configAction !== 'apply' && caps.deployment !== 'native' && <div className="card"><div className="card-title"><RefreshCw size={17} />应用基础与 Unbound 配置</div><p className="suite-note">初始化参数需要通过主机更新容器配置并重新创建容器。解析可能短暂中断，完成后请查询目标域名验证。</p><a className="btn btn-secondary" href="#/deploy">查看主机操作说明</a></div>}
-    {mode !== 'cache' && configAction !== 'restart' && <div className="card"><div className="card-title"><FileCheck size={17} />配置应用</div>
-      <p className="suite-note">custom_mod.yaml 可单独预览并应用。{caps.deployment === 'native' ? '基础设置和 Unbound 配置请使用“重启 DNS 核心”。' : '基础设置和 Unbound 配置请按服务信息中的主机说明应用。'}初始化参数变更不适合仅重载 MosDNS。</p>
-      <button className="btn btn-secondary" disabled={!caps.permissions.maintain || !caps.features.config_apply || busy || active || unsaved || !!connectionError} onClick={() => void preview()}>
-        预览并校验当前配置</button>
-      {!caps.features.config_apply && <p className="suite-note">当前运行模式或维护服务尚不支持配置应用。</p>}
-      {plan && <div className="suite-apply-plan"><p>{plan.notice}</p>
-        <details><summary>本次输入与生成的运行配置</summary><ul>{Object.entries(plan.inputs).map(([name, checksum]) => <li key={name}><code>{name}</code> · {checksum.slice(0, 12)}</li>)}</ul>
-          <pre className="suite-log">{plan.candidate}</pre></details>
-        <button className="btn btn-primary" disabled={!caps.permissions.maintain || !caps.features.config_apply || busy || active || unsaved || !!connectionError} onClick={() => void submit('apply_custom_mod')}>应用此预览配置</button></div>}
-    </div>}
-    {mode !== 'config' && <div className="card"><div className="card-title"><Database size={17} />Redis 持久化维护</div>
-      <dl className="suite-counters"><div><dt>默认 RDB 文件</dt><dd>{bytes(runtime?.persistence?.rdb_bytes)}</dd></div>
-        <div><dt>数据盘可用空间</dt><dd>{bytes(runtime?.persistence?.disk_free_bytes)}</dd></div>
-        <div><dt>最近后台保存</dt><dd>{runtime?.persistence?.last_save_status ?? '未采集'}</dd></div>
-        <div><dt>自上次保存后的修改数</dt><dd>{runtime?.persistence?.changes_since_save ?? '未采集'}</dd></div></dl>
-      {runtime?.persistence?.warnings.map((warning) => <p role="status" key={warning}>{warning}</p>)}
-      {runtime?.persistence?.storage_error && <p role="status">{runtime.persistence.storage_error}</p>}
-      <button className="btn btn-secondary" disabled={!caps.features.redis_snapshot || busy || active || !!connectionError} onClick={() => void submit('save_redis_snapshot')}>保存 Redis 快照</button>
-      <p className="suite-note">后台保存会占用临时内存和磁盘。任务确认保存完成并记录结果，覆盖 Redis 持久化数据；其他组件的内存缓存、查询历史和完整数据备份需另行处理。</p>
-    </div>}
+      {mode === 'config' && configAction !== 'apply' && caps.deployment === 'native' && <div className="card">
+        <div className="card-title"><RefreshCw size={17} />重启 DNS 以应用配置</div>
+        <p className="suite-note">重新加载已保存的基础设置和 Unbound 配置。解析会短暂中断。</p>
+        {confirmRestart && !pending && !active ? <div className="suite-apply-plan">
+          <p>将保存 Redis 快照并重启 DNS，应用全部已保存的初始化配置。启动失败时，系统会尝试恢复此前的运行配置。</p>
+          <div className="suite-local-links">
+            <button className="btn btn-primary" disabled={blocked || unsaved || !caps.features.restart_dns_core} onClick={() => void perform('restart_dns_core', restartResult.current)}>确认重启 DNS</button>
+            <button className="btn btn-secondary" onClick={() => setConfirmRestart(false)}>取消</button>
+          </div>
+        </div> : <button className="btn btn-secondary" disabled={blocked || unsaved || !caps.features.restart_dns_core} onClick={() => setConfirmRestart(true)}>查看重启范围</button>}
+        {!active && !blocked && !caps.features.restart_dns_core && caps.maintenance?.available && <p className="suite-note">DNS 核心尚未就绪。<a href="#/system?component=bootstrap">查看启动日志</a></p>}
+        <div className="suite-action-status" tabIndex={-1} ref={restartResult} role="status">{feedback('restart_dns_core')}</div>
+      </div>}
+      {mode === 'config' && configAction !== 'apply' && caps.deployment !== 'native' && <div className="card">
+        <div className="card-title"><RefreshCw size={17} />应用基础与 Unbound 配置</div>
+        <p className="suite-note">在宿主机更新配置并重新创建容器。解析可能短暂中断，随后可查询目标域名。</p>
+        <a className="btn btn-secondary" href="#/deploy">查看主机操作说明</a>
+      </div>}
+      {mode === 'config' && configAction !== 'restart' && <div className="card">
+        <div className="card-title"><FileCheck size={17} />应用自定义分流</div>
+        <p className="suite-note">校验已保存的 custom_mod.yaml，再加载生成的 MosDNS 配置。</p>
+        <button className="btn btn-secondary" disabled={blocked || unsaved || !caps.features.config_apply} onClick={() => void preview()}>
+          {validating ? '正在校验…' : '预览并校验当前配置'}</button>
+        {previewError && <p role="alert">校验未完成。{previewError}</p>}
+        {!blocked && !caps.features.config_apply && <p className="suite-note">当前配置模式无法执行网页分流应用。<a href="#/system?component=mosdns">查看 MosDNS 状态</a></p>}
+        {plan && !pending && !active && <div className="suite-apply-plan"><p>{plan.notice}</p>
+          <details><summary>本次输入与生成的运行配置</summary><ul>{Object.entries(plan.inputs).map(([name, checksum]) => <li key={name}><code>{name}</code> · {checksum.slice(0, 12)}</li>)}</ul>
+            <pre className="suite-log">{plan.candidate}</pre></details>
+          <button className="btn btn-primary" disabled={blocked || unsaved || !caps.features.config_apply} onClick={() => void perform('apply_custom_mod', applyResult.current, plan.sha256)}>应用此预览配置</button>
+        </div>}
+        <div className="suite-action-status" tabIndex={-1} ref={applyResult} role="status">{feedback('apply_custom_mod')}</div>
+      </div>}
+      {mode === 'cache' && <div className="card"><div className="card-title"><Database size={17} />Redis 持久化维护</div>
+        <dl className="suite-counters"><div><dt>默认 RDB 文件</dt><dd>{bytes(runtime?.persistence?.rdb_bytes)}</dd></div>
+          <div><dt>数据盘可用空间</dt><dd>{bytes(runtime?.persistence?.disk_free_bytes)}</dd></div>
+          <div><dt>最近后台保存</dt><dd>{runtime?.persistence?.last_save_status ?? '未采集'}</dd></div>
+          <div><dt>自上次保存后的修改数</dt><dd>{runtime?.persistence?.changes_since_save ?? '未采集'}</dd></div></dl>
+        {runtime?.persistence?.warnings.map(warning => <p role="status" key={warning}>{warning}</p>)}
+        {runtime?.persistence?.storage_error && <p role="status">{runtime.persistence.storage_error}</p>}
+        <button className="btn btn-secondary" disabled={blocked || !caps.features.redis_snapshot} onClick={() => void perform('save_redis_snapshot', cacheResult.current)}>保存 Redis 快照</button>
+        {!blocked && !caps.features.redis_snapshot && <p className="suite-note">当前实例暂无法保存快照。<a href="#/system?component=redis">查看 Redis 日志</a></p>}
+        <p className="suite-note">覆盖 Redis 持久化数据，保存期间会占用额外内存和磁盘。</p>
+        <div className="suite-action-status" tabIndex={-1} ref={cacheResult} role="status">{feedback('save_redis_snapshot')}</div>
+      </div>}
     </div>
-    <div className="card suite-maintenance-tasks"><div className="card-title"><Clock size={17} />维护任务
-      <button className="btn btn-secondary btn-sm" disabled={taskRefreshing} aria-busy={taskRefreshing} onClick={() => void refresh()}><RefreshCw size={13} />刷新</button></div>
-      {pollError && <p role="alert">任务状态读取暂不可用：{pollError}。请刷新重试；下方结果可能已过期。</p>}
-      {error && <p role="alert">操作未完成：{error} <a href="#/system">查看组件日志</a></p>}
-      {!tasks.length && <p className="suite-note">暂无维护任务。保存配置后按上方入口应用，再查询验证。</p>}
-      {hiddenCount > 0 && <button className="btn btn-secondary btn-sm" aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>{historyOpen ? '收起历史任务' : `查看历史任务（${hiddenCount}）`}</button>}
-      {(historyOpen ? tasks : visibleTasks).map((task) => <div className="suite-task" key={task.id}>
-        <strong>{{ apply_custom_mod: '应用自定义配置', save_redis_snapshot: '保存 Redis 快照', restart_dns_core: '重启 DNS 核心' }[task.action]}</strong>
-        <span>{task.state === 'succeeded' ? <CheckCircle size={13} /> : <Clock size={13} />} {STATES[task.state]}</span>
-        <time>{new Date(task.updated * 1000).toLocaleString()}</time>
-        {task.result?.message && <p>{task.result.message}</p>}
-        {task.result?.error && <p role="status">{task.result.error}</p>}
-        {task.result?.rollback && <p>运行配置回退：{task.result.rollback.runtime_restored ? '已恢复' : '未确认'}；服务：{task.result.rollback.service_running ? '已启动' : '需检查'}。{task.result.rollback.error}</p>}
-        {task.result?.saved_at && <p>保存时间：{new Date(task.result.saved_at * 1000).toLocaleString()} · {bytes(task.result.bytes)}</p>}
-        {task.state === 'succeeded' && task.action !== 'save_redis_snapshot' && <p className="suite-task-next">{mode === 'config' ? '任务已完成；在下方执行样本查询，并核对预期结果。' : <>配置任务已完成；规则效果尚未验证。<a href="#/diagnostics">查询目标域名验证</a></>}</p>}
-        {['failed', 'interrupted'].includes(task.state) && <p className="suite-task-next"><a href="#/system">查看日志</a> · <a href="#/config">返回配置检查后重试</a></p>}
-        <small className="suite-note">任务 {task.id.slice(0, 12)}</small>
-      </div>)}
-    </div>
+    {mode === 'system' && <div className="card suite-maintenance-tasks">
+      <div className="card-title"><Clock size={17} />维护任务
+        <button className="btn btn-secondary btn-sm" disabled={reading} aria-busy={reading} onClick={() => void refresh()}><RefreshCw size={13} />刷新任务</button></div>
+      {readError && <p role="status">暂时无法读取任务，正在重连。<a href="#/system?component=manager">查看管理日志</a></p>}
+      {submission && <div className="suite-action-status" role="status">{feedback(submission.action)}</div>}
+      {!tasks.length && !readError && <p className="suite-note">{loaded ? '暂无维护任务。' : '正在读取维护任务…'}</p>}
+      {(historyOpen ? tasks : tasks.slice(0, 1)).map(task => <div className="suite-task" key={task.id}><TaskResult task={task} historical={!!readError} /></div>)}
+      {tasks.length > 1 && <button className="btn btn-secondary btn-sm" aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>{historyOpen ? '收起历史任务' : `查看历史任务（${tasks.length - 1}）`}</button>}
+    </div>}
   </>;
 }

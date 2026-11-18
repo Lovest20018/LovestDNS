@@ -57,11 +57,12 @@ def main():
                 str(modules), str(source)], check=True)
         else:
             modules.symlink_to(source, target_is_directory=True)
+    accepted_build_advisories = []
     if not args.reuse_dependencies:
         if modules.is_symlink() or (sys.platform == "win32" and modules.is_junction()):
             raise SystemExit("Remove the dependency link before using npm ci; it must not modify the frozen tree")
-        subprocess.run([npm, "ci"], cwd=target, check=True)
-        subprocess.run([npm, "audit", "--audit-level=low"], cwd=target, check=True)
+        subprocess.run([npm, "ci", "--no-audit"], cwd=target, check=True)
+        accepted_build_advisories = runpy.run_path(str(ROOT / "packaging/integrated/audit_frontend.py"))["audit"](target, npm)
     subprocess.run([npm, "run", "build"], cwd=target, check=True)
     subprocess.run([npm, "run", "lint"], cwd=target, check=True)
     manifest = {
@@ -69,6 +70,7 @@ def main():
         'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
         'working_tree_modified': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT, text=True).strip()),
         'dependency_mode': 'development-reuse' if args.reuse_dependencies else 'npm-ci',
+        'accepted_build_advisories': accepted_build_advisories,
         'lock_sha256': hashlib.sha256((target / 'package-lock.json').read_bytes()).hexdigest(),
         'node_version': subprocess.check_output([shutil.which('node'), '--version'], text=True).strip(),
         'source_snapshot': runpy.run_path(str(ROOT / 'scripts/export-api-contract.py'))['source_summary'](),

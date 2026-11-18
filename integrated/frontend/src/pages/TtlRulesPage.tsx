@@ -6,7 +6,7 @@ import { useUnsavedChanges } from '../unsaved';
 import { useFileEditor } from '../useFileEditor';
 import { useState } from 'react';
 import { useToast } from '../hooks';
-import { Plus, X, Clock, Save, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Plus, X, Clock, RefreshCw } from 'lucide-react';
 
 export default function TtlRulesPage() {
   const { error: connectionError, runningEnv } = useSuiteConfig();
@@ -50,11 +50,6 @@ export default function TtlRulesPage() {
     setEntries((prev) => prev.filter((e) => e.id !== id));
   };
 
-  const handleSave = async () => {
-    const result = await editor.save();
-    if (result?.success) showToast('配置已保存；请按生效提示继续');
-  };
-
   return (
     <div>
       <fieldset className="suite-editor-fieldset" disabled={saving} aria-busy={saving}>
@@ -83,7 +78,7 @@ export default function TtlRulesPage() {
         </div>
       )}
 
-      <EditorToolbar file={"force_ttl_rules.txt"} dirty={dirty} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} onSave={() => void handleSave()} />
+      <EditorToolbar file="force_ttl_rules.txt" dirty={dirty} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} change={saveResult?.change} onSave={() => void editor.save()} />
       {editor.error && <p className="suite-editor-result is-error" role="alert">{editor.error}</p>}
 
       <div className="card">
@@ -229,20 +224,6 @@ export default function TtlRulesPage() {
           />
         )}
 
-        <div className="suite-editor-actions" style={{ marginTop: 16, borderTop: '1px solid var(--border-color)', paddingTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" disabled={saving || loading || loadFailed || !!connectionError || !dirty} onClick={handleSave}>
-            <Save size={16} /> {saving ? '保存中...' : '保存配置'}
-          </button>
-          {saveResult && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
-              {saveResult.success ? (
-                <><CheckCircle size={14} style={{ color: 'var(--accent-green)' }} /> <span style={{ color: 'var(--accent-green)' }}>{saveResult.msg}</span></>
-              ) : (
-                <><AlertCircle size={14} style={{ color: 'var(--accent-red)' }} /> <span style={{ color: 'var(--accent-red)' }}>{saveResult.msg}</span></>
-              )}
-            </span>
-          )}
-        </div>
       </div>
 
       <details className="card suite-editor-help"><summary><Clock size={16} /> TTL 语法和生效说明</summary>

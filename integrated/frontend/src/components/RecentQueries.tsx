@@ -11,7 +11,7 @@ import { Empty, Notice, Section } from './SuiteUI';
 import { dnsAddress } from '../dnsListeners';
 import './RecentQueries.css';
 
-const PHASE = { disabled: '后台记录已关闭', starting: '正在启动记录', recording: '后台记录已开启', unavailable: '后台记录暂不可用' };
+const PHASE = { disabled: '未开启查询记录', starting: '正在启动记录', recording: '后台记录已开启', unavailable: '后台记录暂不可用' };
 const DROP_KEYS = ['kernel_drops', 'queue_drops', 'storage_drops', 'pending_evictions', 'stream_evictions', 'tcp_gaps', 'discarded_pending'];
 const COUNTERS: Record<string, string> = { queries_observed: '入口事务', stored_events: '已保存', kernel_drops: '内核丢包', queue_drops: '队列丢弃', storage_drops: '保存丢弃', storage_errors: '存储错误', pending_evictions: '待响应容量丢弃', stream_evictions: 'TCP 容量丢弃', tcp_gaps: 'TCP 缺口', discarded_pending: '关联重置丢弃', discarded_events: '启停或清空丢弃', unparsed_packets: '未解析报文', tcp_untracked_packets: '未跟踪 TCP 报文', unmatched_responses: '未配对响应', no_response_observed: '未观察到响应', same_key_queries: '同键请求', invalid_timing: '无效计时', clock_resets: '时钟跳变重置', tcp_retransmitted_packets: 'TCP 重传报文', tcp_idle_expirations: 'TCP 跟踪到期', capture_errors: '采集错误' };
 type Navigate = (patch: Partial<DiagnosticRoute>, replace?: boolean) => void;

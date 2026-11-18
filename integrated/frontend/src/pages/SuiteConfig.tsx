@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from 'react';
 import { ArrowRight, Clock3, FileCog, FileText, Settings2 } from 'lucide-react';
 import { useSuite } from '../suiteContext';
 import { Empty, Notice, Permission } from '../components/SuiteUI';
@@ -15,11 +16,45 @@ const cards = [
 ];
 export default function SuiteConfig() {
   const { caps, runtime } = useSuite();
+  const canMaintain = Boolean(caps?.permissions.configure && caps.permissions.maintain);
+  const applyHeading = useRef<HTMLHeadingElement>(null);
+  const focusApply = useCallback(() => {
+    applyHeading.current?.focus({ preventScroll: true });
+    applyHeading.current?.scrollIntoView({ block: 'start' });
+  }, []);
+  useEffect(() => {
+    if (!caps?.permissions.configure) return;
+    let frame = 0;
+    const sync = () => {
+      cancelAnimationFrame(frame);
+      const [path, query] = window.location.hash.split('?');
+      const params = new URLSearchParams(query);
+      const applying = params.get('tab') === 'apply' && (path === '#/config' || (path === '#/system' && !params.has('component')));
+      if (canMaintain && applying) frame = requestAnimationFrame(focusApply);
+      if (path === '#/config' && params.get('tab') === 'changes') frame = requestAnimationFrame(() => {
+        const changes = document.getElementById('config-changes');
+        changes?.focus({ preventScroll: true });
+        changes?.scrollIntoView({ block: 'start' });
+      });
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('hashchange', sync);
+    };
+  }, [canMaintain, caps?.permissions.configure, focusApply]);
   if (!caps) return <Empty title="等待 DNS 实例连接">连接后可读取和编辑配置。</Empty>;
   return <div className="suite-page"><Permission allowed={caps.permissions.configure}>
-    <Notice>编辑目标配置，保存后按加载方式处理，再执行样本查询。<a href="#/system?tab=apply">配置历史与维护日志</a></Notice>
+    <Notice>保存配置后可在编辑处继续操作。{canMaintain && <a href="#/config?tab=apply" onClick={() => {
+      if (window.location.hash === '#/config?tab=apply') focusApply();
+    }}>前往应用配置</a>}<a href="#/system?tab=history">配置历史与恢复</a></Notice>
     <div className="suite-config-grid">{cards.map(({ href, title, desc, icon: Icon }) => <a className="suite-config-card" href={href} key={href}><span><Icon size={20} /></span><div><strong>{title}</strong><p>{desc}</p></div><ArrowRight size={17} /></a>)}</div>
     <ConfigState />
-    {caps.permissions.maintain && <div className="suite-config-workflow"><div className="suite-workflow-steps"><span>1 · 保存目标</span><span>2 · 应用 / 重启</span><span>3 · 样本查询</span></div><SuiteMaintenance caps={caps} runtime={runtime} mode="config" /><ConfigVerification /></div>}
+    {canMaintain && <section className="suite-config-workflow" aria-labelledby="config-apply">
+      <h2 id="config-apply" ref={applyHeading} tabIndex={-1}>应用配置</h2>
+      <SuiteMaintenance caps={caps} runtime={runtime} mode="config" />
+      <ConfigVerification />
+    </section>}
   </Permission></div>;
 }

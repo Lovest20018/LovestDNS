@@ -4,9 +4,9 @@ import EditorToolbar from '../components/EditorToolbar';
 import { useSuiteConfig } from '../suiteContext';
 import { useUnsavedChanges } from '../unsaved';
 import { useFileEditor } from '../useFileEditor';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { LIST_FILE_INFO } from '../types';
-import { Plus, X, FileText, Download, Copy, Save, CheckCircle, AlertCircle, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, X, FileText, Download, Copy, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '../hooks';
 import { copyText } from '../copyText';
 
@@ -48,12 +48,20 @@ const ALL_LISTS = [
   },
 ];
 
+function subscribeRoute(listener: () => void) {
+  window.addEventListener('hashchange', listener);
+  return () => window.removeEventListener('hashchange', listener);
+}
+function activeListKey() {
+  const file = new URLSearchParams(window.location.hash.split('?')[1]).get('file');
+  return ALL_LISTS.find(list => list.filename === file)?.key ?? 'force_dnscrypt_list';
+}
 export default function DomainListPage() {
-  const [activeTab, setActiveTab] = useState(() => ALL_LISTS.find((list) => list.filename === new URLSearchParams(window.location.hash.split('?')[1]).get('file'))?.key ?? 'force_dnscrypt_list');
-  return <DomainFileEditor key={activeTab} activeTab={activeTab} onSelect={setActiveTab} />;
+  const activeTab = useSyncExternalStore(subscribeRoute, activeListKey);
+  return <DomainFileEditor key={activeTab} activeTab={activeTab} />;
 }
 
-function DomainFileEditor({ activeTab, onSelect }: { activeTab: string; onSelect: (key: string) => void }) {
+function DomainFileEditor({ activeTab }: { activeTab: string }) {
   const { error: connectionError } = useSuiteConfig();
   const { showToast, ToastComponent } = useToast();
   const [editMode, setEditMode] = useState<'visual' | 'text'>('text');
@@ -72,7 +80,6 @@ function DomainFileEditor({ activeTab, onSelect }: { activeTab: string; onSelect
   const getCurrentContent = () => rawContent;
   const hasUnsavedChanges = editor.dirty;
   useUnsavedChanges(hasUnsavedChanges);
-  const switchTab = (key: string) => onSelect(key);
   const switchEditMode = (mode: 'visual' | 'text') => { if (!isTrackerList || mode === 'text') setEditMode(mode); };
 
   const updateEntry = (id: number, field: keyof DomainEntry, val: string | boolean) => {
@@ -126,11 +133,6 @@ function DomainFileEditor({ activeTab, onSelect }: { activeTab: string; onSelect
     });
   };
 
-  const handleSave = async () => {
-    const result = await editor.save();
-    if (result?.success) showToast('配置已保存；请按生效提示继续');
-  };
-
   const handleCopy = async () => {
     const content = getCurrentContent();
     const copied = await copyText(content);
@@ -162,14 +164,14 @@ function DomainFileEditor({ activeTab, onSelect }: { activeTab: string; onSelect
           <button
             key={list.key}
             className={`tab-item ${activeTab === list.key ? 'active' : ''}`}
-            onClick={() => switchTab(list.key)}
+            onClick={() => { window.location.hash = `/lists?file=${encodeURIComponent(list.filename)}`; }}
           >
             {list.title.replace('强制 ', '').replace('域名列表', '')}
           </button>
         ))}
       </div>
 
-      <EditorToolbar file={activeList.filename} dirty={hasUnsavedChanges} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} onSave={() => void handleSave()} />
+      <EditorToolbar file={activeList.filename} dirty={hasUnsavedChanges} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} change={saveResult?.change} onSave={() => void editor.save()} />
       {editor.error && <p className="suite-editor-result is-error" role="alert">{editor.error}</p>}
 
       <div className="card">
@@ -248,20 +250,8 @@ function DomainFileEditor({ activeTab, onSelect }: { activeTab: string; onSelect
         )}
 
         <div className="suite-editor-actions" style={{ marginTop: 16, borderTop: '1px solid var(--border-color)', paddingTop: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" disabled={saving || loading || loadFailed || !!connectionError || !hasUnsavedChanges} onClick={handleSave}>
-            <Save size={16} /> {saving ? '保存中...' : '保存配置'}
-          </button>
           <button className="btn btn-secondary btn-sm" onClick={handleCopy}><Copy size={14} /> 复制</button>
           <button className="btn btn-secondary btn-sm" onClick={handleDownload}><Download size={14} /> 下载</button>
-          {saveResult && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
-              {saveResult.success ? (
-                <><CheckCircle size={14} style={{ color: 'var(--accent-green)' }} /> <span style={{ color: 'var(--accent-green)' }}>{saveResult.msg}</span></>
-              ) : (
-                <><AlertCircle size={14} style={{ color: 'var(--accent-red)' }} /> <span style={{ color: 'var(--accent-red)' }}>{saveResult.msg}</span></>
-              )}
-            </span>
-          )}
         </div>
       </div>
 

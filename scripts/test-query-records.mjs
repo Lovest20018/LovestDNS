@@ -45,9 +45,9 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 1360, height: 1050, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: base }); await wait("!!document.querySelector('input[name=password]')");
   await input('input[name=password]', 'synthetic-browser-password'); await evaluate("document.querySelector('.suite-login-submit').click()");
-  await wait("document.querySelectorAll('.suite-nav a').length===6");
+  await wait("document.querySelectorAll('.suite-nav a').length===5");
   await evaluate("location.hash='#/diagnostics'");
-  await wait("document.body.textContent.includes('后台记录已关闭')");
+  await wait("document.body.textContent.includes('未开启查询记录')");
   assert(await evaluate("document.body.textContent.includes('暂无符合条件的记录')"));
   await shot('default-off');
   await click('开启记录'); await wait("document.body.textContent.includes('后台记录已开启')");
@@ -73,7 +73,7 @@ try {
   await wait("document.querySelector('[aria-label=\"查询域名\"]')?.value==='128.synthetic-query.example.test.'");
   assert.equal(await evaluate("document.querySelector('[aria-label=\"查询记录类型\"]').value"), 'A');
   assert(await evaluate("document.querySelector('[aria-label=\"查询域名\"]').getBoundingClientRect().bottom<innerHeight"));
-  await evaluate("document.querySelector('.suite-diagnostic-tabs a').click()");
+  await evaluate("[...document.querySelectorAll('.suite-diagnostic-tabs a')].find(a=>a.textContent==='查询记录').click()");
   await wait("document.querySelector('[aria-label=\"筛选来源 IP\"]')?.value==='192.0.2.20' && document.querySelectorAll('.query-record-table tbody tr').length===50");
   await input('[aria-label="筛选查询域名"]', '%'); await click('筛选'); await wait("!document.querySelector('.query-record-table')");
   await input('[aria-label="筛选来源 IP"]', ''); await input('[aria-label="筛选查询类型"]', ''); await input('[aria-label="筛选查询域名"]', ''); await click('筛选');
@@ -97,14 +97,14 @@ try {
     await shot('recent-mobile-' + width + '-response');
     await evaluate("document.querySelector('.query-record-card details').open=false");
   }
-  await click('关闭记录'); await wait("document.body.textContent.includes('后台记录已关闭')");
+  await click('关闭记录'); await wait("document.body.textContent.includes('未开启查询记录')");
   assert.equal(await evaluate("document.querySelectorAll('.query-record-table tbody tr').length"), 50);
   await click('清空记录'); await click('取消');
   assert.equal(await evaluate("document.querySelectorAll('.query-record-table tbody tr').length"), 50);
   await click('清空记录'); await click('确认清空记录'); await wait("!document.querySelector('.query-record-table')");
   assert(await evaluate("document.body.textContent.includes('0 条')"));
   assert.deepEqual(errors, []);
-  await fs.writeFile(path.join(out, 'result.json'), JSON.stringify({ passed: true, fixture: 'synthetic loopback browser fixture; no live DNS capture', widths: [1360, 390, 320], checks: ['default_off', 'explicit_enable_disable', '50_row_cursor_pagination', 'source_type_literal_domain_filters', 'filter_navigation_and_reload', 'record_to_active_query', 'unavailable_retains_previous_results', 'malformed_response_rejected', 'clear_confirmation_cancel_and_apply', 'light_dark_mobile_cards', 'six_navigation_entries', 'no_runtime_exceptions'] }, null, 2));
+  await fs.writeFile(path.join(out, 'result.json'), JSON.stringify({ passed: true, fixture: 'synthetic loopback browser fixture; no live DNS capture', widths: [1360, 390, 320], checks: ['default_off', 'explicit_enable_disable', '50_row_cursor_pagination', 'source_type_literal_domain_filters', 'filter_navigation_and_reload', 'record_to_active_query', 'unavailable_retains_previous_results', 'malformed_response_rejected', 'clear_confirmation_cancel_and_apply', 'light_dark_mobile_cards', 'five_navigation_entries', 'no_runtime_exceptions'] }, null, 2));
   console.log('PASS: query recorder UI, filters, pagination, errors, clear, 1360/390/320 layouts. Output: ' + out);
 } catch (error) {
   await fs.writeFile(path.join(out, 'failure.json'), JSON.stringify({ error: String(error), stack: error.stack, fixture: fixtureError.slice(-2500), chrome: chromeError }, null, 2));

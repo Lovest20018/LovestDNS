@@ -4,14 +4,23 @@ import EditorToolbar from '../components/EditorToolbar';
 import { useSuiteConfig } from '../suiteContext';
 import { useFileEditor } from '../useFileEditor';
 import { useUnsavedChanges } from '../unsaved';
-import { useState } from 'react';
+import { useSyncExternalStore, useState } from 'react';
 import { useToast } from '../hooks';
 import { copyToClipboard, downloadFile } from '../generators';
-import { Plus, X, Copy, Download, FileCode, FileText, Save, CheckCircle, AlertCircle, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Plus, X, Copy, Download, FileCode, FileText, RefreshCw } from 'lucide-react';
 import type { CustomModZone, CustomModSwap, CustomModHost } from '../types';
 import YAML from 'yaml';
 
 type SubTab = 'custom_env' | 'custom_mod' | 'unbound_custom';
+const FILES = { custom_env: 'custom_env.ini', custom_mod: 'custom_mod.yaml', unbound_custom: 'unbound_custom.conf' };
+function subscribeRoute(listener: () => void) {
+  window.addEventListener('hashchange', listener);
+  return () => window.removeEventListener('hashchange', listener);
+}
+function activeFile(): SubTab {
+  const file = new URLSearchParams(window.location.hash.split('?')[1]).get('file');
+  return file === FILES.custom_mod ? 'custom_mod' : file === FILES.unbound_custom ? 'unbound_custom' : 'custom_env';
+}
 type CustomEnvEditMode = 'text' | 'visual';
 
 interface CustomModParseResult {
@@ -85,7 +94,7 @@ function parseCustomModYaml(content: string): CustomModParseResult {
 export default function AdvancedConfigPage() {
   const { error: connectionError } = useSuiteConfig();
   const { showToast, ToastComponent } = useToast();
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>(() => { const file = new URLSearchParams(window.location.hash.split('?')[1]).get('file'); return file === 'custom_mod.yaml' ? 'custom_mod' : file === 'unbound_custom.conf' ? 'unbound_custom' : 'custom_env'; });
+  const activeSubTab = useSyncExternalStore(subscribeRoute, activeFile);
   const envEditor = useFileEditor('custom_env.ini', '', activeSubTab === 'custom_env');
   const modEditor = useFileEditor('custom_mod.yaml', '', activeSubTab === 'custom_mod');
   const unboundEditor = useFileEditor('unbound_custom.conf', '', activeSubTab === 'unbound_custom');
@@ -104,8 +113,12 @@ export default function AdvancedConfigPage() {
   const [customEnvEditMode, setCustomEnvEditMode] = useState<CustomEnvEditMode>('text');
   const parsedMod = parseCustomModYaml(customModContent);
   const { zones: customModZones, swaps: customModSwaps, hosts: customModHosts, visualSafe: customModVisualSafe } = parsedMod;
-  const [validationError, setValidationError] = useState('');
-  const saveResult = validationError ? { success: false, msg: validationError, result: undefined } : activeEditor.result;
+  const [validation, setValidation] = useState<{ tab: SubTab; message: string }>();
+  const saveResult = validation?.tab === activeSubTab ? { success: false, msg: validation.message, result: undefined } : activeEditor.result;
+  const selectTab = (tab: SubTab) => {
+    setValidation(undefined);
+    window.location.hash = `/advanced?file=${FILES[tab]}`;
+  };
   const saving = activeEditor.busy;
   const loading = !activeEditor.loaded && !activeEditor.error;
   const loadFailed = !activeEditor.loaded || !!activeEditor.error;
@@ -140,17 +153,16 @@ export default function AdvancedConfigPage() {
   const addHost = () => editMod('Hosts', null, { env_key: '', zone: '' });
   const updateHost = (i: number, host: CustomModHost) => editMod('Hosts', i, { ...host });
   const removeHost = (i: number) => editMod('Hosts', i, null);
-  const getActiveOutput = () => ({ filename: { custom_env: 'custom_env.ini', custom_mod: 'custom_mod.yaml', unbound_custom: 'unbound_custom.conf' }[activeSubTab], content: activeEditor.content });
+  const getActiveOutput = () => ({ filename: FILES[activeSubTab], content: activeEditor.content });
   const tabDirty = { custom_env: envEditor.dirty, custom_mod: modEditor.dirty, unbound_custom: unboundEditor.dirty };
   const dirty = Object.values(tabDirty).some(Boolean);
   useUnsavedChanges(Object.values(tabDirty).some(Boolean));
   const handleSave = async () => {
-    setValidationError('');
+    setValidation(undefined);
     try {
       if (activeSubTab === 'custom_env' && customEnvEditMode === 'visual') validateCustomEnvRows(customEnvEntries);
-      const result = await activeEditor.save();
-      if (result?.success) showToast('配置已保存；请按生效提示继续');
-    } catch (e) { setValidationError(getErrorMessage(e)); }
+      await activeEditor.save();
+    } catch (e) { setValidation({ tab: activeSubTab, message: getErrorMessage(e) }); }
   };
 
   const handleCopyOutput = async () => {
@@ -185,18 +197,18 @@ export default function AdvancedConfigPage() {
       </div>
 
       <div className="tab-bar suite-file-tabs">
-        <button className={`tab-item ${activeSubTab === 'custom_env' ? 'active' : ''}`} onClick={() => { setValidationError(''); setActiveSubTab('custom_env'); }}>
+        <button className={`tab-item ${activeSubTab === 'custom_env' ? 'active' : ''}`} onClick={() => selectTab('custom_env')}>
           <FileText size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> custom_env.ini
         {tabDirty.custom_env && <span className="suite-draft-dot"> · 未保存</span>}</button>
-        <button className={`tab-item ${activeSubTab === 'custom_mod' ? 'active' : ''}`} onClick={() => { setValidationError(''); setActiveSubTab('custom_mod'); }}>
+        <button className={`tab-item ${activeSubTab === 'custom_mod' ? 'active' : ''}`} onClick={() => selectTab('custom_mod')}>
           <FileCode size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> custom_mod.yaml
         {tabDirty.custom_mod && <span className="suite-draft-dot"> · 未保存</span>}</button>
-        <button className={`tab-item ${activeSubTab === 'unbound_custom' ? 'active' : ''}`} onClick={() => { setValidationError(''); setActiveSubTab('unbound_custom'); }}>
+        <button className={`tab-item ${activeSubTab === 'unbound_custom' ? 'active' : ''}`} onClick={() => selectTab('unbound_custom')}>
           <FileCode size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> unbound_custom.conf
         {tabDirty.unbound_custom && <span className="suite-draft-dot"> · 未保存</span>}</button>
       </div>
 
-      <EditorToolbar file={getActiveOutput().filename} dirty={tabDirty[activeSubTab]} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} onSave={() => void handleSave()} />
+      <EditorToolbar file={getActiveOutput().filename} dirty={tabDirty[activeSubTab]} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} change={saveResult && 'change' in saveResult ? saveResult.change : undefined} onSave={() => void handleSave()} />
       {activeEditor.error && <p className="suite-editor-result is-error" role="alert">{activeEditor.error}</p>}
 
       {loading && (
@@ -212,10 +224,9 @@ export default function AdvancedConfigPage() {
         <div className="form-panel">
           <div className="card-title">
             custom_env.ini — 运行时变量覆盖
-            <span className="badge badge-green" style={{ marginLeft: 8 }}>按生效提示处理</span>
           </div>
           <div className="card-desc">
-            变量覆盖按核心返回的生效条件处理。初始化参数需重启服务；规则变量可在配置中心预览并应用。格式：key="value"
+            变量格式为 `key="value"`。保存后可在本页重启 DNS，加载已保存的初始化设置。
           </div>
 
           <div className="tab-bar" style={{ marginBottom: 16 }}>
@@ -261,10 +272,6 @@ export default function AdvancedConfigPage() {
       {activeSubTab === 'custom_mod' && (
         <>
           <details className="form-panel" open={!customModVisualSafe}><summary>编辑 YAML 原文</summary><textarea disabled={!modEditor.loaded} aria-label="custom_mod.yaml 文件内容" className="textarea-code" rows={12} value={customModContent} onChange={(event) => modEditor.setContent(event.target.value)} /></details>
-          <div className="form-panel" style={{ borderColor: 'var(--accent-amber)' }}>
-            <div className="card-desc"><AlertTriangle size={16} style={{ display: 'inline', verticalAlign: 'middle' }} /> custom_mod.yaml 保存后不会自动生效。请到配置中心预览并应用，再查询目标域名验证规则；纯递归模式不支持 custom_mod。</div>
-            <a className="btn btn-secondary" href="#/config" style={{ marginTop: 12 }}>前往配置中心预览并应用</a>
-          </div>
 
           <div className="form-panel">
             <div className="card-title">Zones — 自定义域名区域转发</div>
@@ -339,20 +346,8 @@ export default function AdvancedConfigPage() {
 
       <p className="suite-save-scope">当前文件：<code>{getActiveOutput().filename}</code> · 仅保存当前文件{dirty && !tabDirty[activeSubTab] ? "；其他标签仍有未保存修改" : ""}</p>
       <div className="stack-actions suite-editor-actions" style={{ marginTop: 18 }}>
-        <button className="btn btn-primary" disabled={saving || loading || loadFailed || !!connectionError} onClick={handleSave}>
-          <Save size={16} /> {saving ? '保存中...' : '保存配置'}
-        </button>
         <button className="btn btn-secondary btn-sm" onClick={handleCopyOutput}><Copy size={14} /> 复制</button>
         <button className="btn btn-secondary btn-sm" onClick={handleDownloadOutput}><Download size={14} /> 下载</button>
-        {saveResult && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}>
-            {saveResult.success ? (
-              <><CheckCircle size={14} style={{ color: 'var(--accent-green)' }} /> <span style={{ color: 'var(--accent-green)' }}>{saveResult.msg}</span></>
-            ) : (
-              <><AlertCircle size={14} style={{ color: 'var(--accent-red)' }} /> <span style={{ color: 'var(--accent-red)' }}>{saveResult.msg}</span></>
-            )}
-          </span>
-        )}
       </div>
 
       {loadFailed && !loading && <p role="alert">配置尚未成功读取，保存已停用。<button className="btn btn-secondary btn-sm" onClick={() => void loadFile(activeSubTab)}>重新读取</button></p>}

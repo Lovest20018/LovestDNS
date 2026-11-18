@@ -2,12 +2,13 @@ ARG FRONTEND_IMAGE=node:22-alpine
 FROM ${FRONTEND_IMAGE} AS frontend
 WORKDIR /build
 COPY integrated/frontend/package.json integrated/frontend/package-lock.json ./
-RUN npm ci && npm audit --audit-level=low
+COPY packaging/integrated/audit_frontend.py /audit_frontend.py
+RUN apk add --no-cache python3 && npm ci --no-audit && python3 /audit_frontend.py
 COPY web/ ./
 COPY integrated/frontend/package.json integrated/frontend/package-lock.json ./
 COPY integrated/frontend/ /overlay/
 COPY packaging/integrated/prepare_frontend.py /prepare_frontend.py
-RUN apk add --no-cache python3 && python3 /prepare_frontend.py /build /overlay && npm run build
+RUN python3 /prepare_frontend.py /build /overlay && npm run build
 
 # This digest and the source checksums are recorded in packaging/upstream.lock.json.
 FROM public.ecr.aws/sliamb/paopaodns@sha256:df0f5689934b3ebb757b7bce0590cd27b97ba23173908eb7205587859012e5c4 AS upstream

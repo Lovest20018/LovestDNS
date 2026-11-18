@@ -4,10 +4,12 @@ import { suiteFetch, errorText, downloadJson } from '../suiteApi';
 import type { SuiteDnsResult, SuiteReport } from '../suiteApi';
 import { RECORD_TYPES, REPORT_LIMIT, parseSuiteReport } from '../reports';
 import { useSuite } from '../suiteContext';
+import { useGateway } from '../gatewayContext';
 import { Notice, Section } from '../components/SuiteUI';
 import { diagnosticTargets, dnsAddress } from '../dnsListeners';
 import RecentQueries from '../components/RecentQueries';
 import { diagnosticHash } from '../diagnosticRoute';
+import type { DiagnosticTab } from '../diagnosticRoute';
 import { useDiagnosticRoute } from '../useDiagnosticRoute';
 import './SuitePage.css';
 import './HomeWorkflow.css';
@@ -15,6 +17,7 @@ import './HomeWorkflow.css';
 type Target = { label: string; server: string; port: string; transport: 'udp' | 'tcp' };
 export default function SuiteDiagnostics() {
   const { caps, runtime, paused, runtimeStale } = useSuite();
+  const { config: gateway } = useGateway();
   const canRecord = caps?.features.query_recording === true && caps.permissions.configure;
   const { route, navigate } = useDiagnosticRoute(caps?.instance_id ?? '', canRecord);
   const mode = route.tab === 'compare' ? 'compare' : 'query';
@@ -35,6 +38,8 @@ export default function SuiteDiagnostics() {
   const defaultServer = caps?.dns_defaults.server ?? '127.0.0.1';
   const defaultPort = caps?.dns_defaults.port ?? 53;
   const presets = diagnosticTargets(caps, paused || runtimeStale ? null : runtime);
+  const tabs: DiagnosticTab[] = ['query', 'device', 'compare'];
+  if (canRecord) tabs.push('records');
 
   const run = async () => {
     if (!caps || busy) return;
@@ -62,8 +67,17 @@ export default function SuiteDiagnostics() {
     catch (e) { setError(errorText(e)); }
   };
   return <div className="suite-page">
-    <nav className="suite-page-tabs suite-diagnostic-tabs" aria-label="查询与诊断分区">{([...(canRecord ? ['records' as const] : []), 'query' as const, 'compare' as const]).map(tab => <a key={tab} aria-current={route.tab === tab ? 'page' : undefined} aria-disabled={busy} href={diagnosticHash({ ...route, tab })} onClick={event => { if (busy) event.preventDefault(); }}>{({ records: '查询记录', query: '主动查询', compare: '链路对照' })[tab]}</a>)}</nav>
-    {route.tab === 'records' ? <RecentQueries route={route} navigate={navigate} /> : <>
+    <nav className="suite-page-tabs suite-diagnostic-tabs" aria-label="查询与诊断分区">
+      {tabs.map(tab => <a key={tab} aria-current={route.tab === tab ? 'page' : undefined} aria-disabled={busy} href={diagnosticHash({ ...route, tab })} onClick={event => { if (busy) event.preventDefault(); }}>{({ records: '查询记录', query: '主动查询', compare: '链路对照', device: '设备接入' })[tab]}</a>)}
+      {gateway?.enabled && <a href="#/diagnostics?tab=gateway">网关观测</a>}
+    </nav>
+    {route.tab === 'device' ? <Section title="检查设备是否使用这台 DNS" icon={HeartPulse}>
+      <ol className="suite-device-steps">
+        <li>在设备的网络设置中核对 DNS 服务器地址。填写部署主机的局域网地址，使用系统或路由器实际映射的 DNS 端口。</li>
+        <li>在设备自身执行 <code>nslookup example.com</code>，查看输出中的 DNS 服务器和回答。服务端发起的样本查询只检查服务器这一侧。</li>
+        <li>{canRecord ? <>在<a href={diagnosticHash({ ...route, tab: 'records' })}>查询记录</a>中按设备来源 IP 核对目标域名。记录关闭时可以临时开启；经路由器转发时可能显示路由器的地址。</> : '可以在服务端主动查询同一域名，与设备的结果对比。'}</li>
+      </ol>
+    </Section> : route.tab === 'records' ? <RecentQueries route={route} navigate={navigate} /> : <>
     <Section title={mode === 'query' ? '主动查询' : '链路对照'} subtitle="查询从当前 DNS 实例发起；链路可用性取决于运行模式" icon={HeartPulse}
       actions={<div className="suite-button-row"><button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => input.current?.click()}><Upload size={14} />导入报告</button><button className="btn btn-secondary btn-sm" disabled={!report || busy} onClick={() => report && downloadJson(report, `paopaodns-dns-${new Date(report.started_utc).getTime()}.json`)}><Download size={14} />导出报告</button><input ref={input} hidden aria-label="导入 DNS 报告" type="file" accept="application/json,.json" onChange={(e) => { const file = e.target.files?.[0]; if (file) void importReport(file); e.target.value = ''; }} /></div>}>
       <form onSubmit={(e) => { e.preventDefault(); void run(); }}>

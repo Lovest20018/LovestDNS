@@ -35,18 +35,26 @@ def manager_request(operation, task=None):
             sock.sendall(json.dumps(payload).encode() + b"\n")
             with sock.makefile("rb") as stream:
                 raw = stream.readline(4 * 1024 * 1024 + 1)
-        if not raw.endswith(b"\n") or len(raw) > 4 * 1024 * 1024:
-            raise ValueError("Invalid manager response")
-        response = json.loads(raw)
-        if not isinstance(response, dict) or not isinstance(response.get("ok"), bool):
-            raise ValueError("Invalid manager response")
-        if not response["ok"]:
-            if response.get("code") == "UNAVAILABLE":
-                raise RuntimeError(str(response.get("error", "维护服务暂不可用"))[:500])
-            raise ValueError(str(response.get("error", "维护请求被拒绝"))[:500])
-        return response["result"]
     except OSError as exc:
         raise RuntimeError("核心维护服务暂不可用") from exc
+    # An incomplete transport reply can arrive after the task was committed.
+    # Only a valid conflict response proves that the manager rejected submission.
+    message = "维护服务响应无效，请核对任务状态"
+    if not raw.endswith(b"\n") or len(raw) > 4 * 1024 * 1024:
+        raise RuntimeError(message)
+    try:
+        response = json.loads(raw)
+    except ValueError as exc:
+        raise RuntimeError(message) from exc
+    if isinstance(response, dict):
+        if response.get("ok") is True and isinstance(response.get("result"), dict):
+            return response["result"]
+        if response.get("ok") is False:
+            if response.get("code") == "CONFLICT":
+                raise ValueError(str(response.get("error", "维护请求被拒绝"))[:500])
+            if response.get("code") == "UNAVAILABLE":
+                raise RuntimeError(str(response.get("error", "维护服务暂不可用"))[:500])
+    raise RuntimeError(message)
 
 
 def snapshot():

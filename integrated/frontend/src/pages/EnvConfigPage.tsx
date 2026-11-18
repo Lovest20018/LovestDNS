@@ -6,7 +6,7 @@ import { useSuiteConfig } from '../suiteContext';
 import { errorText } from '../suiteApi';
 import { envOverrides, editOverride } from '../envEditor';
 import { useUnsavedChanges } from '../unsaved';
-import ConfigFeedback from '../components/ConfigFeedback';
+import ConfigFeedback, { ConfigNextStep } from '../components/ConfigFeedback';
 import { Notice, Section } from '../components/SuiteUI';
 
 export default function EnvConfigPage() {
@@ -14,10 +14,10 @@ export default function EnvConfigPage() {
   const running = runningEnv ?? {};
   const [search, setSearch] = useState('');
   const editor = useFileEditor('custom_env.ini');
-  const { content, setContent, loaded, busy, dirty } = editor;
+  const { content, setContent: editContent, loaded, busy, dirty } = editor;
   const saved = editor.baseline ?? '';
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const setContent = (value: string) => { setError(''); editContent(value); };
   const load = () => editor.load(true);
   useUnsavedChanges(dirty);
   const values = envOverrides(content);
@@ -25,7 +25,7 @@ export default function EnvConfigPage() {
   const native = caps?.deployment === 'native';
   const variables = ENV_VARS.filter((v) => !['DNSPORT', 'HTTP_FILE', 'USE_HOSTS'].includes(v.key));
   const save = async () => {
-    setError(''); setMessage('');
+    setError('');
     try {
       for (const v of variables) {
         if (!Object.hasOwn(values, v.key)) continue;
@@ -33,15 +33,16 @@ export default function EnvConfigPage() {
         if (!value) throw new Error(`${v.label}不能为空；如需使用启动设置，请关闭“覆盖”。`);
         if (v.type === 'number' && (!/^\d+$/.test(value) || Number(value) < (v.min ?? 0) || Number(value) > (v.max ?? Number.MAX_SAFE_INTEGER))) throw new Error(`${v.label}超出有效范围。`);
       }
-      const result = await editor.save();
-      if (result?.success) setMessage(result.msg);
+      await editor.save();
     } catch (e) { setError(errorText(e)); }
   };
   return <div className="suite-page">
-    <Notice>基础设置与高级配置共用 custom_env.ini 草稿。<a href="#/advanced?file=custom_env.ini">编辑源文件</a>。保存后在本页展开“应用与查询验证”。启用“覆盖”时使用此处的值；关闭后使用服务启动设置。自定义变量和注释会保留。</Notice>
-    <div className="suite-editor-toolbar"><span>{dirty ? '有未保存修改' : loaded ? '配置已读取' : '等待读取配置'}</span><div><button className="btn btn-secondary" aria-label="重新读取配置" title="重新读取配置" disabled={busy} onClick={() => void load()}><RefreshCw size={15} />重新读取</button><button className="btn btn-primary" disabled={busy || !loaded || !dirty || !!connectionError} onClick={() => void save()}><Save size={15} />{busy ? '处理中…' : '保存配置'}</button></div></div>
-    {(error || editor.error || editor.result?.success === false) && <Notice tone="error">{error || editor.error || editor.result?.msg}</Notice>}{message && <Notice>{message}</Notice>}
-    <ConfigFeedback file="custom_env.ini" saved={!!message} dirty={dirty} result={editor.result?.result} />
+    <Notice>启用“覆盖”时使用此处设置，关闭后使用服务启动设置。高级配置共用此处的草稿。<a href="#/advanced?file=custom_env.ini">编辑源文件</a></Notice>
+    <div className="suite-editor-toolbar suite-editor-toolbar-feedback"><span>{dirty ? '有未保存修改' : loaded ? '配置已读取' : '等待读取配置'}</span><div><button className="btn btn-secondary" aria-label="重新读取配置" title="重新读取配置" disabled={busy} onClick={() => void load()}><RefreshCw size={15} />重新读取</button><button className="btn btn-primary" disabled={busy || !loaded || !dirty || !!connectionError} onClick={() => void save()}><Save size={15} />{busy ? '处理中…' : '保存配置'}</button></div>
+      <ConfigNextStep message={error || editor.result?.msg} failed={!!error || editor.result?.success === false} />
+    </div>
+    {editor.error && <Notice tone="error">{editor.error}</Notice>}
+    <ConfigFeedback file="custom_env.ini" saved={editor.result?.success === true} dirty={dirty} result={editor.result?.result} change={editor.result?.change} />
     <div className="suite-settings-find"><label htmlFor="settings-search">查找设置<input id="settings-search" className="form-input" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索名称、变量或说明" /></label>{search && <button className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>清除搜索</button>}<nav aria-label="设置分组">{Object.entries(GROUP_LABELS).map(([group, info]) => <a key={group} href={`#settings-${group}`} onClick={(e) => { e.preventDefault(); setSearch(''); setTimeout(() => document.getElementById(`settings-${group}`)?.scrollIntoView({ behavior: 'smooth' }), 0); }}>{info.label}</a>)}</nav></div>
     {statusError && <Notice tone="warning">运行值读取失败，当前不展示旧值：{statusError}</Notice>}
     {!variables.some((v) => `${v.label} ${v.key} ${v.description}`.toLowerCase().includes(search.trim().toLowerCase())) && <Notice>没有匹配设置。<button className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>显示全部设置</button></Notice>}
@@ -57,9 +58,9 @@ export default function EnvConfigPage() {
           : v.description.replace(/Docker 启动时的|容器/g, '服务');
         return <div className={`suite-setting ${cnOnly ? 'is-inactive' : ''}`} key={v.key}>
           <label className="suite-setting-title" htmlFor={`setting-${v.key}`}><strong>{v.label}</strong><code>{v.key}</code></label><p>{description}</p>
-          <label className="suite-override"><input type="checkbox" checked={enabled} disabled={busy || !loaded} onChange={(e) => { setMessage(''); setContent(editOverride(content, v.key, e.target.checked ? value : null)); }} />覆盖服务启动设置</label>
-          {v.type === 'select' ? <select id={`setting-${v.key}`} className="form-select" value={value} disabled={!enabled || busy} onChange={(e) => { setMessage(''); setContent(editOverride(content, v.key, e.target.value)); }}>{!v.options?.some((o) => o.value === value) && <option value={value}>{value || '未设置'}</option>}{v.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
-            : <input id={`setting-${v.key}`} className="form-input" type={v.type === 'number' ? 'number' : 'text'} min={v.min} max={v.max} value={value} placeholder={v.placeholder} disabled={!enabled || busy} onChange={(e) => { setMessage(''); setContent(editOverride(content, v.key, e.target.value)); }} />}
+          <label className="suite-override"><input type="checkbox" checked={enabled} disabled={busy || !loaded} onChange={(e) => { setContent(editOverride(content, v.key, e.target.checked ? value : null)); }} />覆盖服务启动设置</label>
+          {v.type === 'select' ? <select id={`setting-${v.key}`} className="form-select" value={value} disabled={!enabled || busy} onChange={(e) => { setContent(editOverride(content, v.key, e.target.value)); }}>{!v.options?.some((o) => o.value === value) && <option value={value}>{value || '未设置'}</option>}{v.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+            : <input id={`setting-${v.key}`} className="form-input" type={v.type === 'number' ? 'number' : 'text'} min={v.min} max={v.max} value={value} placeholder={v.placeholder} disabled={!enabled || busy} onChange={(e) => { setContent(editOverride(content, v.key, e.target.value)); }} />}
           <small>运行值：{runtime ?? '未采集'}{itemDirty ? (enabled ? ' · 草稿：覆盖值未保存' : ' · 草稿：改用服务启动设置，未保存') : enabled && runtime !== undefined && value !== runtime ? ' · 已保存目标与运行值不同，待应用确认' : ''}{cnOnly ? ' · 当前目标模式未开启智能分流' : ''}</small>
         </div>;
       })}</div>

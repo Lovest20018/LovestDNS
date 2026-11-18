@@ -7,14 +7,14 @@ import { confirmDiscard } from '../unsaved';
 import GatewaySettings from '../components/GatewaySettings';
 import { nativeMaintenanceCommands } from '../settingsIdentity';
 import CopyableText from '../components/CopyableText';
-import SoftwareUpdate from '../components/SoftwareUpdate';
+import SoftwareUpdateNetwork from '../components/SoftwareUpdateNetwork';
 import './SuitePage.css';
 
 export default function SuiteDeploy() {
   const { caps } = useSuite();
-  const [gatewayTab, setGatewayTab] = useState(() => new URLSearchParams(window.location.hash.split('?')[1]).get('tab') === 'gateway');
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.hash.split('?')[1]).get('tab'));
   useEffect(() => {
-    const sync = () => setGatewayTab(new URLSearchParams(window.location.hash.split('?')[1]).get('tab') === 'gateway');
+    const sync = () => setTab(new URLSearchParams(window.location.hash.split('?')[1]).get('tab'));
     window.addEventListener('hashchange', sync);return () => window.removeEventListener('hashchange', sync);
   }, []);
   const [apiEnabled, setApiEnabled] = useState<boolean | null>(null);
@@ -43,11 +43,16 @@ export default function SuiteDeploy() {
     ? nativeMaintenanceCommands(installed)
     : 'export WEB_UI_TOKEN=$(openssl rand -hex 32)\nexport DNS_HOST_PORT=1053\nexport WEB_HOST_PORT=18080\ndocker compose -f docker-compose.integrated.yaml build\ndocker compose -f docker-compose.integrated.yaml up -d';
   return <div className="suite-page">
-    <div className="suite-segment"><button className={!gatewayTab ? 'is-active' : ''} onClick={() => { if (confirmDiscard()) { setGatewayTab(false);window.history.replaceState(null, '', '#/settings'); } }}>服务信息</button><button className={gatewayTab ? 'is-active' : ''} onClick={() => { if (confirmDiscard()) { setGatewayTab(true);window.history.replaceState(null, '', '#/settings?tab=gateway'); } }}>网关联动</button></div>
-    {gatewayTab ? <GatewaySettings /> : <>
+    <nav className="suite-page-tabs" aria-label="设置分区">
+      <a aria-current={!tab ? 'page' : undefined} href="#/settings" onClick={event => { if (tab === 'gateway' && !confirmDiscard()) event.preventDefault(); }}>服务信息</a>
+      {native && <a aria-current={tab === 'updates' ? 'page' : undefined} href="#/settings?tab=updates">更新通道与代理</a>}
+      <a aria-current={tab === 'gateway' ? 'page' : undefined} href="#/settings?tab=gateway">网关联动</a>
+    </nav>
+    {tab === 'gateway' ? <GatewaySettings /> : tab === 'updates' && native ? <Section title="更新通道与代理">
+      <SoftwareUpdateNetwork /><a href="#/system?tab=updates">查看更新检查结果</a>
+    </Section> : <>
     <div className="suite-deploy-hero"><div><span className="suite-kicker">{native ? 'DEBIAN / SYSTEMD' : 'DOCKER / COMPOSE'}</span><h2>LovestDNS</h2><p>管理本机 DNS 解析、缓存与规则，查看服务状态并排查问题。</p></div><Server size={46} /></div>
-    <Notice tone="info">{native ? '日常 DNS 参数与规则可直接在网页修改、保存和应用。软件更新可在下方检查并执行，监听端口变更由主机处理。' : '当前为 Docker 集成版。正式升级、端口切换和数据迁移由宿主机 Compose 执行。'}</Notice>
-    {native && <SoftwareUpdate loadedVersion={caps.version} />}
+    <Notice tone="info">{native ? <>监听端口变更由主机处理。<a href="#/system?tab=updates">前往软件更新</a></> : '当前为 Docker 集成版。正式升级、端口切换和数据迁移由宿主机 Compose 执行。'}</Notice>
     <div className="suite-dashboard-grid suite-settings-grid">
       <Section title="当前实例" subtitle="实例身份与原生安装信息" icon={Network}><dl className="suite-kpi-list suite-build-list">
         <div><dt>实例名称</dt><dd>{caps.name || '未记录'}</dd></div><div><dt>持久实例 ID</dt><dd>{value(caps.instance_id)}</dd></div>

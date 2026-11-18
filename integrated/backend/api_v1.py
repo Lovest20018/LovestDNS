@@ -39,7 +39,7 @@ OPERATIONS = [
     ("/config/state", "GET", "config_state", "configuration_state", "读取持久应用记录与当前配置版本"),
     ("/config/apply-plan", "GET", "apply_plan", "apply_plan", "预览当前配置生成结果与输入指纹"),
     ("/maintenance/tasks", "GET", "task_list", "maintenance_tasks", "读取最近维护任务"),
-    ("/maintenance/tasks/<task_id>", "GET", "task_read", "maintenance_task", "按任务编号查询状态与结果"),
+    ("/maintenance/tasks/<task_id>", "GET", "task_read", "maintenance_task", "按任务编号或原请求编号查询状态与结果"),
     ("/maintenance/tasks", "POST", "task_submit", "submit_task", "提交有幂等编号的维护任务"),
     ("/history/<filename>", "GET", "history_list", "list_history", "读取配置历史列表"),
     ("/history/<filename>/<int:revision>", "GET", "history_read", "read_history", "读取指定历史版本"),

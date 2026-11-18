@@ -39,12 +39,19 @@ export function applyFileSave(file: string, expectedVersion: number, content: st
   // advance it, so a delayed response cannot undo a newer disk baseline.
   return rememberFileDraft(file, { ...current, baseline: content, revision, loaded: true }, expectedEpoch);
 }
-export function dirtyFileDrafts() { return [...documents.values()].some((value) => value.content !== (value.baseline ?? '')); }
+export function isDirtyFileDraft(value?: FileDraft) {
+  return !!value?.loaded && value.content !== (value.baseline ?? '');
+}
+export function dirtyFileDrafts() { return [...documents.values()].some(isDirtyFileDraft); }
+export function dirtyFileNames() {
+  return [...documents].filter(([, value]) => isDirtyFileDraft(value)).map(([name]) => name).join(',');
+}
 export function invalidateCleanDraft(file: string) {
   const value = documents.get(file);
-  if (value && value.content === (value.baseline ?? '')) { documents.delete(file); advanceBaseline(file); notify(file); }
+  if (value && !isDirtyFileDraft(value)) { documents.delete(file); advanceBaseline(file); notify(file); }
 }
 export function reconcileFileDraft(current: FileDraft, remote: FileDraft, replace = false) {
-  const dirty = current.loaded && current.content !== (current.baseline ?? '');
-  return dirty && !replace ? { document: current, conflict: current.revision !== remote.revision } : { document: remote, conflict: false };
+  return isDirtyFileDraft(current) && !replace
+    ? { document: current, conflict: current.revision !== remote.revision }
+    : { document: remote, conflict: false };
 }

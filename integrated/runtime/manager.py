@@ -54,10 +54,16 @@ class Manager:
         if operation == "task" and set(request) == {"operation", "task"}:
             return {"task": self.store.get(request["task"])}
         if operation == "capabilities" and set(request) == {"operation"}:
-            env = self.actions.environment()
+            try:
+                env = self.actions.environment()
+            except (OSError, ValueError):
+                # A managed restart can clear core readiness while this worker is still serving tasks.
+                env = None
             healthy = self.healthy()
-            return {"schema_version": 1, "apply_custom_mod": healthy and env.get("CNAUTO") != "no", "save_redis_snapshot": healthy,
-                    "restart_dns_core": healthy and os.environ.get("LOVESTDNS_SYSTEMD") == "1",
+            actions_available = healthy and env is not None
+            return {"schema_version": 1, "apply_custom_mod": actions_available and env.get("CNAUTO") != "no",
+                    "save_redis_snapshot": actions_available,
+                    "restart_dns_core": actions_available and os.environ.get("LOVESTDNS_SYSTEMD") == "1",
                     "worker": {"available": healthy, "phase": self.phase}}
         if operation in {"config_state", "plan"} and set(request) == {"operation"}:
             # No waiting preview queue: one active inspection, zero queued jobs.
