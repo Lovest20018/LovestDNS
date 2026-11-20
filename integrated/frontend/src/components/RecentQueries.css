@@ -32,15 +32,26 @@
   font-weight: 650;
 }
 .query-record-expand:hover { text-decoration: underline; }
-.query-record-detail { padding: .6rem; }
-.query-record-detail > dl {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr));
-  gap: .45rem 1rem;
-  margin: 0 0 .55rem;
+.query-record-detail { min-width: 0; padding: 12px; font-size: 13px; line-height: 1.5; color: var(--suite-ink); }
+.query-detail-verdict, .query-detail-verdict > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 12px; }
+.query-detail-verdict > strong { padding: 2px 9px; border-radius: 5px; font-size: 12px; background: var(--suite-panel); }
+.query-detail-verdict > strong[data-action=block] { color: var(--suite-blue); background: color-mix(in srgb, var(--suite-blue) 12%, var(--suite-panel)); }
+.query-detail-verdict > div { min-width: 0; }
+.query-detail-verdict span, .query-record-detail dt { color: var(--suite-muted); font-size: 12px; }
+.query-record-detail code { font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+.query-detail-columns { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px 28px; margin: 14px 0; }
+.query-detail-columns dl { display: grid; align-content: start; gap: 6px; margin: 0; }
+.query-detail-columns dl > div { display: grid; grid-template-columns: 5em minmax(0,1fr); align-items: baseline; gap: 8px; }
+.query-record-detail dd { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.query-detail-version summary { width: fit-content; color: var(--suite-link); cursor: pointer; }
+.query-detail-version[open] > code { display: block; margin-top: 4px; }
+.query-detail-actions { align-items: center; flex-wrap: wrap; padding-top: 12px; border-top: 1px solid var(--suite-line); }
+.query-detail-actions .suite-note { margin: 0 auto 0 0; }
+.query-detail-actions .query-record-query { margin: 0; }
+@media (max-width: 780px) {
+  .query-detail-columns { grid-template-columns: minmax(0,1fr); gap: 6px; }
+  .query-detail-actions .suite-note { flex-basis: 100%; }
 }
-.query-record-detail dt { color: var(--text-secondary); font-size: .8rem; }
-.query-record-detail dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
 .query-record-toolbar .form-select { display: inline-block; width: auto; }
 .query-record-blocked { display: block; margin-top: .2rem; font-size: .75rem; }
 .query-record-detail-row { background: var(--suite-panel-soft); }

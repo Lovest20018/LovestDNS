@@ -47,7 +47,7 @@ export default function BlockedQueries({ windowData }: { windowData?: Pick<Query
   }, [allowed, fixed, paused, instance, query, refresh]);
   const data = result?.query === query ? result.records : null;
   if (!allowed) return null;
-  return <section className="blocked-queries query-analytics-ranking" aria-label="最近拦截">
+  return <section className="blocked-queries" aria-label="最近拦截">
     <header><h3>{history ? '拦截记录' : '最近拦截'}</h3>
       <button type="button" className="btn btn-secondary btn-sm" aria-expanded={!!history} onClick={() => {
         setOpen(''); setHistory(history ? null : { window: windowData, cursors: [] });

@@ -3,14 +3,14 @@
   "artifacts": {
     "openapi.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "affc7f4adf05b9096ea91eecb8ff4769bdd93e4d9ca0e4c468711d9ce9781676"
+      "sha256": "c9a111d5291c88f06319a80434582b7f15aaaba37cfb1d07e66b9352228abbca"
     },
     "samples.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "099f44ce800a79670cc0934a8315ec9510553baaa2ead2f53af9fea39f4bdc25"
+      "sha256": "708bd2df1b244f761956feb7c054915938e51ea08923f7c61e0e79dd3d5f905e"
     }
   },
-  "candidate_version": "0.2.0",
+  "candidate_version": "0.2.1",
   "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
   "format_version": 1,
   "provenance": "All responses from actual Flask handlers with synthetic I/O and clocks; no live core/network acceptance evidence",
@@ -33,9 +33,9 @@
       "docker-compose-web.yaml": "0409bc4340124407c7a72fdb01a352f8ef74347e5470af9ae1d21e020d5d7214",
       "docker-compose.integrated.yaml": "b40f095e7fe8119b627abd161e1b4d62a8649a27e854978c67ec7813d8e845fb",
       "docker-compose.sidecar.yaml": "2e9bd7a32e43599b9aedbc8bae3ef9e7cd2b93379d642446016940903fc45609",
-      "docs/lovestdns-native-deployment.md": "b4afec6c5f96e89be3de2ef091c6a85d93c3b26bb0ec9965f84067d0bc6d307c",
-      "install.py": "6723ba5ba952ba0e71e0da726fb3fe5d892137d726611e172212b3d77bfeb71c",
-      "integrated/README.md": "d6b9716d2dc3c7379786cdf0d6c53f6cfebc0df3b7ea1b489431711ca16d170f",
+      "docs/lovestdns-native-deployment.md": "d1d53ba3c4cafa4b3411b01d648bdb627482381525299194ef6cb73f6be5150a",
+      "install.py": "cac725471631269ac2160d242caedfa1876efb454da203dacf05873447417002",
+      "integrated/README.md": "28b36dd1c4c147f68150091cbf3dd9bc3ee2280f78b24216df403b9e75b3e831",
       "integrated/backend/api_schema.py": "8170c94f2cb4289f07af414fb5bd9308fc34c24e6082de84bc9f7961107e7b85",
       "integrated/backend/api_v1.py": "5febfe8706af71507be7aef33ef61631676535383790a2f109b921c44266396e",
       "integrated/backend/browser_auth.py": "4e64b0f1554c4ba362e0d71e41e469a81d2ad5b8f24ae4af4110d8a88f69eeaa",
@@ -45,7 +45,7 @@
       "integrated/backend/history.py": "068715c1e54af2ec880712da543bd7a7c1e88f5567c213f0b2fd6007dea28713",
       "integrated/backend/installation.py": "64190ebaa3b32c2dfb6f5aa67a8a35303e77be1547114d8a6a866cfc44fd6a84",
       "integrated/backend/runtime_client.py": "f97b233696bcfb36eba5249d6557a57e0f3b8ef589dd064417a9b01f6dcd9408",
-      "integrated/backend/server.py": "715cfe75b9479fa2425c3ac31577aa43edb483e256f50f33126d7cdf9ea71f81",
+      "integrated/backend/server.py": "d29aec0672fe9b875265fb2f0404c000862afc3e125cda868e315f01d9578ff5",
       "integrated/backend/software_update.py": "b52458da2c3da101c1f9def879a71a2aaf24134511fecaf5b1ffdc6f190b42bb",
       "integrated/frontend/package-lock.json": "a9cc6c4341237b1ddb91874a72cf08878df13787d20fc3cbc19b1bfc56a915a7",
       "integrated/frontend/package.json": "465e17dc4fde55be78c58247330b5bd39920eef42123a3917c564b41b2a08d38",
@@ -59,8 +59,8 @@
       "integrated/frontend/src/SuiteProvider.tsx": "e4b1669a4e716c4eb95f6135360a8544724fff7be799256b00c511e460340235",
       "integrated/frontend/src/UpdateNetworkProvider.tsx": "fd542c81bf24f2218103a2ce0a8461b4de80c093555aca3772408b823dba6422",
       "integrated/frontend/src/api.ts": "f6619e843068fc70a9d5adc4db4668a33cc1a276b00dd5cde506202007a077c7",
-      "integrated/frontend/src/components/BlockedQueries.css": "150c077bf78d2d132e62ad32b628340a410827022a5ca580f9961ee187822538",
-      "integrated/frontend/src/components/BlockedQueries.tsx": "2507b5db99431028fb365a389311eba436d340aa1a0634e1d6571150115d831d",
+      "integrated/frontend/src/components/BlockedQueries.css": "4fbc5c8fabb2d50c36d84523ce52ad755ab95584c7b2d88a238b19e42a652ddb",
+      "integrated/frontend/src/components/BlockedQueries.tsx": "2e6aeb338aff2cf03ba12e618c51640fc27e9573922d3dfc401cd0fc1e253608",
       "integrated/frontend/src/components/BrowserLogin.tsx": "4abb8d0f99fe52a1949869c4a4c0b5a90e873ef24974424adc47cca99f40c19a",
       "integrated/frontend/src/components/ConfigFeedback.tsx": "c1d234c20c26338e362541c422a411d585cd85b7cff1d828748457362623c9b7",
       "integrated/frontend/src/components/ConfigState.tsx": "b6674cfe69d42f901dbb4918099a2ad7e71de58ed7f10ac2137e33bd2801ec08",
@@ -71,10 +71,10 @@
       "integrated/frontend/src/components/GatewaySettings.tsx": "699ccccaadffd3c86dc2529407fd90cfc4255b2449d6648a7b3177d29c9aa9ba",
       "integrated/frontend/src/components/GatewaySummaryView.tsx": "9ba785ebe6b40cedcb008ed017cb70f5af3ab6cee40e4470697f72efd1f1e79c",
       "integrated/frontend/src/components/PageBoundary.tsx": "fcbdd3b956107d6885f8f7b9746964d4209452c540dfd3eee291b0c075315e11",
-      "integrated/frontend/src/components/QueryAnalytics.css": "4e4e9ed8e4a30385b712437c6dc0ce6269ae8cd231789293433934197da811a1",
-      "integrated/frontend/src/components/QueryAnalytics.tsx": "cd1d01c38e8dab81348419fdcdf495b0f19c2cc7f2565fc2c19bde46859e8685",
-      "integrated/frontend/src/components/RecentQueries.css": "d5a5e46465cb07ad9ed0a662364bbf0cb347c21cf8e811c15ed4e3130e95f6e9",
-      "integrated/frontend/src/components/RecentQueries.tsx": "3cdcd253ebbc61a808c819957b7edad8f70cfaaed0b39bcd2a51d7dc0d0d0710",
+      "integrated/frontend/src/components/QueryAnalytics.css": "1bd3680daffb2f29529ae6512f37efd6ba76012285edca6050509dc9e3a16552",
+      "integrated/frontend/src/components/QueryAnalytics.tsx": "1d33e4aad17005aaa2f726d4fa481179aa3ef68109c70b29b680fd118627afee",
+      "integrated/frontend/src/components/RecentQueries.css": "9f963d86ec34b50cedaf4f08a8c213bc1c4a3a96355929d80b9f75520551c7c7",
+      "integrated/frontend/src/components/RecentQueries.tsx": "27d4d5fa8ed668f66607e3b0fadaede6aedd8638627c28512913f60f86c2075f",
       "integrated/frontend/src/components/RuntimeStatus.tsx": "27bb88f605c31239099fc5a4bd3d19e301665eb563c5b4ba295e86a7c8d0daea",
       "integrated/frontend/src/components/SoftwareUpdate.tsx": "5d6b4350db5f165309acfb33ebeb8a15633948347c1505f77f3286a12944bfae",
       "integrated/frontend/src/components/SoftwareUpdateNetwork.tsx": "32a64311634b26d17c89ba228c0b57b18cd627b0b68f616b19d0196e3e48cb16",
@@ -101,14 +101,14 @@
       "integrated/frontend/src/pages/AdvancedConfigPage.tsx": "f391c081e3537dc5775efa8ff2afbd36765b1046ceedf973437d5e468d9e37de",
       "integrated/frontend/src/pages/DomainListPage.tsx": "8c6539468a9f575679eed4fea9ce5dd88dec71ed2ac3ca2a62e085aeb4d6bdc7",
       "integrated/frontend/src/pages/EnvConfigPage.tsx": "3de61e5568a1160415a64df0ea7634458c0c33d1b8f766aff2f2b4fb205fda50",
-      "integrated/frontend/src/pages/HomeWorkflow.css": "2fb282d7aa90a5be834530691a2f65c0fb05e7b44a9d413560f1398e1c220e12",
+      "integrated/frontend/src/pages/HomeWorkflow.css": "59829d6a08ff82026d1cdbc9a377d999aebeaa513e44602e9a5b4170bc3770b6",
       "integrated/frontend/src/pages/SuiteCache.tsx": "6b1567f39e1909fcdec0d19b083c29f5624a33d90b4a2c254eff6b381333a0ca",
       "integrated/frontend/src/pages/SuiteConfig.tsx": "bb83ecc483bf9da888de0105521277d7b77a547a719be12de42d725d8a86a7b9",
-      "integrated/frontend/src/pages/SuiteDashboard.tsx": "0bb350b7c43a99ed5854462ec88ed9d249db2d8fc77292bbd79d40b20ae38262",
+      "integrated/frontend/src/pages/SuiteDashboard.tsx": "2de4846421e5abd69bbccd7fde8052a639f81004805da2494d95538929520e2d",
       "integrated/frontend/src/pages/SuiteDeploy.tsx": "5496c86f29f1593d9435813e2a46b929210810cbf2b32e3d562711aee7af9252",
       "integrated/frontend/src/pages/SuiteDiagnostics.tsx": "48e1fed457a771cae6ad2b5f06a47d1db0d372ecf4cd3280dcd5eb071de29a02",
-      "integrated/frontend/src/pages/SuiteFiltering.css": "f81fea6cda19ea1929b8ffd604924258f033106e3a33555cf9a527b204bbc851",
-      "integrated/frontend/src/pages/SuiteFiltering.tsx": "2a382ea31c0687d27919dee1f43981560aaea1c29408193fa148c512aa512770",
+      "integrated/frontend/src/pages/SuiteFiltering.css": "34f583b13581efa2b0cbdfc805d51617bb3180ef3128f0454fb29f26ba8c807c",
+      "integrated/frontend/src/pages/SuiteFiltering.tsx": "f12a0b7acf40025c9e2c3cb66376bc0db1b566dbe42c1a79a101b0b63ee9676f",
       "integrated/frontend/src/pages/SuiteGateway.tsx": "67e0626e47dcbdc9d8d331e58a046a47113b51e04c1a4a490f34ed73e8944942",
       "integrated/frontend/src/pages/SuitePage.css": "696dc13b55d17348c7e59a629ecb2ac59c414d196ee260d830e0963dee745dfb",
       "integrated/frontend/src/pages/SuiteSystem.tsx": "d7dc4650074c82fe808dbddec842677cba7d67d7ef92296cd55b9bdbd0816838",
@@ -400,7 +400,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "f461c8ec29619b32496390f866301b72823e434be9918866d515d43b8a738583"
+    "sha256": "da8db29001131ed417b3ad23ff58766fbfabf6933dcf8bcd569a55b89ba0838e"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

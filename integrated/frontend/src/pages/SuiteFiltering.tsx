@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ListFilter, RefreshCw, Shield } from 'lucide-react';
+import { ListFilter, Plus, RefreshCw, Shield } from 'lucide-react';
 import { applyFilter, checkFilter, filterLabels } from '../filterApi';
 import type { FilterAction, FilterCheck, FilterSource, FilterState } from '../filterApi';
 import { errorText, when } from '../suiteApi';
@@ -72,27 +72,27 @@ export default function SuiteFiltering() {
     {busy && <p aria-live="polite" className="suite-note">正在处理过滤任务…</p>}
     {!state ? <Empty title={readError ? 'DNS 过滤管理暂不可用' : '正在读取 DNS 过滤配置'} />
       : <>
-        <div className="dns-filter-status"><div className="suite-button-row">
+        <div className="dns-filter-status"><div className="dns-filter-statusbar">
           <Status value={!readError && state.live_enabled && state.available && state.live_revision === state.revision ? 'good' : 'neutral'} label={(readError ? '上次读取 · ' : '') + filterStatus(state)} />
-          {state.live_revision && <small>{state.rules.toLocaleString()} 条匹配规则</small>}
+          {state.live_revision && <span className="dns-filter-count"><strong>{state.rules.toLocaleString()}</strong> 条匹配规则</span>}
+          {state.live_revision && tab === 'rules' && <small>活动版本 <code>{state.live_revision.slice(0, 12)}</code></small>}
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => void refresh()}
             disabled={busy}><RefreshCw size={14} />刷新过滤状态</button>
         </div>
           {state.mode === 'recursive' && <Notice>当前使用纯递归入口。切换到 MosDNS 分流模式后可使用过滤。</Notice>}
           {state.mode === 'unavailable' && <Notice tone="warning">尚未连接支持过滤的 MosDNS 入口。</Notice>}
           {state.available && state.live_revision !== state.revision && <Notice tone="warning">解析核心与已保存的过滤版本不同，服务正在核对。</Notice>}
-          {state.live_revision && tab === 'rules' && <small>活动版本 <code>{state.live_revision.slice(0, 12)}</code></small>}
         </div>
         <div className="dns-filter-rules" hidden={tab !== 'rules'}>
         <Section title="过滤设置" icon={Shield}>
           <FilterEditor state={state} busy={busy} apply={perform} />
         </Section>
         <Section title="过滤订阅" icon={ListFilter}>
-          <NewSubscription disabled={busy || !state.available} apply={perform} />
           {state.draft && <Preview key={state.draft.id} draft={state.draft} disabled={busy || !state.available} apply={perform} />}
           {state.sources.map(item => <Subscription key={item.id + item.interval + item.enabled}
             source={item} live={!readError && state.available && state.live_enabled && state.live_revision === state.revision} disabled={busy || !state.available} apply={perform} />)}
-          {!!state.jobs.length && <details className="suite-editor-help">
+          <NewSubscription initiallyOpen={!state.sources.length && !state.draft} disabled={busy || !state.available} apply={perform} />
+          {!!state.jobs.length && <details className="dns-filter-jobs">
             <summary>最近过滤任务</summary><ul>{state.jobs.map(job =>
               <li key={job.id}>{job.phase === 'failed' ? '失败' : job.phase === 'pending' ? '处理中' : '完成'} · {job.message || job.action}</li>)}</ul>
           </details>}
@@ -123,16 +123,19 @@ function FilterEditor({ state, busy, apply }: { state: FilterState; busy: boolea
       : { enabled: nextEnabled, local: nextLocal, revision });
   }
   return <form className="dns-filter-editor" onSubmit={e => { e.preventDefault(); if (draft && !conflict) void apply({ action: 'configure', enabled, local_rules: local }); }}>
-    <label><input type="checkbox" checked={enabled} disabled={!state.available || busy} onChange={e => edit(e.target.checked, local)} /> 启用 DNS 去广告</label>
+    <label className="dns-filter-switch">启用 DNS 去广告<input type="checkbox" checked={enabled} disabled={!state.available || busy} onChange={e => edit(e.target.checked, local)} /></label>
     <label>本地规则<textarea className="form-input" value={local} rows={5} maxLength={16 * 1024}
       spellCheck={false} disabled={!state.available || busy} onChange={e => edit(enabled, e.target.value)}
       placeholder={'ads.example.test\n||tracker.example.test^\n@@||safe.tracker.example.test^'} /></label>
-    <p className="suite-note">支持精确域名、域名及子域、两端带星号的固定域名片段、域名例外和阻断 hosts 行。命中时返回 REFUSED。</p>
+    <details className="dns-filter-help"><summary>支持的规则语法</summary><p className="suite-note">支持精确域名、域名及子域、两端带星号的固定域名片段、域名例外和阻断 hosts 行。命中时返回 REFUSED。</p></details>
     {conflict && draft && <Notice tone="warning">编辑期间活动配置已变化。当前保存的开关为{state.enabled ? '开启' : '关闭'}。
       <pre>{state.local_rules || '当前没有本地规则'}</pre>
       <button type="button" onClick={() => setDraft({ ...draft, revision: state.revision })}>已核对，保留草稿</button>
       <button type="button" onClick={() => setDraft(null)}>使用当前配置</button></Notice>}
-    <button className="btn btn-primary" disabled={!draft || conflict || busy || !state.available}>应用过滤设置</button>
+    <div className="dns-filter-editor-footer">
+      <span>{draft ? '有未应用的修改' : '无待应用修改'}</span>
+      <button className="btn btn-primary btn-sm" disabled={!draft || conflict || busy || !state.available}>应用过滤设置</button>
+    </div>
   </form>;
 }
 
@@ -175,11 +178,14 @@ function Interval({ value, disabled, onChange }: { value: number; disabled: bool
   </select></label>;
 }
 
-function NewSubscription({ disabled, apply }: { disabled: boolean; apply: Apply }) {
+function NewSubscription({ initiallyOpen, disabled, apply }: { initiallyOpen: boolean; disabled: boolean; apply: Apply }) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [interval, setInterval] = useState(86400);
-  return <form className="dns-filter-inline dns-filter-new" onSubmit={e => {
+  const [open, setOpen] = useState(initiallyOpen);
+  return <div className="dns-filter-add"><button className="btn btn-secondary btn-sm" type="button" aria-expanded={open}
+    onClick={() => setOpen(!open)}><Plus size={14} />{open ? '收起添加表单' : '添加订阅'}</button>
+    <form hidden={!open} className="dns-filter-inline dns-filter-new" onSubmit={e => {
     e.preventDefault();
     void apply({ action: 'preview', name: name.trim(), url: url.trim(), interval });
   }}>
@@ -187,7 +193,7 @@ function NewSubscription({ disabled, apply }: { disabled: boolean; apply: Apply 
     <label>订阅地址<input className="form-input" type="url" value={url} placeholder="https://…" maxLength={2048} onChange={e => setUrl(e.target.value)} disabled={disabled} required /></label>
     <Interval value={interval} disabled={disabled} onChange={setInterval} />
     <button className="btn btn-secondary" disabled={disabled || !name.trim() || !url.trim()}>获取预览</button>
-  </form>;
+  </form></div>;
 }
 
 function Preview({ draft, disabled, apply }: { draft: NonNullable<FilterState['draft']>; disabled: boolean; apply: Apply }) {
@@ -196,7 +202,8 @@ function Preview({ draft, disabled, apply }: { draft: NonNullable<FilterState['d
   const partial = !!(counts.invalid || counts.unsupported);
   const blocked = !!counts.protected || !counts.valid;
   return <div className="dns-filter-preview">
-    <h3>{draft.name} · {draft.host}</h3>
+    <div className="dns-source-heading"><h3>{draft.name}</h3><strong className="dns-review-label">待复核</strong></div>
+    <small>{draft.host}</small>
     <p>有效 {counts.valid} · 重复 {counts.duplicates} · 注释或空行 {counts.ignored} · 无效 {counts.invalid} · 不支持 {counts.unsupported} · 阻止导入 {counts.protected}</p>
     {counts.issues.length > 0 && <details open><summary>查看规则行及原因（最多 100 条）</summary>
       <ul>{counts.issues.map(issue => <li key={issue.line}>第 {issue.line} 行 · {reasons[issue.reason] ?? issue.reason}
@@ -215,20 +222,25 @@ function Subscription({ source, live, disabled, apply }: { source: FilterSource;
   const [confirm, setConfirm] = useState(false);
   const save = (remove: boolean) => void apply({ action: 'subscription', id: source.id, enabled, interval, remove });
   return <div className="dns-filter-subscription">
-    <h3>{source.name}</h3>
-    <p className="suite-note">{!source.enabled ? '已停用' : live ? '已生效' : '已配置'} · {source.parse.valid.toLocaleString()} 条有效 · {source.parse.invalid + source.parse.unsupported} 条跳过</p>
-    <details><summary>订阅详情</summary><p className="suite-note">{source.host} · 更新于 {when(source.updated)} · 无效 {source.parse.invalid} · 不支持 {source.parse.unsupported} · 重复 {source.parse.duplicates}</p></details>
-    <div className="dns-filter-inline">
+    <div className="dns-source-heading"><h3>{source.name}</h3>
+      <Status value={source.enabled && live ? 'good' : 'neutral'} label={!source.enabled ? '已停用' : live ? '已生效' : '已配置'} /></div>
+    <p className="dns-source-host">{source.host}</p>
+    <div className="dns-source-stats"><span><b>{source.parse.valid.toLocaleString()}</b> 条有效</span>
+      <span><b>{(source.parse.invalid + source.parse.unsupported).toLocaleString()}</b> 条跳过</span>
+      <span>{intervals.find(([value]) => value === source.interval)?.[1] ?? source.interval + ' 秒'}</span></div>
+    <div className="dns-source-tools"><details><summary>订阅详情与设置</summary>
+    <p className="suite-note">更新于 {when(source.updated)} · 无效 {source.parse.invalid} · 不支持 {source.parse.unsupported} · 重复 {source.parse.duplicates}</p>
+    <div className="dns-filter-inline dns-source-settings">
       <label><input type="checkbox" checked={enabled} disabled={disabled} onChange={e => setEnabled(e.target.checked)} /> 已启用</label>
       <Interval value={interval} disabled={disabled} onChange={setInterval} />
       <button className="btn btn-secondary btn-sm" disabled={disabled || enabled === source.enabled && interval === source.interval}
         onClick={() => save(false)}>保存订阅设置</button>
-      <button className="btn btn-secondary btn-sm" disabled={disabled}
-        onClick={() => void apply({ action: 'refresh', id: source.id })}>刷新订阅</button>
       <button className="btn btn-secondary btn-sm" disabled={disabled} onClick={() => setConfirm(!confirm)}>移除</button>
     </div>
     {confirm && <Notice tone="warning">移除此订阅会重新计算域名拦截。
       <button className="btn btn-secondary btn-sm" disabled={disabled} onClick={() => save(true)}>确认移除</button>
-    </Notice>}
+    </Notice>}</details>
+    <button className="btn btn-secondary btn-sm" disabled={disabled}
+      onClick={() => void apply({ action: 'refresh', id: source.id })}><RefreshCw size={13} />刷新订阅</button></div>
   </div>;
 }

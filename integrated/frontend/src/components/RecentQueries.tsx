@@ -189,20 +189,25 @@ export function QueryDetails({ event, route }: { event: QueryEvent; route: Diagn
     }
   };
   return <div className="query-record-detail">
-    <dl>
-      <div><dt>查询</dt><dd>{event.domain} · {event.record_type} · {event.transport.toUpperCase()}</dd></div>
-      <div><dt>来源</dt><dd><code>{dnsAddress(event.source_ip, event.source_port)}</code></dd></div>
-      <div><dt>入口</dt><dd><code>{dnsAddress(event.entry_address, event.entry_port)}</code> · {event.component}</dd></div>
-      <div><dt>应答</dt><dd>{responseText(event)} · {addressText(event)}</dd></div>
-      <div><dt>应答时间</dt><dd>{event.response_at === null ? '—' : date(event.response_at)} · {elapsedText(event)}</dd></div>
-      <div><dt>耗时口径</dt><dd>{event.timing_scope === 'mosdns_entry_processing' ? 'MosDNS 核心处理' : '入口报文间隔'}</dd></div>
-      <div><dt>过滤判定</dt><dd>{verdict ? filterLabels[verdict.action] : '未取得判定'}</dd></div>
-      {verdict && <div><dt>活动版本</dt><dd><code>{verdict.revision}</code></dd></div>}
-      {verdict?.rule && <div><dt>命中规则</dt><dd><code>{verdict.rule}</code> · {verdict.source}</dd></div>}
-      {event.same_key_packets > 1 && <div><dt>同键请求</dt><dd>{event.same_key_packets} 次</dd></div>}
-    </dl>
+    <div className="query-detail-verdict">
+      <strong data-action={verdict?.action}>{verdict ? filterLabels[verdict.action] : '未取得判定'}</strong>
+      {verdict?.rule && <div><span>命中规则</span><code>{verdict.rule}</code>{verdict.source && <span>来自 {verdict.source}</span>}</div>}
+    </div>
+    <div className="query-detail-columns">
+      <dl><div><dt>查询域名</dt><dd>{event.domain}</dd></div>
+        <div><dt>查询类型</dt><dd>{event.record_type} · {event.transport.toUpperCase()}</dd></div>
+        <div><dt>设备来源</dt><dd><code>{dnsAddress(event.source_ip, event.source_port)}</code></dd></div>
+        <div><dt>解析入口</dt><dd><code>{dnsAddress(event.entry_address, event.entry_port)}</code> · {event.component}</dd></div>
+        {event.same_key_packets > 1 && <div><dt>同键请求</dt><dd>{event.same_key_packets} 次</dd></div>}
+      </dl>
+      <dl><div><dt>应答</dt><dd>{responseText(event)} · {addressText(event)}</dd></div>
+        <div><dt>应答时间</dt><dd>{event.response_at === null ? '—' : date(event.response_at)}</dd></div>
+        <div><dt>响应耗时</dt><dd>{elapsedText(event)} · {event.timing_scope === 'mosdns_entry_processing' ? 'MosDNS 核心处理' : '入口报文间隔'}</dd></div>
+        {verdict && <div><dt>活动版本</dt><dd><details className="query-detail-version"><summary aria-label="查看完整活动版本"><code>{verdict.revision.slice(0, 12)}</code></summary><code>{verdict.revision}</code></details></dd></div>}
+      </dl>
+    </div>
     {notice && <Notice tone={error ? 'error' : undefined}>{notice}</Notice>}
-    <div className="suite-button-row">
+    <div className="suite-button-row query-detail-actions">
     {verdict?.action === 'block' && caps?.features.dns_filter && <>
       <span className="suite-note">精确放行作用于整个实例。</span>
       <button type="button" className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void allow('temporary')}>精确放行 10 分钟</button>

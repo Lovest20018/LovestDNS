@@ -1,4 +1,4 @@
-import { Network } from 'lucide-react';
+import { Activity, ArrowUpRight, Network, Radio, Shield } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useSuite } from '../suiteContext';
 import { filterStatus, useFilterView } from '../filterContext';
@@ -90,18 +90,18 @@ export default function SuiteDashboard() {
   const historical = paused || runtimeStale;
   const process = error ? '面板连接中断' : historical ? '显示历史快照' : runtime?.core_healthy ? 'DNS 进程运行中' : runtime ? 'DNS 进程需检查' : '等待运行状态';
   return <div className="suite-page suite-home">
-    <section className="card suite-home-health" aria-label="DNS 状态与待处理操作">
+    <section className="card suite-home-health" data-healthy={!!runtime?.core_healthy && !activeConfig && !historical && !error} aria-label="DNS 状态与待处理操作">
       <div className="suite-home-health-main">
         <p className="suite-home-instance"><Network size={15} />{caps.name}</p>
         <div role="status">
-          <h2>{activeConfig ? `${error || readError ? '上次看到 · ' : ''}${taskLabel(activeConfig)}` : process}</h2>
+          <h2><Activity size={21} aria-hidden="true" />{activeConfig ? `${error || readError ? '上次看到 · ' : ''}${taskLabel(activeConfig)}` : process}</h2>
           <p>{activeConfig ? `任务更新于 ${when(activeConfig.updated)}`
             : runtime ? `进程状态采样于 ${when(runtime.sampled_at)}` : runtimeError || '正在连接 DNS 实例'}</p>
         </div>
         <div className="suite-home-actions">{activeConfig ? <a className="btn btn-primary" href="#/system?tab=tasks">查看任务进度</a> : caps.permissions.diagnose && <button className="btn btn-primary" disabled={checking || !!error} onClick={() => void checkDns()}>
           {checking ? '正在测试解析…' : '测试本机解析'}</button>}
-          <a href="#/diagnostics?tab=query&help=device">检查设备接入</a>
-          <a href="#/system?tab=status">查看运行状态</a></div>
+          <a href="#/diagnostics?tab=query&help=device">检查设备接入<ArrowUpRight size={13} /></a>
+          <a href="#/system?tab=status">查看运行状态<ArrowUpRight size={13} /></a></div>
         <div className="suite-probe-region" aria-live="polite" aria-atomic="true">
           {checking && <p>正在向本机 DNS 查询两个样本域名…</p>}
           {checkError && <div className="suite-probe-result is-failed">
@@ -109,7 +109,6 @@ export default function SuiteDashboard() {
             <p>请重新测试，或在「查询与诊断」中单独查询域名。</p>
             <details><summary>请求详情</summary><p>{checkError}</p></details>
           </div>}
-          {!checking && !checkError && !result && !activeConfig && caps.permissions.diagnose && <p className="suite-note">本次会话尚未测试本机解析。</p>}
           {result && <div className={`suite-probe-result ${probeHistorical ? 'is-historical' : result.pass ? 'is-passed' : 'is-failed'}`}>
             <strong>{probeHistorical && '历史样本 · '}{result.pass ? '本机解析测试通过' : '部分或全部样本解析失败'}</strong>
             <small>{dnsAddress(result.server, result.port)} · {probeSamples.filter(sample => sample.resolved).length} / {probeSamples.length} 个域名取得 A 记录</small>
@@ -121,10 +120,10 @@ export default function SuiteDashboard() {
         </div>
       </div>
       <div className="suite-home-followup suite-home-entry">
-        <div><h3>{caps.deployment === 'container' ? '容器内 DNS 入口' : 'DNS 监听入口'}</h3>
+        <div><h3><Radio size={16} />{caps.deployment === 'container' ? '容器内 DNS 入口' : 'DNS 监听入口'}</h3>
           <strong className="suite-home-address">{addresses.join(' · ') || '监听待确认'}</strong>
           {historical && <small>上次采样</small>}</div>
-        {caps.features.dns_filter && caps.permissions.configure && <div><h3>广告过滤</h3>
+        {caps.features.dns_filter && caps.permissions.configure && <div><h3><Shield size={16} />广告过滤</h3>
           <a href="#/filter">{(filter.error || paused ? '上次读取 · ' : '') + filterStatus(filter.state)}</a>
           {filter.state?.draft && <p><a href="#/filter?tab=rules">订阅待复核</a></p>}</div>}
       </div>

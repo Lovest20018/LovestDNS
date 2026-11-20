@@ -16,7 +16,7 @@ sudo lovestdnsctl health
 sudo lovestdnsctl password
 ```
 
-根目录 `install.py` 默认选择 `0.2.0`，按精确标签下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`。安装器核对归档、路径、清单和载荷后执行包内安装器。归档和摘要由同一个 GitHub 发布账号提供。可通过 `--version` 指定不含 `v` 的其他已发布版本。
+根目录 `install.py` 默认选择 `0.2.1`，按精确标签下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`。安装器核对归档、路径、清单和载荷后执行包内安装器。归档和摘要由同一个 GitHub 发布账号提供。可通过 `--version` 指定不含 `v` 的其他已发布版本。
 
 只下载且验证、不安装：
 
@@ -61,7 +61,7 @@ python3 -m venv .build/native-tools
 ```sh
 sha256sum -c lovestdns-native.tar.gz.sha256
 tar -xzf lovestdns-native.tar.gz
-cd lovestdns-0.2.0
+cd lovestdns-0.2.1
 cp native.env.example /root/lovestdns-install.env
 chmod 600 /root/lovestdns-install.env
 nano /root/lovestdns-install.env
@@ -123,12 +123,12 @@ Web 编辑的 `custom_env.ini` 用于 DNS 参数与规则变量。原生版禁�
 
 设置由已修改初始密码的管理员会话和 CSRF 校验写入私有 `updates/network.json`，文件权限为 `0600`，接口不回传密码。相同协议、IP、端口和账号下密码留空保留；修改其中任一项须重新填写认证信息。清除认证时，SOCKS5 同时清除账号；选择直连清除全部代理信息。任务运行期间不可改设置；保存会清除旧的版本检查结果，安装前须重新检查。设置保留在 `updates`，不随 `state` 数据回退恢复旧值。
 
-更新代理自 v0.1.0 起提供。正式版通道默认开启，预览通道需显式选择。变更通道后需要重新检查发行版，再确认安装。[当前发行说明](releases/v0.2.0.md) · [已知限制](roadmap.md)
+更新代理自 v0.1.0 起提供。正式版通道默认开启，预览通道需显式选择。变更通道后需要重新检查发行版，再确认安装。[当前发行说明](releases/v0.2.1.md) · [已知限制](roadmap.md)
 
 首次从不含更新助手的版本迁移，需要通过当前安装入口升级一次，并保留实际实例名；之后可在前端完成同实例软件升级：
 
 ```sh
-sudo python3 install.py --version 0.2.0 --instance <实例名>
+sudo python3 install.py --version 0.2.1 --instance <实例名>
 ```
 
 默认实例省略 `--instance`。Docker 部署继续由宿主机 Compose 管理。网页更新仅允许已修改初始密码的管理员会话与 CSRF 校验，不接受外部管理/只读 Token、任意 URL、主机命令或其他实例参数。更新开始后暂停配置、认证设置和维护任务写入，DNS 查询与状态读取仍可用；有未保存草稿时请先保存或还原。
