@@ -71,7 +71,7 @@ export default function SuiteSystem() {
     </nav>
     {tab === 'status' ? <RuntimeStatus /> : <Permission allowed={caps.permissions.maintain} kind="maintain">
     {tab === 'tasks' && <SuiteMaintenance caps={caps} runtime={runtime} />}
-    {tab === 'history' && <Section title="配置历史与恢复" actions={<a href="#/config?tab=apply">前往应用配置</a>}><SuiteHistory /></Section>}
+    {tab === 'history' && <SuiteHistory />}
     {tab === 'updates' && (caps.deployment === 'native' ? <SoftwareUpdate loadedVersion={caps.version} /> : <Empty title="通过主机更新容器">请参阅服务信息中的部署说明。<a href="#/deploy">查看说明</a></Empty>)}
     {tab === 'logs' && <div id="component-logs"><Section title="组件日志" subtitle="最近 200 行，后端会脱敏 Token 和敏感环境变量" icon={ScrollText}>
       <div className="suite-query-form"><label>组件<select aria-label="日志组件" className="form-select" disabled={busy} value={component} onChange={(e) => { window.location.hash = `#/system?component=${encodeURIComponent(e.target.value)}`; }}>{COMPONENTS.map((name) => <option key={name}>{name}</option>)}</select></label><button className="btn btn-secondary" disabled={busy} onClick={() => void loadLogs()}><ScrollText size={16} />{busy ? '读取中…' : '读取日志'}</button></div>

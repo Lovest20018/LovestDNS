@@ -27,3 +27,12 @@
 .dns-filter-domain-tool { padding:.85rem 1rem; background:var(--suite-panel); border:1px solid var(--suite-line); border-radius:10px; }
 .dns-filter-domain-tool summary { cursor:pointer; font-weight:600; }
 .dns-filter-check { margin-top:.8rem; }
+
+.dns-filter-status .suite-button-row { align-items: center; }
+.dns-filter-status .suite-status { margin: 0; }
+.dns-filter-editor label, .dns-filter-inline label { font-size: 14px; }
+@media (max-width: 640px) {
+  .dns-filter-new { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .dns-filter-new label:has(input) { grid-column: 1 / -1; }
+  .dns-filter-new :is(input, select) { width: 100%; }
+}

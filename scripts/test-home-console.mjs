@@ -97,7 +97,7 @@ try{
  await wait("location.hash==='#/config?tab=apply' && document.activeElement?.id==='config-apply'");
  await wait("!!document.querySelector('.suite-config-state .suite-config-version')");
  assert(await e("(()=>{const heading=document.getElementById('config-apply').getBoundingClientRect();return heading.top>=document.querySelector('.suite-topbar').getBoundingClientRect().bottom && heading.bottom<innerHeight;})()"),'the application heading must be visible after navigation');
- assert(await e("!!document.querySelector('.suite-notice a[href=\"#/config?tab=apply\"]')"),'the configuration page must expose the application link');
+ assert(await e("!!document.querySelector('nav.suite-local-links a[href=\"#/config?tab=apply\"]')"),'the configuration page must expose the application link');
  await click('预览并校验当前配置');
  await wait("[...document.querySelectorAll('button')].some(b=>b.textContent==='应用此预览配置')");
  assert.equal((await control({},'/fixture/home-control')).submissions,0,'navigation and preview must not submit a task');

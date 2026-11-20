@@ -257,7 +257,7 @@ function DomainFileEditor({ activeTab }: { activeTab: string }) {
 
       <div className="card">
         <div className="card-title">域名匹配语法</div>
-        <table className="info-table">
+        <table className="info-table domain-syntax">
           <thead><tr><th>前缀</th><th>说明</th><th>示例</th></tr></thead>
           <tbody>
             <tr><td><code style={{ color: 'var(--accent-cyan)' }}>domain:</code></td><td>匹配域名及子域名</td><td>domain:03k.org</td></tr>
