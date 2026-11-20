@@ -38,3 +38,5 @@ export function cacheSaveSummary(redis?: RuntimeSnapshot['redis']): { value: str
   if (info.rdb_last_bgsave_status === 'err') return { value: '上次保存失败', detail: '请到维护与日志查看磁盘或保存错误' };
   return { value: info.rdb_last_bgsave_status === 'ok' ? '上次保存成功' : '暂无保存结果', detail: `上次保存后 ${String(info.rdb_changes_since_last_save ?? '—')} 次数据变更；当前内存可能含未落盘内容` };
 }
+
+export const CORE = ['mosdns', 'unbound-raw', 'unbound-forward', 'dnscrypt', 'dnscrypt-socks', 'redis'];

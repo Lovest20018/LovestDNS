@@ -62,7 +62,7 @@ function pageFromHash(): Page {
   if (path === '/settings') return 'deploy';
   if (path === '/diagnostics' && params.get('tab') === 'gateway') return 'gateway';
   if (path === '/config' || (path === '/system' && params.get('tab') === 'apply' && !params.has('component'))) return 'config';
-  if (path === '/monitoring' || path === '/status') return 'dashboard';
+  if (path === '/monitoring' || path === '/status') return 'system';
   return (Object.entries(PATHS).find(([, value]) => value === path)?.[0] as Page | undefined) ?? 'dashboard';
 }
 type Theme = 'light' | 'dark' | 'system';
