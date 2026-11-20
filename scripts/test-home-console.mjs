@@ -69,7 +69,7 @@ try{
  await click('测试本机解析');
  await wait("document.querySelector('.suite-probe-result')?.textContent.includes('本机解析测试通过')");
  assert(await e("document.querySelector('.suite-probe-result').textContent.includes('2 / 2 个域名取得 A 记录')"));
- await e("document.querySelector('a[href=\"#/diagnostics?tab=device\"]').click()");
+ await e("document.querySelector('a[href=\"#/diagnostics?tab=query&help=device\"]').click()");
  await wait("document.querySelector('.suite-device-steps code')?.textContent.includes('-port=15453')");
  const deviceTests=await e("Array.from(document.querySelectorAll('.suite-device-steps a'), a => new URLSearchParams(a.hash.split('?')[1]).get('exact'))");
  assert.equal(new Set(deviceTests).size,2);

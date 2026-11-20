@@ -7,6 +7,7 @@ test('diagnostic entry opens records by default, queries from existing domain li
   assert.equal(parseDiagnosticRoute('#/diagnostics?domain=example.com').tab, 'query');
   assert.equal(parseDiagnosticRoute('#/diagnostics?tab=query').tab, 'query');
   assert.equal(parseDiagnosticRoute('#/diagnostics?tab=compare').tab, 'compare');
+  assert.equal(diagnosticHash(parseDiagnosticRoute('#/diagnostics?tab=device')), '#/diagnostics?tab=query&help=device');
   assert.equal(parseDiagnosticRoute('#/diagnostics?tab=records&domain=example.com').tab, 'records');
   assert.equal(parseDiagnosticRoute('#/diagnostics?tab=records', '', false).tab, 'query');
 });

@@ -107,7 +107,7 @@ export default function SuiteDashboard() {
         </div>
         <div className="suite-home-actions">{activeConfig ? <a className="btn btn-primary" href="#/system?tab=tasks">查看任务进度</a> : caps.permissions.diagnose && <button className="btn btn-primary" disabled={checking || !!error} onClick={() => void checkDns()}>
           {checking ? '正在测试解析…' : '测试本机解析'}</button>}
-          <a href="#/diagnostics?tab=device">检查设备接入</a></div>
+          <a href="#/diagnostics?tab=query&help=device">检查设备接入</a></div>
         <div className="suite-probe-region" aria-live="polite" aria-atomic="true">
           {checking && <p>正在向本机 DNS 查询两个样本域名…</p>}
           {checkError && <div className="suite-probe-result is-failed">

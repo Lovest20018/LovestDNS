@@ -43,7 +43,7 @@ export default function SuiteDiagnostics() {
   const defaultName = `device-${probeId}.example.com`;
   const recordsFor = (name: string) => '#/diagnostics?tab=records&exact=' + encodeURIComponent(name);
   const presets = diagnosticTargets(caps, paused || runtimeStale ? null : runtime);
-  const tabs: DiagnosticTab[] = ['query', 'device', 'compare'];
+  const tabs: DiagnosticTab[] = ['query', 'compare'];
   if (canRecord) tabs.push('records');
 
   const run = async () => {
@@ -73,17 +73,10 @@ export default function SuiteDiagnostics() {
   };
   return <div className="suite-page">
     <nav className="suite-page-tabs suite-diagnostic-tabs" aria-label="查询与诊断分区">
-      {tabs.map(tab => <a key={tab} aria-current={route.tab === tab ? 'page' : undefined} aria-disabled={busy} href={diagnosticHash({ ...route, tab })} onClick={event => { if (busy) event.preventDefault(); }}>{({ records: '查询记录', query: '主动查询', compare: '链路对照', device: '设备接入' })[tab]}</a>)}
+      {tabs.map(tab => <a key={tab} aria-current={route.tab === tab ? 'page' : undefined} aria-disabled={busy} href={diagnosticHash({ ...route, tab })} onClick={event => { if (busy) event.preventDefault(); }}>{({ records: '查询记录', query: '主动查询', compare: '链路对照' })[tab]}</a>)}
       {gateway?.enabled && <a href="#/diagnostics?tab=gateway">网关观测</a>}
     </nav>
-    {route.tab === 'device' ? <Section title="检查设备是否使用这台 DNS" icon={HeartPulse}>
-      <ol className="suite-device-steps">
-        <li>在被测设备执行以下命令。将 DNS主机IP 换成设备可达的地址。{caps?.deployment === 'container' ? '端口请使用宿主机发布的 UDP 端口。' : `当前观测到的入口端口：${ports.join('、') || '待确认'}。如有端口映射，请使用映射后的端口。`}</li>
-        <li>测试指定入口 <code>nslookup -port={caps?.deployment === 'native' && ports.length === 1 ? ports[0] : '入口端口'} {directName}. DNS主机IP</code> {canRecord && <a href={recordsFor(directName)}>查看入口测试记录</a>}</li>
-        <li>测试设备默认 DNS <code>nslookup {defaultName}.</code> {canRecord && <a href={recordsFor(defaultName)}>查看默认 DNS 测试记录</a>}</li>
-        <li>{canRecord ? '请先开启查询记录。两次查询都可能返回 NXDOMAIN。按各自测试名查到入口记录即可核对来源 IP，经路由器转发时可能显示路由器地址。' : '当前权限无法读取入口记录，仅凭设备收到回答不能确认请求经过此实例。'}</li>
-      </ol>
-    </Section> : route.tab === 'records' ? <RecentQueries route={route} navigate={navigate} /> : <>
+    {route.tab === 'records' ? <RecentQueries route={route} navigate={navigate} /> : <>
     <Section title={mode === 'query' ? '主动查询' : '链路对照'} subtitle="查询从当前 DNS 实例发起；链路可用性取决于运行模式" icon={HeartPulse}
       actions={<div className="suite-button-row"><button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => input.current?.click()}><Upload size={14} />导入报告</button><button className="btn btn-secondary btn-sm" disabled={!report || busy} onClick={() => report && downloadJson(report, `paopaodns-dns-${new Date(report.started_utc).getTime()}.json`)}><Download size={14} />导出报告</button><input ref={input} hidden aria-label="导入 DNS 报告" type="file" accept="application/json,.json" onChange={(e) => { const file = e.target.files?.[0]; if (file) void importReport(file); e.target.value = ''; }} /></div>}>
       <form onSubmit={(e) => { e.preventDefault(); void run(); }}>
@@ -95,6 +88,16 @@ export default function SuiteDiagnostics() {
           {mode === 'query' && <div className="suite-diagnostic-presets"><label htmlFor="diagnostic-target">通道预设</label><select id="diagnostic-target" className="form-select" value="" onChange={(event) => { const target = presets.find((item) => item.id === event.target.value); if (target) { setServer(target.server); setPort(String(target.port)); setTransport(target.transport); } }}><option value="">选择预设，或使用上方目标</option>{presets.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="suite-note">来自当前监听状态。</span></div>}
         </fieldset>
       </form>
+    {route.tab === 'query' && <details className="suite-editor-help" open={!!route.deviceHelp}
+      onToggle={e => { if (e.currentTarget.open !== !!route.deviceHelp) navigate({ deviceHelp: e.currentTarget.open }, true); }}>
+      <summary>如何确认设备正在使用这台 DNS？</summary>
+      <ol className="suite-device-steps">
+        <li>在被测设备执行以下命令。将 DNS主机IP 换成设备可达的地址。{caps?.deployment === 'container' ? '端口请使用宿主机发布的 UDP 端口。' : `当前观测到的入口端口：${ports.join('、') || '待确认'}。如有端口映射，请使用映射后的端口。`}</li>
+        <li>测试指定入口 <code>nslookup -port={caps?.deployment === 'native' && ports.length === 1 ? ports[0] : '入口端口'} {directName}. DNS主机IP</code> {canRecord && <a href={recordsFor(directName)}>查看入口测试记录</a>}</li>
+        <li>测试设备默认 DNS <code>nslookup {defaultName}.</code> {canRecord && <a href={recordsFor(defaultName)}>查看默认 DNS 测试记录</a>}</li>
+        <li>{canRecord ? '请先开启查询记录。两次查询都可能返回 NXDOMAIN。按各自测试名查到入口记录即可核对来源 IP，经路由器转发时可能显示路由器地址。' : '当前权限无法读取入口记录，仅凭设备收到回答不能确认请求经过此实例。'}</li>
+      </ol>
+    </details>}
       {error && <Notice tone="error">{error}</Notice>}
       {report && <><div className="suite-report-heading"><strong>{busy ? '正在查询，以下保留上次结果' : imported ? '离线导入报告' : '查询结果'}</strong><time>{new Date(report.started_utc).toLocaleString('zh-CN')}</time><p>报告来源：{report.method}</p></div>{imported && <Notice>报告在本地解析，未上传。以下内容是报告记录的历史结果。</Notice>}<ReportSummary report={report} />{report.tests.map((test, index) => <Result key={index} label={test.label} result={test.result} />)}</>}
     </Section>

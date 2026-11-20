@@ -1,6 +1,7 @@
-export type DiagnosticTab = 'records' | 'query' | 'compare' | 'device';
+export type DiagnosticTab = 'records' | 'query' | 'compare';
 export interface DiagnosticRoute {
   tab: DiagnosticTab;
+  deviceHelp?: boolean;
   source: string;
   filterDomain: string;
   exactDomain: string;
@@ -32,7 +33,7 @@ export function parseDiagnosticRoute(hash: string, remembered = '', canRecord = 
       if (!params.has(key) && previous.has(key)) params.set(key, previous.get(key)!);
     }
   }
-  const tab = requested === 'compare' || requested === 'query' || requested === 'device' ? requested
+  const tab = requested === 'device' ? 'query' : requested === 'compare' || requested === 'query' ? requested
     : requested === 'records' && canRecord ? 'records'
       : params.has('domain') || !canRecord ? 'query' : 'records';
   const cursor = params.get('before') ?? '';
@@ -44,7 +45,8 @@ export function parseDiagnosticRoute(hash: string, remembered = '', canRecord = 
   const response = params.get('response') ?? '';
   const decision = params.get('decision') ?? '';
   return {
-    tab, source: canRecord ? (params.get('source') ?? '').slice(0, 45) : '',
+    tab, ...(tab === 'query' && (requested === 'device' || params.get('help') === 'device') ? { deviceHelp: true } : {}),
+    source: canRecord ? (params.get('source') ?? '').slice(0, 45) : '',
     filterDomain: canRecord ? (params.get('filter_domain') ?? '').slice(0, 253) : '',
     exactDomain: canRecord ? (params.get('exact') ?? '').slice(0, 1021) : '',
     qtype: canRecord && /^[1-9]\d*$/.test(qtype) && Number(qtype) <= 65535 ? qtype : '',
@@ -61,6 +63,7 @@ export function parseDiagnosticRoute(hash: string, remembered = '', canRecord = 
 
 export function diagnosticHash(route: DiagnosticRoute): string {
   const params = new URLSearchParams({ tab: route.tab });
+  if (route.tab === 'query' && route.deviceHelp) params.set('help', 'device');
   const filters = queryRecordParams(route);
   filters.delete('limit');
   filters.delete('domain');
