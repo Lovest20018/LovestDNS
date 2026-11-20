@@ -48,7 +48,7 @@ const COMPONENTS = {
 };
 function retryPage(page: Page) { COMPONENTS[page] = lazy(LOADERS[page]); }
 const NAV: { title: string; items: { key: Page; icon: LucideIcon }[] }[] = [
-  { title: 'DNS 控制台', items: [{ key: 'dashboard', icon: Activity }, { key: 'filter', icon: Shield }, { key: 'config', icon: FileCog }, { key: 'diagnostics', icon: HeartPulse }, { key: 'system', icon: ScrollText }, { key: 'deploy', icon: Network }] },
+  { title: 'DNS 控制台', items: [{ key: 'dashboard', icon: Activity }, { key: 'config', icon: FileCog }, { key: 'diagnostics', icon: HeartPulse }, { key: 'filter', icon: Shield }, { key: 'system', icon: ScrollText }, { key: 'deploy', icon: Network }] },
 ];
 function navPage(page: Page): Page {
   if (page === 'cache') return 'system';

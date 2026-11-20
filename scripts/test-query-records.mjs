@@ -45,7 +45,7 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 1360, height: 1050, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: base }); await wait("!!document.querySelector('input[name=password]')");
   await input('input[name=password]', 'synthetic-browser-password'); await evaluate("document.querySelector('.suite-login-submit').click()");
-  await wait("document.querySelectorAll('.suite-nav a')[1]?.textContent==='广告过滤'");
+  await wait("document.querySelectorAll('.suite-nav a')[3]?.textContent==='广告过滤'");
   await wait("document.body.textContent.includes('查询记录已关闭')");
   await evaluate("document.querySelector('.query-analytics-actions').scrollIntoView({block:'center'})");
   await shot('analytics-disabled');
@@ -70,6 +70,19 @@ try {
   await evaluate("document.querySelector('.query-analytics-actions').scrollIntoView({block:'start'})");
   await shot('analytics-desktop');
   await wait("!!document.querySelector('.blocked-queries .query-record-expand')");
+  const homeBeforeExpand = await evaluate('location.hash');
+  await click('全部拦截记录');
+  await wait("!!document.querySelector('.blocked-query-pages') && !!document.querySelector('.blocked-query-summary')");
+  const firstBlock = await evaluate("document.querySelector('.blocked-query-summary button').textContent");
+  await click('下一页');
+  await wait("document.querySelector('.blocked-query-pages')?.textContent.includes('第 2 页') && !!document.querySelector('.blocked-query-summary')");
+  assert.notEqual(await evaluate("document.querySelector('.blocked-query-summary button').textContent"),firstBlock);
+  await click('上一页');
+  await wait("document.querySelector('.blocked-query-pages')?.textContent.includes('第 1 页') && !!document.querySelector('.blocked-query-summary')");
+  assert.equal(await evaluate("document.querySelector('.blocked-query-summary button').textContent"),firstBlock);
+  assert.equal(await evaluate('location.hash'),homeBeforeExpand);
+  await click('收起记录');
+  await wait("!document.querySelector('.blocked-query-pages') && !!document.querySelector('.blocked-query-summary')");
   await evaluate("document.querySelector('.blocked-queries .query-record-expand').click()");
   await wait("document.querySelector('.blocked-queries .query-record-detail')?.textContent.includes('合成订阅')");
   await evaluate("document.querySelector('.blocked-queries .query-record-expand').click()");
@@ -149,7 +162,8 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 1360, height: 1000, deviceScaleFactor: 1, mobile: false });
   await evaluate("location.hash='#/filter'");
   await wait("document.body.textContent.includes('按当前规则测试')");
-  await input('.dns-filter-inline input', '128.synthetic-query.example.test');
+  await evaluate("document.querySelector('.dns-filter-domain-tool summary').click()");
+  await input('.dns-filter-domain-tool input', '128.synthetic-query.example.test');
   await click('按当前规则测试');
   await wait("document.body.textContent.includes('当前规则判定 · 拦截')");
   await evaluate("document.querySelector('a[href=\"#/filter?tab=allow\"]').click()");

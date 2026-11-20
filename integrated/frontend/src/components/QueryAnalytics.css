@@ -46,12 +46,26 @@
 .query-analytics-ranking li + li { border-top: 1px solid var(--border-color); }
 .query-analytics-ranking a { display: flex; justify-content: space-between; gap: .5rem; padding: .35rem 0; }
 .query-analytics-ranking code { overflow-wrap: anywhere; }
-.query-analytics-ranks { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items:start; }
+.query-analytics-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); gap:0; margin:1rem 0 1.35rem; padding:.85rem 0; border-block:1px solid var(--suite-line); }
+.query-analytics-kpis > div { border:0; border-radius:0; padding:.2rem 1rem; }
+.query-analytics-kpis > div + div { border-left:1px solid var(--suite-line); }
+.query-analytics-kpis dd { font-size:clamp(1.25rem,2vw,1.75rem); letter-spacing:-.025em; }
+.query-analytics-kpis dd a, .query-analytics-ranking a { text-decoration:none; }
+.query-analytics-kpis dd a:hover, .query-analytics-ranking a:hover { text-decoration:underline; }
+.query-analytics-ranks { grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr)); align-items:stretch; gap:1.3rem; margin:1.1rem 0; }
+.query-analytics-ranks .query-analytics-ranking { padding:.6rem 0; border:0; border-radius:0; }
+.query-analytics-ranks .query-analytics-ranking a { align-items:baseline; padding:.45rem .15rem; }
+.query-analytics-ranks .query-analytics-ranking code { color:var(--suite-ink); font:inherit; font-size:.84rem; }
+.query-analytics-ranking li a > span { font-variant-numeric:tabular-nums; }
+.query-analytics-chart { height:8rem; background:repeating-linear-gradient(to top,transparent 0 calc(33.33% - 1px),var(--suite-line) calc(33.33% - 1px) 33.33%); }
+.query-analytics-bar[data-count="0"] { min-height:0; }
 @media (max-width: 700px) {
   .query-analytics-ranks { grid-template-columns: minmax(0, 1fr); }
+  .query-analytics-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:1rem; }
+  .query-analytics-kpis > div:nth-child(odd) { border-left:0; }
 }
 @media (max-width: 520px) {
-  .query-analytics-kpis { grid-template-columns: repeat(auto-fit, minmax(min(100%, 126px), 1fr)); }
+  .query-analytics-kpis > div { padding:.2rem .55rem; }
   .query-analytics-chart { gap: 2px; }
   .query-analytics-bucket small { font-size: .65rem; }
 }

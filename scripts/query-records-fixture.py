@@ -67,9 +67,10 @@ def records(payload):
                 'addresses': (['2001:db8::8'] if index % 2 else ['192.0.2.8']) if index % 3 else [],
                 'addresses_complete': True, 'truncated': False, 'elapsed_ms': 1.25,
                 'outcome': 'response_observed', 'timing_scope': 'passive_entry_packet_interval', 'branch': None, 'cache_hit': None})
-        rows[128].update(rcode='REFUSED', rcode_value=5, answer_count=0, addresses=[], timing_scope='mosdns_entry_processing',
-                         filter={'action': 'block', 'revision': filter_revision, 'id': 'a' * 24,
-                                 'source': '合成订阅', 'rule': '||128.synthetic-query.example.test^'})
+        for index in range(4, 129, 4):
+            rows[index].update(rcode='REFUSED', rcode_value=5, answer_count=0, addresses=[], timing_scope='mosdns_entry_processing',
+                               filter={'action': 'block', 'revision': filter_revision, 'id': 'a' * 24,
+                                       'source': '合成订阅', 'rule': f'||{index}.synthetic-query.example.test^'})
         recorder.store.append(rows[:128]); recorder.store.append(rows[128:])
         now = int(time.time())
         recorder.store.record_coverage(now - 600, now)

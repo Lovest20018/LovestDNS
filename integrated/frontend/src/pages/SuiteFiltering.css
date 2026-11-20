@@ -22,3 +22,8 @@
 .dns-filter-allow { margin: .5rem 0; padding: 0; list-style: none; }
 .dns-filter-allow li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .25rem 0; overflow-wrap: anywhere; }
 .dns-filter-rules:not([hidden]) { display:grid; gap:1rem; }
+.dns-filter-status small { color:var(--suite-muted); }
+.dns-filter-status .suite-button-row > button { margin-inline-start:auto; }
+.dns-filter-domain-tool { padding:.85rem 1rem; background:var(--suite-panel); border:1px solid var(--suite-line); border-radius:10px; }
+.dns-filter-domain-tool summary { cursor:pointer; font-weight:600; }
+.dns-filter-check { margin-top:.8rem; }

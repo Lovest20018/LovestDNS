@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ListFilter, RefreshCw, Search, Shield } from 'lucide-react';
+import { ListFilter, RefreshCw, Shield } from 'lucide-react';
 import { applyFilter, checkFilter, filterLabels } from '../filterApi';
 import type { FilterAction, FilterCheck, FilterSource, FilterState } from '../filterApi';
 import { errorText, when } from '../suiteApi';
@@ -72,17 +72,17 @@ export default function SuiteFiltering() {
     {busy && <p aria-live="polite" className="suite-note">正在处理过滤任务…</p>}
     {!state ? <Empty title={readError ? 'DNS 过滤管理暂不可用' : '正在读取 DNS 过滤配置'} />
       : <>
-        <Section title="DNS 过滤" icon={Shield} actions={<div className="suite-button-row">
+        <div className="dns-filter-status"><div className="suite-button-row">
           <Status value={!readError && state.live_enabled && state.available && state.live_revision === state.revision ? 'good' : 'neutral'} label={(readError ? '上次读取 · ' : '') + filterStatus(state)} />
+          {state.live_revision && <small>{state.rules.toLocaleString()} 条匹配规则</small>}
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => void refresh()}
             disabled={busy}><RefreshCw size={14} />刷新过滤状态</button>
-        </div>}>
+        </div>
           {state.mode === 'recursive' && <Notice>当前使用纯递归入口。切换到 MosDNS 分流模式后可使用过滤。</Notice>}
           {state.mode === 'unavailable' && <Notice tone="warning">尚未连接支持过滤的 MosDNS 入口。</Notice>}
           {state.available && state.live_revision !== state.revision && <Notice tone="warning">解析核心与已保存的过滤版本不同，服务正在核对。</Notice>}
-          {state.live_revision && <p className="suite-note">活动版本 <code>{state.live_revision.slice(0, 12)}</code> · {state.rules.toLocaleString()} 条匹配规则</p>}
-        </Section>
-        {tab === 'records' && <DomainCheck available={state.available} revision={state.live_revision} />}
+          {state.live_revision && tab === 'rules' && <small>活动版本 <code>{state.live_revision.slice(0, 12)}</code></small>}
+        </div>
         <div className="dns-filter-rules" hidden={tab !== 'rules'}>
         <Section title="过滤设置" icon={Shield}>
           <FilterEditor state={state} busy={busy} apply={perform} />
@@ -108,6 +108,7 @@ export default function SuiteFiltering() {
         </Section>}
       </>}
     {tab === 'records' && <BlockedQueries />}
+    {tab === 'records' && state && <details className="dns-filter-domain-tool"><summary>检查域名</summary><DomainCheck available={state.available} revision={state.live_revision} /></details>}
   </div>;
 }
 
@@ -153,7 +154,7 @@ function DomainCheck({ available, revision }: { available: boolean; revision: st
     catch (e) { if (!request.signal.aborted) setError(errorText(e)); }
     finally { if (!request.signal.aborted) setBusy(false); }
   };
-  return <Section title="检查域名" icon={Search}>
+  return <div className="dns-filter-check">
     <form className="dns-filter-inline" onSubmit={e => { e.preventDefault(); void check(); }}>
       <label>查询名<input className="form-input" value={domain} maxLength={254} placeholder="example.test"
         onChange={e => { setDomain(e.target.value); setResult(null); }} disabled={busy || !available} /></label>
@@ -164,7 +165,7 @@ function DomainCheck({ available, revision }: { available: boolean; revision: st
       {result.rule && <> · <code>{result.rule}</code> · {result.source}</>}
       {result.revision && <> · 版本 <code>{result.revision.slice(0, 12)}</code></>}
     </Notice>}
-  </Section>;
+  </div>;
 }
 
 function Interval({ value, disabled, onChange }: { value: number; disabled: boolean; onChange: (v: number) => void }) {

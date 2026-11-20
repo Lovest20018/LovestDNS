@@ -240,9 +240,21 @@
   .suite-account>summary { gap:4px; padding:0 4px; white-space:nowrap; }
 }
 /* Console sections share the same keyboard and mobile navigation. */
-.suite-page-tabs { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 16px; }
-.suite-page-tabs a { padding:10px 14px; border-radius:9px; color:var(--suite-muted); background:var(--suite-panel); border:1px solid var(--suite-line); font-size:14px; text-decoration:none; }
-.suite-page-tabs a[aria-current=page] { color:var(--suite-blue); border-color:var(--suite-blue); background:var(--suite-panel-soft); }
+.suite-page-tabs { display:flex; flex-wrap:wrap; align-items:stretch; gap:4px; margin:0; border-bottom:1px solid var(--suite-line); }
+.suite-page-tabs a { display:inline-flex; align-items:center; justify-content:center; padding:10px 14px; border-bottom:2px solid transparent; color:var(--suite-muted); font-size:14px; text-decoration:none; }
+.suite-page-tabs a:hover { color:var(--suite-ink); background:var(--suite-panel-soft); }
+.suite-page-tabs a[aria-current=page] { color:var(--suite-blue); border-bottom-color:currentColor; font-weight:650; }
+.suite-content .suite-section, .suite-content .suite-config-card { border-radius:var(--suite-radius); box-shadow:var(--suite-shadow); }
+.suite-content .suite-section > header { align-items:center; margin-bottom:1rem; }
+.suite-content .suite-section > header h2 { color:var(--suite-ink); font-size:1.04rem; line-height:1.45; font-weight:650; }
+.suite-content .suite-section > header p { margin-top:3px; color:var(--suite-muted); font-size:.82rem; line-height:1.55; }
+.suite-content :is(.suite-section,.suite-config-card) :is(dt,th,time) { font-variant-numeric:tabular-nums; }
+.suite-content .info-table th { color:var(--suite-muted); background:var(--suite-panel-soft); font-weight:600; }
+.suite-content .info-table tbody tr:hover { background:var(--suite-panel-soft); }
+.suite-content .suite-page :is(input,select,textarea,button,a,summary):focus-visible { outline:2px solid var(--suite-teal); outline-offset:2px; }
+.suite-content .suite-config-card { transition:border-color .15s ease; }
+.suite-content .suite-config-card:hover { border-color:var(--suite-teal); }
+.suite-content .suite-build-list dd { min-width:0; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
 .suite-config-summary { margin-bottom:16px; }
 .suite-status-component { min-width:0; overflow-wrap:anywhere; }
 .suite-status-component details { margin-top:12px; }

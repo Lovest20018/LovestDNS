@@ -116,12 +116,12 @@ function AnalyticsContent({ data }: { data: QuerySummary }) {
       </p>
     </div>
     <div className="query-analytics-ranks">
-      <BlockedQueries windowData={data} />
       <Ranking title="来源 IP 排行" items={data.sources} href={value => link({ source: value })} />
       <Ranking title="热门域名" items={data.domains} href={value => link({ exactDomain: value })} />
       {!!data.blocked_sources.length && <Ranking title="拦截来源排行" items={data.blocked_sources}
         href={value => link({ source: value, decision: 'block' })} />}
     </div>
+    <BlockedQueries key={data.end - data.start} windowData={data} />
   </>;
 }
 

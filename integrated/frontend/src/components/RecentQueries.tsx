@@ -127,11 +127,11 @@ export default function RecentQueries({ route, navigate }: { route: DiagnosticRo
     {data?.events.length ? <>
       <div className="suite-table-scroll query-record-desktop">
         <table className="info-table query-record-table">
-          <thead><tr><th>时间 / 来源 IP</th><th>域名 / 类型</th><th>响应</th><th>观测耗时</th></tr></thead>
+          <thead><tr><th>查询域名</th><th>设备来源 / 时间</th><th>响应</th><th>观测耗时</th></tr></thead>
           <tbody>{data.events.map(event => <Fragment key={event.id}>
-            <tr><td><time>{date(event.observed_at)}</time>{sourceLink(event)}</td>
-              <td><button type="button" className="query-record-expand" aria-expanded={open(event)} onClick={() => toggle(event)}>{event.domain}</button>
+            <tr><td><button type="button" className="query-record-expand" aria-expanded={open(event)} onClick={() => toggle(event)}>{event.domain}</button>
                 <span>{event.record_type} · {event.transport.toUpperCase()}</span></td>
+              <td>{sourceLink(event)}<time>{date(event.observed_at)}</time></td>
               <td><strong>{responseText(event)}{event.truncated ? ' · 报文截断' : ''}</strong>
                 {event.filter?.action === 'block' && <span className="query-record-blocked">DNS 过滤拦截</span>}</td>
               <td>{elapsedText(event)}</td></tr>
@@ -140,9 +140,9 @@ export default function RecentQueries({ route, navigate }: { route: DiagnosticRo
         </table>
       </div>
       <ul className="query-record-cards" aria-label="查询记录">{data.events.map(event => <li key={event.id} className="query-record-card">
-        <div className="query-record-card-source">{sourceLink(event)}<time>{date(event.observed_at)}</time></div>
         <button type="button" className="query-record-expand" aria-expanded={open(event)} onClick={() => toggle(event)}>{event.domain}</button>
         <span className="query-record-card-type">{event.record_type} · {event.transport.toUpperCase()}</span>
+        <div className="query-record-card-source">{sourceLink(event)}<time>{date(event.observed_at)}</time></div>
         <dl className="query-record-card-result"><div><dt>响应</dt><dd>{responseText(event)}{event.truncated ? ' · 报文截断' : ''}
           {event.filter?.action === 'block' && <span className="query-record-blocked">DNS 过滤拦截</span>}</dd></div><div><dt>观测耗时</dt><dd>{elapsedText(event)}</dd></div></dl>
         {open(event) && <QueryDetails event={event} route={route} />}

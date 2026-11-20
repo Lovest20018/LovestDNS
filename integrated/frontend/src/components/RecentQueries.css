@@ -44,3 +44,12 @@
 .query-record-toolbar .form-select { display: inline-block; width: auto; }
 .query-record-blocked { display: block; margin-top: .2rem; font-size: .75rem; }
 .query-record-detail-row { background: var(--suite-panel-soft); }
+.query-record-table { table-layout:fixed; }
+.query-record-table th:first-child { width:39%; }
+.query-record-table th:nth-child(2) { width:27%; }
+.query-record-table th:last-child { width:12%; }
+.query-record-table time { font-size:12px; color:var(--suite-muted); }
+.query-record-table .query-record-expand, .query-record-card .query-record-expand { color:var(--text-primary); }
+.query-record-table tr:has(.query-record-expand[aria-expanded=true]) { background:var(--suite-panel-soft); }
+.query-record-table td .query-record-blocked, .query-record-card .query-record-blocked { color:var(--accent-orange); }
+.query-record-card-source { margin:.6rem 0; }
