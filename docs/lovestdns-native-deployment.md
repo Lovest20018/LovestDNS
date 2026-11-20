@@ -16,7 +16,7 @@ sudo lovestdnsctl health
 sudo lovestdnsctl password
 ```
 
-根目录 `install.py` 默认选择 `0.1.1`，按精确标签下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`。安装器核对归档、路径、清单和载荷后执行包内安装器。归档和摘要由同一个 GitHub 发布账号提供。可通过 `--version` 指定不含 `v` 的其他已发布版本。
+根目录 `install.py` 默认选择 `0.2.0`，按精确标签下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`。安装器核对归档、路径、清单和载荷后执行包内安装器。归档和摘要由同一个 GitHub 发布账号提供。可通过 `--version` 指定不含 `v` 的其他已发布版本。
 
 只下载且验证、不安装：
 
@@ -34,23 +34,25 @@ sudo python3 install.py --package ./lovestdns-native-debian-amd64.tar.gz --sha25
 
 ## 开发者构建安装包
 
-在 Linux amd64 构建机，准备 Docker、Python venv/pip、Node/npm 和源码：
+在 Linux amd64 构建机准备 Docker、Python venv/pip、Node/npm、Go 1.27.3 和源码。
 
 ```sh
 python3 scripts/build-integrated-ui.py
 python3 -m venv .build/native-tools
 .build/native-tools/bin/python scripts/build-components.py --output .build/components-bundle
+.build/native-tools/bin/python packaging/components/mosdns_filter.py --output .build/mosdns-filter
 .build/native-tools/bin/python scripts/build-native-package.py \
   --components-bundle .build/components-bundle \
+  --mosdns-filter .build/mosdns-filter \
   --frontend-dist .build/integrated-web/dist \
   --output .build/lovestdns-native.tar.gz
 ```
 
-构建校验 `packaging/upstream.lock.json` 中的上游脚本 SHA-256，独立组件来源与构建依赖由 `packaging/components.lock.json` 固定。两种发行方式复用同一组件包，定制 MosDNS 及原运行库保留；新版组件的私有依赖独立打包。构建还为 Debian 12 的 Python 3.11、Debian 13 的 Python 3.13 下载固定版本的 wheel。输出安装包与同名 `.sha256` 文件；`manifest.json` 列出全部载荷摘要、上游和实际组件来源。`--version` 可覆盖包及 API 的版本号。单组件对照与缓存验收见 [组件构建说明](../packaging/components/README.md)。
+构建根据锁文件校验上游脚本与独立组件。过滤扩展使用冻结 MosDNS 二进制记录的源码提交，构建摘要随包保存。打包器为 Debian 12 的 Python 3.11 和 Debian 13 的 Python 3.13 下载固定版本的 wheel。安装包附同名 `.sha256` 文件，`manifest.json` 列出全部载荷和实际组件来源。`--version` 可覆盖包及 API 的版本号。[组件构建说明](../packaging/components/README.md) · [DNS 过滤使用说明](dns-filtering.md)
 
 需要将已验收的 DNSCrypt `combined` 源码候选加入独立试用包时，在上述原生打包命令中显式增加 `--dnscrypt-source-candidate /path/to/normal/combined`。该目录必须包含正常静态 amd64 二进制与对应 `source-manifest.json`。打包器核对源码锁、三个补丁、工具链声明和二进制摘要，拒绝诊断构建及其他变体；保留输入组件清单，另写实际载荷清单和补丁来源。该参数不更改默认组件来源，新包保留候选、未批准发布及性能未验收标记。
 
-已有核验过的新组件原生包时，也可用 `scripts/refresh-native-package.py --base <原包> --base-sha256 <可信摘要> --frontend .build/integrated-web/dist --output <新包>` 更新应用与界面。脚本要求当前源码干净且已提交，前端为同提交的 `npm ci` 构建；上游锁、模板适配脚本、组件锁和 Python 依赖改变时拒绝刷新。所有核心、私有库、组件与 wheels 保持原字节，Linux 执行权限从原归档保留；新包分别记录继承来源与当前源码，不声称重新编译了组件。正式发行时可显式增加 `--release`，仅接受不带开发后缀的 `主.次.修订` 版本，并记录功能发行批准；性能验收标记仍为 false，不由该开关推导性能结论。默认省略该参数保持候选标记。
+已有核验过的新组件原生包时，也可用 `scripts/refresh-native-package.py --base <原包> --base-sha256 <可信摘要> --frontend .build/integrated-web/dist --mosdns-filter .build/mosdns-filter --output <新包>` 更新应用与界面。脚本要求当前源码干净且已提交，前端为同提交的 `npm ci` 构建；上游锁、模板适配脚本、组件锁和 Python 依赖改变时拒绝刷新。过滤扩展从已核对的本次构建复制，基础核心、私有库、其他组件与 wheels 保持原字节，Linux 执行权限从原归档保留；新包分别记录继承来源与当前源码，不声称重新编译了组件。正式发行时可显式增加 `--release`，仅接受不带开发后缀的 `主.次.修订` 版本，并记录功能发行批准；性能验收标记仍为 false，不由该开关推导性能结论。默认省略该参数保持候选标记。
 
 ## 首次安装
 
@@ -59,7 +61,7 @@ python3 -m venv .build/native-tools
 ```sh
 sha256sum -c lovestdns-native.tar.gz.sha256
 tar -xzf lovestdns-native.tar.gz
-cd lovestdns-0.1.1
+cd lovestdns-0.2.0
 cp native.env.example /root/lovestdns-install.env
 chmod 600 /root/lovestdns-install.env
 nano /root/lovestdns-install.env
@@ -121,12 +123,12 @@ Web 编辑的 `custom_env.ini` 用于 DNS 参数与规则变量。原生版禁�
 
 设置由已修改初始密码的管理员会话和 CSRF 校验写入私有 `updates/network.json`，文件权限为 `0600`，接口不回传密码。相同协议、IP、端口和账号下密码留空保留；修改其中任一项须重新填写认证信息。清除认证时，SOCKS5 同时清除账号；选择直连清除全部代理信息。任务运行期间不可改设置；保存会清除旧的版本检查结果，安装前须重新检查。设置保留在 `updates`，不随 `state` 数据回退恢复旧值。
 
-更新代理自 v0.1.0 起提供。正式版通道默认开启，预览通道需显式选择。变更通道后需要重新检查发行版，再确认安装。[当前发行说明](releases/v0.1.1.md) · [已知限制](roadmap.md)
+更新代理自 v0.1.0 起提供。正式版通道默认开启，预览通道需显式选择。变更通道后需要重新检查发行版，再确认安装。[当前发行说明](releases/v0.2.0.md) · [已知限制](roadmap.md)
 
 首次从不含更新助手的版本迁移，需要通过当前安装入口升级一次，并保留实际实例名；之后可在前端完成同实例软件升级：
 
 ```sh
-sudo python3 install.py --version 0.1.1 --instance <实例名>
+sudo python3 install.py --version 0.2.0 --instance <实例名>
 ```
 
 默认实例省略 `--instance`。Docker 部署继续由宿主机 Compose 管理。网页更新仅允许已修改初始密码的管理员会话与 CSRF 校验，不接受外部管理/只读 Token、任意 URL、主机命令或其他实例参数。更新开始后暂停配置、认证设置和维护任务写入，DNS 查询与状态读取仍可用；有未保存草稿时请先保存或还原。

@@ -1,6 +1,7 @@
 import { Activity, Clock, Database, Network } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useSuite } from '../suiteContext';
+import { filterStatus, useFilterView } from '../filterContext';
 import { useGateway } from '../gatewayContext';
 import { bytes, errorText, suiteFetch, when } from '../suiteApi';
 import type { RuntimeSnapshot } from '../suiteApi';
@@ -10,6 +11,7 @@ import { dnsAddress, entryListeners } from '../dnsListeners';
 import { processFingerprint } from '../queryEvidence';
 import ConfigState from '../components/ConfigState';
 import TrendChart from '../components/TrendChart';
+import QueryAnalytics from '../components/QueryAnalytics';
 import { isActiveTask, taskLabel, TASK_NAMES, useMaintenance } from '../maintenanceContext';
 import './SuitePage.css';
 import './HomeWorkflow.css';
@@ -36,9 +38,11 @@ function probeResultText(sample: ProbeSample) {
 
 export default function SuiteDashboard() {
   const { caps, runtime, samples, paused, runtimeStale, setPaused, runtimeError, error } = useSuite();
+  const filter = useFilterView();
   const { config: gateway } = useGateway();
   const { tasks, submission, readError } = useMaintenance();
   const [checking, setChecking] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [check, setCheck] = useState<ProbeObservation | null>(null);
   const [checkError, setCheckError] = useState('');
   const result = check?.result;
@@ -122,21 +126,33 @@ export default function SuiteDashboard() {
           </div>}
         </div>
       </div>
+      <div className="suite-home-followup suite-home-entry">
+        <div><h3>{caps.deployment === 'container' ? '容器内 DNS 入口' : 'DNS 监听入口'}</h3>
+          <strong className="suite-home-address">{addresses.join(' · ') || '监听待确认'}</strong>
+          {historical && <small>上次采样</small>}</div>
+        {caps.features.dns_filter && caps.permissions.configure && <div><h3>广告过滤</h3>
+          <a href="#/filter">{(filter.error || paused ? '上次读取 · ' : '') + filterStatus(filter.state)}</a>
+          {filter.state?.draft && <p><a href="#/filter?tab=rules">订阅待复核</a></p>}</div>}
+      </div>
+    </section>
+    {!activeConfig && (runtime?.error ? <Notice tone="error">{runtime.error}</Notice> : runtime && !runtime.core_healthy ? <Notice tone="warning">核心组件需检查。<a href="#/system?component=bootstrap">查看启动日志</a></Notice> : null)}
+    {!!problems.length && <Notice tone="warning">辅助服务需检查。{problems.map((name, i) => <span key={name}>{i > 0 && '、'}<a href={`#/system?component=${encodeURIComponent(name)}`}>{name}</a></span>)}</Notice>}
+    {shownSubmission && <Notice><a href="#/system?tab=tasks">{TASK_NAMES[shownSubmission.action]} · {shownSubmission.phase === 'sending' ? '正在提交' : shownSubmission.phase === 'failed' ? '提交失败' : '正在核对受理记录'}</a></Notice>}
+    {!shownSubmission && latest?.state === 'failed' && <Notice tone="warning"><a href="#/system?tab=tasks">{taskLabel(latest)} · 查看任务详情</a></Notice>}
+    {caps.features.query_recording && caps.permissions.configure
+      && <QueryAnalytics key={caps.instance_id} instance={caps.instance_id} paused={paused} />}
+    <details className="suite-home-details card" onToggle={e => setDetailsOpen(e.currentTarget.open)}>
+      <summary>运行详情与统计</summary>
+      <div className="suite-page">
+    <div className="suite-toolbar"><p className="suite-muted">更新于 {when(runtime?.sampled_at)} · {paused ? '自动刷新已暂停' : runtimeStale ? '数据过期' : '每 5 秒刷新'}</p><button className="btn btn-secondary btn-sm" onClick={() => setPaused(!paused)}>{paused ? '恢复自动刷新' : '暂停自动刷新'}</button></div>
       <div className="suite-home-followup">
-        {caps.permissions.configure && <div><h3>配置</h3><ConfigState compact /></div>}
+        {caps.permissions.configure && detailsOpen && <div><h3>配置</h3><ConfigState compact /></div>}
         {caps.permissions.maintain && <div><h3><Clock size={15} />维护任务</h3>
           <p>{shownSubmission ? `${TASK_NAMES[shownSubmission.action]} · ${shownSubmission.phase === 'sending' ? '正在提交' : shownSubmission.phase === 'failed' ? '提交失败' : '正在核对受理记录'}`
             : latest ? `${readError ? '上次看到 · ' : ''}${taskLabel(latest)}` : readError ? '正在重新连接管理服务' : '暂无维护任务'}</p>
           {latest && <small>{when(latest.updated)}</small>}
           <a href="#/system?tab=tasks">{latest || submission ? '查看任务详情' : '打开维护'}</a></div>}
       </div>
-    </section>
-    <details className="suite-home-details card">
-      <summary>运行详情与统计</summary>
-      <div className="suite-page">
-    <div className="suite-toolbar"><p className="suite-muted">更新于 {when(runtime?.sampled_at)} · {paused ? '自动刷新已暂停' : runtimeStale ? '数据过期' : '每 5 秒刷新'}</p><button className="btn btn-secondary btn-sm" onClick={() => setPaused(!paused)}>{paused ? '恢复自动刷新' : '暂停自动刷新'}</button></div>
-    {!activeConfig && (runtime?.error ? <Notice tone="error">{runtime.error}</Notice> : runtime && !runtime.core_healthy ? <Notice tone="warning">核心组件需检查。<a href="#/system?component=bootstrap">查看启动日志</a></Notice> : null)}
-    {!!problems.length && <Notice tone="warning">辅助服务需检查。{problems.map((name, i) => <span key={name}>{i > 0 && '、'}<a href={`#/system?component=${encodeURIComponent(name)}`}>{name}</a></span>)}</Notice>}
     <div className="suite-home-summary">
       <Section title={caps.deployment === 'container' ? '容器内 DNS 监听' : 'DNS 进程监听'} icon={Network}><strong className="suite-home-value suite-home-address">{addresses.length ? addresses.join(' · ') : '未确认'}</strong><p className="suite-note">{endpoints.length ? `${[...new Set(endpoints.map((item) => item.transport.toUpperCase()))].join(' / ')} · ${runtime?.dns?.entry_component}` : '尚未取得入口进程的监听证据'}</p><details><summary>接入信息</summary><p className="suite-note">{endpoints.some((item) => item.wildcard) ? '通配监听地址不能填写为设备 DNS，请确认主机的局域网 IP。' : '监听记录来自进程 socket，不代表终端查询已经过此服务。'}{caps.deployment === 'container' && '宿主机映射端口需另行核对。'}</p><p className="suite-note">来源：Linux 进程监听 · 服务网络空间。<a href="#/deploy">版本与服务信息</a></p></details></Section>
       <Section title="Redis 缓存" icon={Database}><strong className="suite-home-value">{runtime?.redis?.available ? bytes(runtime.redis.info?.used_memory) : '未采集'}</strong><p className="suite-note">{runtime?.redis?.available ? runtime.redis.info?.maxmemory === 0 ? '未设置 Redis 上限' : `上限 ${bytes(runtime.redis.info?.maxmemory)}` : '等待缓存数据'}</p><p className="suite-note">{cacheSave.value}</p><a href="#/cache">查看缓存与持久化</a></Section>

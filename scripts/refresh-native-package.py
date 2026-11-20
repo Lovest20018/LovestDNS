@@ -63,7 +63,7 @@ def release_flags(version, release):
     return {'candidate_only': not release, 'release_approved': release, 'performance_acceptance': False}
 
 
-def refresh(base, expected, frontend, output, *, release=False):
+def refresh(base, expected, frontend, output, *, release=False, mosdns_filter=None):
     base, frontend, output = map(Path, (base, frontend, output))
     if output.exists() or output.with_suffix(output.suffix + '.sha256').exists():
         raise ValueError('Use a new output filename')
@@ -103,7 +103,12 @@ def refresh(base, expected, frontend, output, *, release=False):
         if components['lock_sha256'] != bundle['lock_digest'](lock):
             raise ValueError('Base component lock mismatch')
         inherited = {name: checksum for name, checksum in old['files'].items()
-                     if name.startswith(('core/', 'lib/', 'libexec/', 'components/', 'wheels/'))}
+                     if name.startswith(('core/', 'lib/', 'libexec/', 'components/', 'wheels/'))
+                     and name not in ('components/mosdns-filter', 'components/mosdns-filter.json')}
+        filter_builder = runpy.run_path(str(ROOT / 'packaging/components/mosdns_filter.py'))
+        filter_meta = filter_builder['install'](mosdns_filter, package / 'components/mosdns-filter',
+                                                package / 'components/mosdns-filter.json')
+        modes['components/mosdns-filter'] = 0o755
         for relative, destination in (('integrated/runtime', 'app/runtime'), ('integrated/backend', 'app/backend'),
                                       ('packaging/native/runtime', 'app/native')):
             target = package / destination
@@ -126,7 +131,7 @@ def refresh(base, expected, frontend, output, *, release=False):
         info = json.loads((package / 'build-info.json').read_text())
         if 'native_trial' in info:
             info['base_native_trial'] = info.pop('native_trial')
-        info.update(components=components, native_refresh={k: v for k, v in provenance.items() if k != 'inherited_files'})
+        info.update(components=components, mosdns_filter=filter_meta, native_refresh={k: v for k, v in provenance.items() if k != 'inherited_files'})
         write_json(package / 'build-info.json', info)
         write_json(package / 'native-refresh-provenance.json', provenance)
         if any(digest(package / name) != checksum for name, checksum in inherited.items()):
@@ -134,7 +139,7 @@ def refresh(base, expected, frontend, output, *, release=False):
         files = {p.relative_to(package).as_posix(): digest(p) for p in sorted(package.rglob('*'))
                  if p.is_file() and p != package / 'manifest.json'}
         write_json(package / 'manifest.json', {**old, 'version': version, 'files': files, 'components': components,
-                                              'installation_receipt_v1': True,
+                                              'installation_receipt_v1': True, 'mosdns_filter': filter_meta,
                                               **flags})
         installer['verify_package'](package)
         prefix = 'lovestdns-' + version
@@ -156,6 +161,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('base', 'frontend', 'output'): parser.add_argument('--' + name, type=Path, required=True)
     parser.add_argument('--base-sha256', required=True)
+    parser.add_argument('--mosdns-filter', type=Path, required=True)
     parser.add_argument('--release', action='store_true', help='Mark an explicitly approved stable functional release; does not claim performance acceptance')
     args = parser.parse_args()
-    print(json.dumps(refresh(args.base, args.base_sha256, args.frontend, args.output, release=args.release)))
+    print(json.dumps(refresh(args.base, args.base_sha256, args.frontend, args.output, release=args.release, mosdns_filter=args.mosdns_filter)))

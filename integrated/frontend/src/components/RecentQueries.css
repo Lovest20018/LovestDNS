@@ -1,6 +1,6 @@
 .query-recording-status,.query-record-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px}
 .query-recording-status>div:first-child{display:grid;gap:5px}.query-recording-status span,.query-record-toolbar{color:var(--text-secondary);font-size:12px}
-.query-record-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) 100px auto;align-items:end;gap:10px;margin:16px 0}.query-record-filters label{display:grid;gap:6px;min-width:0;font-size:12px;color:var(--text-secondary)}
+.query-record-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr) 100px 130px auto;align-items:end;gap:10px;margin:16px 0}.query-record-filters label{display:grid;gap:6px;min-width:0;font-size:12px;color:var(--text-secondary)}
 .query-record-toolbar label{display:flex;align-items:center;gap:7px}.query-record-table{min-width:760px}.query-record-table td{vertical-align:top}.query-record-table td>*{display:block;overflow-wrap:anywhere;margin-bottom:5px}.query-record-table td:nth-child(2){max-width:270px}.query-record-table td:nth-child(3){max-width:260px}.query-record-table td span{color:var(--text-secondary);font-size:12px}.query-record-table code{font-size:12px}.query-record-pages{margin-top:14px}
 .query-record-cards{display:none;list-style:none;padding:0;margin:0}
 .query-record-query{margin-top:5px;width:fit-content}
@@ -11,16 +11,36 @@
   .query-record-cards{display:grid;gap:12px}
   .query-record-card{min-width:0;padding:14px;border:1px solid var(--suite-line);border-radius:10px;background:var(--suite-panel-soft)}
   .query-record-card-source{display:grid;gap:5px;margin-bottom:12px}
-  .query-record-card-source code,.query-record-card-domain,.query-record-card-address,.query-record-card-actions code{overflow-wrap:anywhere;white-space:normal}
+  .query-record-card-source code{overflow-wrap:anywhere;white-space:normal}
   .query-record-card-source code{font-size:12px}
-  .query-record-card time,.query-record-card-type,.query-record-card-address{color:var(--suite-muted);font-size:12px;line-height:1.6}
-  .query-record-card-domain{display:block;font-size:14px;line-height:1.6}
+  .query-record-card time,.query-record-card-type{color:var(--suite-muted);font-size:12px;line-height:1.6}
   .query-record-card-type{display:block;margin-top:4px}
   .query-record-card-result{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;margin:12px 0}
   .query-record-card-result dt{font-size:11px;color:var(--suite-muted)}
   .query-record-card-result dd{margin:4px 0 0;font-size:13px;font-weight:650;overflow-wrap:anywhere}
-  .query-record-card-actions{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-top:12px}
-  .query-record-card-actions details{min-width:0;font-size:12px;line-height:1.7}
-  .query-record-card-actions summary{cursor:pointer;color:var(--suite-link)}
-  .query-record-card-actions .query-record-query{flex:none;margin-top:0}
 }
+.query-record-expand {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  text-align: left;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-weight: 650;
+}
+.query-record-expand:hover { text-decoration: underline; }
+.query-record-detail { padding: .6rem; }
+.query-record-detail > dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr));
+  gap: .45rem 1rem;
+  margin: 0 0 .55rem;
+}
+.query-record-detail dt { color: var(--text-secondary); font-size: .8rem; }
+.query-record-detail dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
+.query-record-toolbar .form-select { display: inline-block; width: auto; }
+.query-record-blocked { display: block; margin-top: .2rem; font-size: .75rem; }
+.query-record-detail-row { background: var(--suite-panel-soft); }

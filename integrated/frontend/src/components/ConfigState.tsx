@@ -12,7 +12,7 @@ const LABELS = { unknown: '本次启动后暂无应用记录', recorded: '与应
 const subscribeDrafts = (listener: () => void) => subscribeFileDraft('*', listener);
 
 export default function ConfigState({ compact = false }: { compact?: boolean }) {
-  const { caps } = useSuite();
+  const { caps, paused } = useSuite();
   const { tasks } = useMaintenance();
   const applying = tasks.some(task => task.action !== 'save_redis_snapshot' && isActiveTask(task));
   const drafts = useSyncExternalStore(subscribeDrafts, dirtyFileNames);
@@ -47,9 +47,9 @@ export default function ConfigState({ compact = false }: { compact?: boolean }) 
       else void read(abort.signal);
     };
     window.addEventListener('lovestdns-config-changed', invalidate);
-    void poll();
+    if (!paused) void poll();
     return () => { abort.abort(); refreshQueued.current = null; clearTimeout(timer); window.removeEventListener('lovestdns-config-changed', invalidate); };
-  }, [read]);
+  }, [paused, read]);
   const draftNames = drafts.split(',');
   const rows = (items: Row[]) => items.map((row) => <div className="suite-config-version" key={row.filename}>
     <strong title={row.filename}>{configFileLabel(row.filename)}</strong><span className={row.state === 'changed' ? 'is-warning' : ''}>{draftNames.includes(row.filename) ? '有未保存草稿' : LABELS[row.state]}</span>

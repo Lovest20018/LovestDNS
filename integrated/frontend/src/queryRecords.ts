@@ -1,4 +1,5 @@
 import { suiteFetch } from './suiteApi';
+import type { FilterDecision } from './filterApi';
 
 export interface QueryEvent {
   id: string; sequence: number; observed_at: number; response_at: number | null;
@@ -7,7 +8,8 @@ export interface QueryEvent {
   same_key_packets: number; rcode: string | null; answer_count: number | null;
   addresses: string[]; addresses_complete: boolean; truncated: boolean | null;
   elapsed_ms: number | null; outcome: 'response_observed' | 'no_response_observed';
-  branch: null; cache_hit: null; timing_scope: 'passive_entry_packet_interval';
+  branch: null; cache_hit: null; timing_scope: 'passive_entry_packet_interval' | 'mosdns_entry_processing';
+  filter?: FilterDecision;
 }
 export interface QueryRecording {
   enabled: boolean; active: boolean; phase: 'disabled' | 'starting' | 'recording' | 'unavailable';
@@ -15,8 +17,20 @@ export interface QueryRecording {
   counters: Record<string, number>; queue_depth: number;
   endpoints: { address: string; port: number; transport: string; component: string }[];
   limits: { retention_seconds: number; rows: number; storage_bytes: number; database_bytes: number };
+  source?: 'linux_passive_entry_packets' | 'mosdns_entry_events';
 }
-export interface QueryRecords { instance_id: string; status: QueryRecording; events: QueryEvent[]; next_before: number | null }
+export interface QueryRecords {
+  instance_id: string; status: QueryRecording; events: QueryEvent[]; next_before: number | null;
+  history_changed?: boolean;
+}
+export interface QueryBucket { start: number; end: number; count: number; coverage: 'complete' | 'partial' | 'unknown' }
+export interface QueryRank { value: string; count: number }
+export interface QuerySummary {
+  instance_id: string; status: QueryRecording; start: number; end: number; snapshot: number;
+  total: number; source_count: number; latency_samples: number; latency_scopes: Record<string, number>; p95_ms: number | null;
+  buckets: QueryBucket[]; domains: QueryRank[]; sources: QueryRank[];
+  evaluated: number; blocked: number; blocked_sources: QueryRank[];
+}
 
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const number = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -38,6 +52,25 @@ export async function recentQueries(params: URLSearchParams, signal: AbortSignal
       && ['response_observed', 'no_response_observed'].includes(String(e.outcome))
       && (e.elapsed_ms === null || number(e.elapsed_ms)) && (e.rcode === null || typeof e.rcode === 'string')
       && Array.isArray(e.addresses) && e.addresses.length <= 4 && e.addresses.every(a => typeof a === 'string')
-      && typeof e.addresses_complete === 'boolean' && number(e.same_key_packets))) throw new Error('查询记录响应格式无效');
+      && typeof e.addresses_complete === 'boolean' && number(e.same_key_packets)
+      && (e.filter === undefined || object(e.filter) && ['block', 'allow', 'pass'].includes(String(e.filter.action))
+        && typeof e.filter.revision === 'string'
+        && (e.filter.action === 'pass' || typeof e.filter.rule === 'string' && typeof e.filter.source === 'string')))) throw new Error('查询记录响应格式无效');
+  return value;
+}
+
+export async function querySummary(hours: 1 | 24, signal: AbortSignal): Promise<QuerySummary> {
+  const value = await suiteFetch<QuerySummary>('/api/v1/query-records/summary?hours=' + hours, { signal });
+  const validRank = (items: unknown) => Array.isArray(items) && items.length <= 10
+    && items.every(item => object(item) && typeof item.value === 'string' && number(item.count));
+  if (!object(value) || typeof value.instance_id !== 'string' || !recordingValid(value.status)
+    || ![value.start, value.end, value.snapshot, value.total, value.source_count, value.latency_samples,
+      value.evaluated, value.blocked].every(number)
+    || value.end - value.start !== hours * 3600 || !(value.p95_ms === null || number(value.p95_ms))
+    || !object(value.latency_scopes) || !Object.values(value.latency_scopes).every(number)
+    || !Array.isArray(value.buckets) || value.buckets.length !== (hours === 1 ? 12 : 24)
+    || !value.buckets.every(b => object(b) && number(b.start) && number(b.end) && number(b.count)
+      && ['complete', 'partial', 'unknown'].includes(String(b.coverage)))
+    || ![value.domains, value.sources, value.blocked_sources].every(validRank)) throw new Error('解析概览响应格式无效');
   return value;
 }

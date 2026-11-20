@@ -2,8 +2,10 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity, Boxes, ChevronRight, FileCog, HeartPulse, KeyRound,
-  LogOut, Moon, Network, ScrollText, Sun, X,
+  LogOut, Moon, Network, ScrollText, Shield, Sun, X,
 } from 'lucide-react';
+import { useFilterView } from './filterContext';
+import { FilterProvider } from './FilterProvider';
 import BrowserLogin from './components/BrowserLogin';
 import SuiteProvider from './SuiteProvider';
 import MaintenanceProvider from './MaintenanceProvider';
@@ -22,30 +24,31 @@ import PageBoundary from './components/PageBoundary';
 import { clearDiagnosticRoutes } from './useDiagnosticRoute';
 import './suite.css';
 
-type Page = 'cache' | 'dashboard' | 'diagnostics' | 'gateway' | 'config' | 'env' | 'lists' | 'ttl' | 'advanced' | 'system' | 'deploy';
+type Page = 'cache' | 'dashboard' | 'diagnostics' | 'gateway' | 'config' | 'env' | 'lists' | 'ttl' | 'advanced' | 'filter' | 'system' | 'deploy';
 const PATHS: Record<Page, string> = {
   cache: '/cache', config: '/config', dashboard: '/', diagnostics: '/diagnostics', gateway: '/gateway',
-  env: '/env', lists: '/lists', ttl: '/ttl', advanced: '/advanced', system: '/system', deploy: '/deploy',
+  env: '/env', lists: '/lists', ttl: '/ttl', advanced: '/advanced', filter: '/filter', system: '/system', deploy: '/deploy',
 };
 const TITLES: Record<Page, string> = {
   cache: '缓存', config: '解析配置', dashboard: '概览', diagnostics: '查询与诊断', gateway: '网关观测',
-  env: '基础设置', lists: '域名分流', ttl: 'TTL 规则', advanced: '高级配置', system: '维护', deploy: '设置',
+  env: '基础设置', lists: '域名分流', ttl: 'TTL 规则', advanced: '高级配置', filter: '广告过滤', system: '维护', deploy: '设置',
 };
 const LOADERS = {
   cache: () => import('./pages/SuiteCache'), dashboard: () => import('./pages/SuiteDashboard'), diagnostics: () => import('./pages/SuiteDiagnostics'),
   gateway: () => import('./pages/SuiteGateway'),
   config: () => import('./pages/SuiteConfig'), system: () => import('./pages/SuiteSystem'), deploy: () => import('./pages/SuiteDeploy'),
   env: () => import('./pages/EnvConfigPage'), lists: () => import('./pages/DomainListPage'), ttl: () => import('./pages/TtlRulesPage'), advanced: () => import('./pages/AdvancedConfigPage'),
+  filter: () => import('./pages/SuiteFiltering'),
 };
 const COMPONENTS = {
   cache: lazy(LOADERS.cache), dashboard: lazy(LOADERS.dashboard), diagnostics: lazy(LOADERS.diagnostics), config: lazy(LOADERS.config),
   gateway: lazy(LOADERS.gateway),
   system: lazy(LOADERS.system), deploy: lazy(LOADERS.deploy), env: lazy(LOADERS.env),
-  lists: lazy(LOADERS.lists), ttl: lazy(LOADERS.ttl), advanced: lazy(LOADERS.advanced),
+  lists: lazy(LOADERS.lists), ttl: lazy(LOADERS.ttl), advanced: lazy(LOADERS.advanced), filter: lazy(LOADERS.filter),
 };
 function retryPage(page: Page) { COMPONENTS[page] = lazy(LOADERS[page]); }
 const NAV: { title: string; items: { key: Page; icon: LucideIcon }[] }[] = [
-  { title: 'DNS 控制台', items: [{ key: 'dashboard', icon: Activity }, { key: 'config', icon: FileCog }, { key: 'diagnostics', icon: HeartPulse }, { key: 'system', icon: ScrollText }, { key: 'deploy', icon: Network }] },
+  { title: 'DNS 控制台', items: [{ key: 'dashboard', icon: Activity }, { key: 'filter', icon: Shield }, { key: 'config', icon: FileCog }, { key: 'diagnostics', icon: HeartPulse }, { key: 'system', icon: ScrollText }, { key: 'deploy', icon: Network }] },
 ];
 function navPage(page: Page): Page {
   if (page === 'cache') return 'system';
@@ -67,13 +70,14 @@ type Theme = 'light' | 'dark' | 'system';
 function Console(props: Parameters<typeof Shell>[0]) {
   const { caps } = useSuite();
   return <MaintenanceProvider key={caps?.instance_id ?? ''} instance={caps?.instance_id} allowed={caps?.permissions.maintain === true}>
-    <UpdateNetworkProvider><Shell {...props} /></UpdateNetworkProvider>
+    <FilterProvider key={`${caps?.instance_id}-${caps?.access_role}`}><UpdateNetworkProvider><Shell {...props} /></UpdateNetworkProvider></FilterProvider>
   </MaintenanceProvider>;
 }
 
 function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: Theme; setTheme: (value: Theme) => void; onLogout: () => void; onPassword: () => void; actionError: string }) {
   const { caps, error, runtimeError, paused, setPaused, loading, refreshing, refresh } = useSuite();
   const { tasks } = useMaintenance();
+  const filter = useFilterView();
   const active = tasks.find(isActiveTask);
   const [page, setPage] = useState<Page>(() => pageFromHash());
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -118,7 +122,7 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
       <a href="#/" className="suite-brand"><img className="suite-brand-mark" src="/lovestdns-icon.svg" alt="" /><div><strong>LovestDNS</strong><span>DNS 管理面板</span></div></a>
       <button className="suite-mobile-close" onClick={() => setMobileOpen(false)} aria-label="关闭导航"><X size={18} /></button>
       <a href="#/status" className="suite-instance"><div className="suite-instance-icon"><Network size={17} /></div><div><small>当前 DNS</small><strong title={caps?.name ?? 'LovestDNS'}>{caps?.name ?? 'LovestDNS'}</strong></div><Status value={error ? 'warning' : 'neutral'} label={error ? '失联' : active ? '维护中' : loading ? '连接中' : caps?.deployment === 'native' ? '原生' : caps ? '容器' : '等待连接'} /></a>
-      <nav className="suite-nav">{NAV.map((group) => <div className="suite-nav-group" key={group.title}>{group.items.map((item) => { const Icon = item.icon; return <a key={item.key} href={`#${PATHS[item.key]}`} aria-current={navPage(page) === item.key ? 'page' : undefined} className={navPage(page) === item.key ? 'is-active' : ''}><Icon size={17} /><span>{TITLES[item.key]}</span>{navPage(page) === item.key && <ChevronRight size={14} />}</a>; })}</div>)}</nav>
+      <nav className="suite-nav">{NAV.map((group) => <div className="suite-nav-group" key={group.title}>{group.items.map((item) => { if (item.key === 'filter' && !(caps?.features.dns_filter && caps.permissions.configure)) return null; const Icon = item.icon; return <a key={item.key} href={`#${PATHS[item.key]}`} aria-current={navPage(page) === item.key ? 'page' : undefined} className={navPage(page) === item.key ? 'is-active' : ''}><Icon size={17} /><span>{TITLES[item.key]}</span>{item.key === 'filter' && filter.state?.draft && <small>待复核</small>}{navPage(page) === item.key && <ChevronRight size={14} />}</a>; })}</div>)}</nav>
       <div className="suite-sidebar-footer"><span>本地配置与诊断</span><small>{caps?.deployment === 'native' ? '原生服务' : caps ? '容器服务' : 'LovestDNS'} · {caps?.version?.replace('0.1.0-dev.lovestdns-native.', '') ?? '准备中'}</small></div>
     </aside>
     <main className="suite-main" inert={mobileOpen}>
@@ -126,10 +130,10 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
       <section className="suite-content"><div className="suite-page-heading"><h1>{TITLES[page]}</h1></div>
         {(error || actionError) && <div className="suite-global-error"><HeartPulse size={16} /><div><strong>{error ? '连接暂时中断，草稿已保留' : '操作未完成'}</strong><p>{error || actionError}</p></div><button className="btn btn-secondary btn-sm" onClick={() => void refresh()}>重试</button></div>}
         {runtimeError && !error && !active && page !== 'dashboard' && <div className="suite-global-warning"><Activity size={16} /><span>运行状态读取暂不可用。{runtimeError}</span></div>}
-        {paused && <div className="suite-refresh-paused" role="status"><div><strong>自动刷新已暂停</strong><p>页面保留上次结果；后台 DNS 查询记录开关不受影响。</p></div><button className="btn btn-secondary btn-sm" onClick={() => setPaused(false)}>恢复自动刷新</button></div>}
+        {paused && <div className="suite-refresh-paused" role="status"><div><strong>自动刷新已暂停</strong><p>页面保留上次结果。进行中的维护任务会继续跟踪，DNS 查询记录沿用当前开关。</p></div><button className="btn btn-secondary btn-sm" onClick={() => setPaused(false)}>恢复自动刷新</button></div>}
         {navPage(page) === 'config' && caps?.permissions.configure && <nav className="suite-page-tabs" aria-label="解析配置分区">{[['config', '配置状态'], ['env', '基础与上游'], ['lists', '域名分流'], ['ttl', 'TTL 规则'], ['advanced', '高级配置']].map(([key, label]) => <a key={key} aria-current={page === key ? 'page' : undefined} href={`#${PATHS[key as Page]}`}>{label}</a>)}</nav>}
         <PageBoundary key={`${page}-${pageAttempt}`} onRetry={() => { retryPage(page); setPageAttempt((value) => value + 1); }}><Suspense fallback={<p role="status">正在加载页面…</p>}>
-        {['env', 'lists', 'ttl', 'advanced'].includes(page) ? caps ? <Permission allowed={caps.permissions.configure}><Active key={`${page}-${caps.instance_id}-${caps.access_role}`} /></Permission> : <Offline /> : <Active key={`${caps?.instance_id}-${caps?.access_role}`} />}
+        {['env', 'lists', 'ttl', 'advanced', 'filter'].includes(page) ? caps ? <Permission allowed={caps.permissions.configure && (page !== 'filter' || !!caps.features.dns_filter)}><Active key={`${page}-${caps.instance_id}-${caps.access_role}`} /></Permission> : <Offline /> : <Active key={`${caps?.instance_id}-${caps?.access_role}`} />}
         </Suspense></PageBoundary>
       </section>
     </main>

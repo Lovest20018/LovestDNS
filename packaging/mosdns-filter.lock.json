@@ -1,0 +1,7 @@
+{
+  "format_version": 1,
+  "source_commit": "408e342f64ea0f8bc35aeb7bd456be767e7ed0d3",
+  "source_url": "https://codeload.github.com/kkkgo/mosdns/tar.gz/408e342f64ea0f8bc35aeb7bd456be767e7ed0d3",
+  "source_sha256": "8a15f4609b72bd2a7de0b27a3ea4a4c0d7f1d8ec7330dd5ac1f592205b2d0bf1",
+  "go_version": "go1.27.3"
+}

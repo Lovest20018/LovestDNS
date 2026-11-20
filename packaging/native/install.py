@@ -406,6 +406,9 @@ def install(args, package):
                  '-r', str(release / 'requirements.lock.txt')])
         for name, arguments in (('redis-server', ['--version']), ('unbound', ['-V']), ('mosdns', ['version']), ('dnscrypt-proxy', ['-version'])):
             command([str(release / 'core' / name), *arguments], capture=True)
+        filter_binary = release / 'components/mosdns-filter'
+        if filter_binary.is_file():
+            command([str(filter_binary), 'version'], capture=True)
         installation_receipt(p, release, getattr(args, 'sha256', None))
         backup = None
         changed = False
@@ -466,23 +469,65 @@ def install(args, package):
             raise
 
 
-def restore(p, backup):
+def restore(p, backup, *, manual=False):
     info = json.loads((backup / 'release.json').read_text())
     old = Path(info['release']).resolve(strict=True)
     if old.parent != (p['home'] / 'releases').resolve():
         raise ValueError('Rollback release is outside this instance')
-    failed = p['storage'] / 'backups' / ('pre-rollback-' + time.strftime('%Y%m%d-%H%M%S'))
-    failed.mkdir(mode=0o700)
-    # Preserve the displaced data for review; never delete it during rollback.
-    for name in ('data', 'state'):
-        (p['storage'] / name).rename(failed / name)
-        shutil.copytree(backup / name, p['storage'] / name, symlinks=True)
-    shutil.copyfile(backup / 'service.env', p['config'])
-    shutil.copyfile(backup / 'service.unit', p['unit'])
-    switch(p['home'] / 'current', old)
-    configure_online_updater(p, old)
-    command(['systemctl', 'daemon-reload'])
-    command(['systemctl', 'reset-failed', p['name'] + '.service'], check=False, capture=True)
+    current = p['home'] / 'current'
+    prior = current.resolve(strict=True)
+    configs = [('service.env', 'config', 0o600), ('service.unit', 'unit', 0o644)]
+    candidate = {key: (backup / name).read_text() for name, key, mode in configs}
+    original = {key: p[key].read_text() for _, key, _ in configs}
+    storage = p['storage']
+    names = ('data', 'state')
+    required = sum(path.stat().st_size for name in names for path in (backup / name).rglob('*')
+                   if not path.is_symlink() and path.is_file())
+    if shutil.disk_usage(storage).free < required:
+        raise ValueError('Not enough space to stage rollback')
+    with tempfile.TemporaryDirectory(prefix='.rollback-', dir=storage) as staging:
+        stage = Path(staging)
+        for name in names:
+            shutil.copytree(backup / name, stage / name, symlinks=True)
+        displaced = Path(tempfile.mkdtemp(prefix='pre-rollback-', dir=storage / 'backups'))
+        moved = []
+        was_active = manual and is_active(p)
+        starting = False
+        if was_active:
+            stop(p)
+        try:
+            for name in names:
+                (storage / name).rename(displaced / name)
+                moved.append(name)
+                (stage / name).rename(storage / name)
+            for _, key, mode in configs:
+                atomic(p[key], candidate[key], mode)
+            switch(current, old)
+            configure_online_updater(p, old)
+            command(['systemctl', 'daemon-reload'])
+            command(['systemctl', 'reset-failed', p['name'] + '.service'], check=False, capture=True)
+            if manual:
+                starting = True
+                command(['systemctl', 'start', p['name'] + '.service'])
+                return healthy(p)
+        except BaseException:
+            if starting:
+                stop(p)
+            for name in reversed(moved):
+                if (storage / name).exists():
+                    (storage / name).rename(stage / name)
+                (displaced / name).rename(storage / name)
+            if current.resolve() != prior:
+                switch(current, prior)
+            for _, key, mode in configs:
+                if p[key].read_text() != original[key]:
+                    atomic(p[key], original[key], mode)
+            configure_online_updater(p, prior)
+            command(['systemctl', 'daemon-reload'])
+            if was_active:
+                command(['systemctl', 'start', p['name'] + '.service'])
+                healthy(p)
+            raise
 
 
 def main():
@@ -527,10 +572,7 @@ def main():
             backup = Path(json.loads((p['home'] / 'rollback.json').read_text())['backup']).resolve(strict=True)
             if backup.parent != (p['storage'] / 'backups').resolve():
                 raise ValueError('Invalid rollback path')
-            stop(p)
-            restore(p, backup)
-            command(['systemctl', 'start', p['name'] + '.service'])
-            print(json.dumps(healthy(p)))
+            print(json.dumps(restore(p, backup, manual=True)))
     elif args.action == 'logs':
         command(['journalctl', '-u', p['name'] + '.service', '-n', '80', '--no-pager'])
     elif args.action in {'password', 'api'}:

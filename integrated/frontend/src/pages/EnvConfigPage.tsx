@@ -38,6 +38,8 @@ export default function EnvConfigPage() {
   };
   return <div className="suite-page">
     <Notice>启用“覆盖”时使用此处设置，关闭后使用服务启动设置。高级配置共用此处的草稿。<a href="#/advanced?file=custom_env.ini">编辑源文件</a></Notice>
+    {caps?.features.dns_filter && (values.CNAUTO ?? running.CNAUTO) === 'no'
+      && <Notice tone="warning">纯递归模式生效后会停用 DNS 过滤。订阅与规则可在恢复 MosDNS 分流时继续使用。</Notice>}
     <div className="suite-editor-toolbar suite-editor-toolbar-feedback"><span>{dirty ? '有未保存修改' : loaded ? '配置已读取' : '等待读取配置'}</span><div><button className="btn btn-secondary" aria-label="重新读取配置" title="重新读取配置" disabled={busy} onClick={() => void load()}><RefreshCw size={15} />重新读取</button><button className="btn btn-primary" disabled={busy || !loaded || !dirty || !!connectionError} onClick={() => void save()}><Save size={15} />{busy ? '处理中…' : '保存配置'}</button></div>
       <ConfigNextStep message={error || editor.result?.msg} failed={!!error || editor.result?.success === false} />
     </div>

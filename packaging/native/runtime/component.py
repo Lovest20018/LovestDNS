@@ -158,6 +158,9 @@ def main():
             env.update(overrides)
             active.write_text(json.dumps(env))
     command = commands[action]
+    if action == "mosdns":
+        command = shared.filter_command(command, env, home / 'components/mosdns-filter',
+                                        os.environ['SUITE_STATE_DIR'], run)
     os.execve(command[0], command, env)
 
 

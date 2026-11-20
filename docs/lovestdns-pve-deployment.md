@@ -97,6 +97,7 @@ DNS_STATE_DIR=/opt/lovestdns/state
 ```sh
 docker compose -f docker-compose.integrated.yaml config --quiet
 python3 scripts/build-components.py --output .build/components-bundle
+python3 packaging/components/mosdns_filter.py --output .build/mosdns-filter
 docker compose -f docker-compose.integrated.yaml build
 docker compose -f docker-compose.integrated.yaml up -d
 docker compose -f docker-compose.integrated.yaml ps

@@ -27,8 +27,9 @@ SOURCE_ROOT_FILES = (".gitignore", ".gitattributes", ".dockerignore", "install.p
                      "docs/lovestdns-native-deployment.md",
                      "packaging/standalone.freeze.json", "docker-compose-web.yaml",
                      "docker-compose.sidecar.yaml", "packaging/legacy/web-docker-ghcr.yml.disabled",
-                     ".github/workflows/native-package.yml", "packaging/components.lock.json", "packaging/dnscrypt-source.lock.json")
-TEXT_SUFFIXES = {".py", ".ts", ".tsx", ".js", ".mjs", ".css", ".json", ".html", ".md", ".yaml", ".yml", ".svg", ".txt", ".patch"}
+                     ".github/workflows/native-package.yml", "packaging/components.lock.json", "packaging/dnscrypt-source.lock.json",
+                     "packaging/mosdns-filter.lock.json")
+TEXT_SUFFIXES = {".py", ".go", ".ts", ".tsx", ".js", ".mjs", ".css", ".json", ".html", ".md", ".yaml", ".yml", ".svg", ".txt", ".patch"}
 BINARY_SUFFIXES = {".png"}
 
 
@@ -194,9 +195,39 @@ def collect_samples(server, stack, temp):
             'addresses_complete': True, 'truncated': False, 'elapsed_ms': 1.0,
             'outcome': 'response_observed', 'timing_scope': 'passive_entry_packet_interval', 'branch': None, 'cache_hit': None}
         with patch.object(server.runtime_client, 'query_records_request', return_value={
-            'status': {**query_status, 'retained_rows': 1}, 'events': [query_event], 'next_before': None}):
+            'status': {**query_status, 'retained_rows': 1}, 'events': [query_event], 'next_before': None, 'history_changed': False}):
             capture('query_records_recent', '/query-records', 'query_records_recent', role='admin',
                     scenario='synthetic passive event at recorder I/O boundary; no live traffic or cache/path inference')
+        sample_revision = 'a' * 64
+        decision = {'action': 'block', 'revision': sample_revision, 'id': 'd' * 24,
+                    'rule': '||ads.example.test^', 'source': 'Fixture'}
+        with patch.object(server.runtime_client, 'query_records_request', return_value={
+            'status': {**query_status, 'retained_rows': 1, 'source': 'mosdns_entry_events', 'timing_scope': 'mosdns_entry_processing'},
+            'events': [{**query_event, 'domain': 'ads.example.test.', 'timing_scope': 'mosdns_entry_processing',
+                        'rcode': 'REFUSED', 'rcode_value': 5, 'answer_count': 0, 'addresses': [], 'filter': decision}],
+            'next_before': None, 'history_changed': False}):
+            capture('query_records_filter_hit', '/query-records?decision=block', 'query_records_recent', role='admin',
+                    scenario='synthetic core event with a captured matching rule snapshot and REFUSED response')
+        window_end = int(NOW)
+        with patch.object(server.runtime_client, 'query_records_request', return_value={
+            'status': query_status, 'start': window_end - 3600, 'end': window_end, 'snapshot': 0, 'total': 0, 'source_count': 0,
+            'latency_samples': 0, 'latency_scopes': {}, 'p95_ms': None,
+            'evaluated': 0, 'blocked': 0, 'blocked_sources': [], 'domains': [], 'sources': [],
+            'buckets': [{'start': t, 'end': t + 300, 'count': 0, 'coverage': 'unknown'} for t in range(window_end - 3600, window_end, 300)]}):
+            capture('query_summary_off', '/query-records/summary?hours=1', 'query_records_summary', role='admin',
+                    scenario='synthetic empty window with recording off and unknown coverage')
+        with patch.object(server.runtime_client, 'manager_request', return_value={
+            'enabled': False, 'local_rules': '', 'sources': [], 'allow': {}, 'rules': 0, 'revision': '',
+            'mode': 'mosdns', 'available': True, 'live_revision': '', 'live_enabled': False, 'draft': None, 'jobs': []}):
+            capture('dns_filter_off', '/dns-filter', 'dns_filter_status', role='admin',
+                    scenario='synthetic MosDNS management status before opt-in')
+        with patch.object(server.runtime_client, 'manager_request', return_value={'domain': 'ads.example.test', **decision}):
+            capture('dns_filter_check', '/dns-filter/check?domain=ads.example.test', 'dns_filter_check', role='admin',
+                    scenario='synthetic active policy decision, independently of recorder state')
+        with patch.object(server.runtime_client, 'manager_request', return_value={'id': '1' * 32}):
+            capture('dns_filter_job', '/dns-filter/actions', 'dns_filter_action', role='admin', method='POST', status=202,
+                    body={'action': 'allow', 'domain': 'ads.example.test', 'mode': 'temporary', 'revision': sample_revision},
+                    scenario='synthetic accepted temporary allow job, not an activation result')
         with patch.object(server.runtime_client, 'query_records_request', return_value={**query_status, 'enabled': True, 'phase': 'starting'}):
             capture('query_recording_opt_in', '/query-recording', 'query_recording_configure', method='PUT', role='admin',
                     body={'enabled': True}, scenario='synthetic recorder I/O; actual handler submits explicit opt-in')
@@ -268,8 +299,14 @@ def validate_samples(document, samples):
         path, method, operation = operations[case["operation_id"]]
         request, response = case["request"], case["response"]
         route_pattern = re.sub(r"\\\{\w+\\\}", "[^/]+", re.escape("/api/v1" + path))
-        if method != request["method"] or not re.fullmatch(route_pattern, request["path"]):
+        url_path, _, query = request["path"].partition("?")
+        if method != request["method"] or not re.fullmatch(route_pattern, url_path):
             raise ValueError(f"{case['id']}: request route differs from OpenAPI")
+        if query:
+            from urllib.parse import parse_qs
+            parameters = {p["name"] for p in operation["parameters"] if p["in"] == "query"}
+            if not set(parse_qs(query, keep_blank_values=True)) <= parameters:
+                raise ValueError(f"{case['id']}: request query differs from OpenAPI")
         def validate(schema, value):
             Draft202012Validator({**schema, "components": document["components"]},
                                  format_checker=FormatChecker()).validate(value)

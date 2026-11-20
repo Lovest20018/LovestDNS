@@ -14,9 +14,10 @@ LOGGER = logging.getLogger('paopaodns.manager')
 
 
 class Manager:
-    def __init__(self, actions, store):
+    def __init__(self, actions, store, dns_filter=None):
         self.actions = actions
         self.store = store
+        self.dns_filter = dns_filter
         self.wakeup = threading.Event()
         self.worker = None
         self.phase = "starting"
@@ -31,11 +32,20 @@ class Manager:
     def start(self):
         self.worker = threading.Thread(target=self.run, name="maintenance-worker", daemon=True)
         self.worker.start()
+        if self.dns_filter:
+            self.dns_filter.start()
 
     def dispatch(self, request):
         if not isinstance(request, dict) or not isinstance(request.get("operation"), str):
             raise ValueError("Invalid manager request")
         operation = request["operation"]
+        if self.dns_filter:
+            if operation == 'filter_status' and set(request) == {'operation'}:
+                return self.dns_filter.status()
+            if operation == 'filter_check' and set(request) == {'operation', 'task'}:
+                return self.dns_filter.check(request['task'])
+            if operation == 'filter_action' and set(request) == {'operation', 'task'}:
+                return self.dns_filter.submit(request['task'])
         if operation == "submit" and set(request) == {"operation", "task"}:
             validate_submission(request["task"])
             if request["task"]["action"] == "restart_dns_core" and os.environ.get("LOVESTDNS_SYSTEMD") != "1":
@@ -62,6 +72,7 @@ class Manager:
             healthy = self.healthy()
             actions_available = healthy and env is not None
             return {"schema_version": 1, "apply_custom_mod": actions_available and env.get("CNAUTO") != "no",
+                    **({"dns_filter": True} if self.dns_filter and self.dns_filter.supported() else {}),
                     "save_redis_snapshot": actions_available,
                     "restart_dns_core": actions_available and os.environ.get("LOVESTDNS_SYSTEMD") == "1",
                     "worker": {"available": healthy, "phase": self.phase}}
@@ -138,18 +149,22 @@ def main():
     os.umask(0o077)
     run = Path(os.environ.get("SUITE_RUN_DIR", "/run/paopaodns-suite"))
     state = Path(os.environ.get("SUITE_STATE_DIR", "/var/lib/paopaodns-suite"))
-    manager = Manager(CoreActions(state, run), TaskStore(state))
+    from runtime.dns_filter import FilterManager
+    manager = Manager(CoreActions(state, run), TaskStore(state), FilterManager(state, run))
     # Recovery is completed before the socket accepts new submissions.
     manager.store.recover()
 
     class Handler(socketserver.StreamRequestHandler):
         def handle(self):
             self.request.settimeout(4)
-            raw = self.rfile.readline(4097)
+            raw = self.rfile.readline(131073)
             try:
-                if len(raw) > 4096 or not raw.endswith(b"\n"):
+                if len(raw) > 131072 or not raw.endswith(b"\n"):
                     raise ValueError("Manager request too large")
-                result = manager.dispatch(json.loads(raw))
+                value = json.loads(raw)
+                if len(raw) > 4096 and (not isinstance(value, dict) or value.get('operation') != 'filter_action'):
+                    raise ValueError("Manager request too large")
+                result = manager.dispatch(value)
                 response = {"ok": True, "result": result}
             except (ValueError, RuntimeError) as exc:
                 response = {"ok": False, "error": str(exc)[:500], "code": "UNAVAILABLE" if isinstance(exc, RuntimeError) else "CONFLICT"}

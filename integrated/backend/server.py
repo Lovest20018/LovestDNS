@@ -21,7 +21,7 @@ from installation import read_object, recorded, installation_summary, provenance
 app = base.app
 if os.environ.get("SUITE_DIST_DIR"):
     app.static_folder = os.environ["SUITE_DIST_DIR"]
-VERSION = "0.1.1"
+VERSION = "0.2.0"
 STATE_DIR = Path(os.environ.get("SUITE_STATE_DIR", "/var/lib/paopaodns-suite"))
 RUN_DIR = Path(os.environ.get("SUITE_RUN_DIR", "/run/paopaodns-suite"))
 history = History(STATE_DIR)
@@ -255,6 +255,7 @@ def capabilities():
                      "redis_snapshot": management.get("save_redis_snapshot") is True,
                      "restart_dns_core": management.get("restart_dns_core") is True,
                      "conditional_config_write": True, "config_state": True,
+                     **({"dns_filter": True} if management.get('dns_filter') is True else {}),
                      "query_recording": True, "cache_flush": False, "client_policies": False},
         "runtime_error": current.get("error")})
 
@@ -262,7 +263,7 @@ def capabilities():
 def _query_records(payload):
     try:
         value = runtime_client.query_records_request(payload)
-        if payload['operation'] == 'recent':
+        if payload['operation'] in ('recent', 'analytics'):
             from api_v1 import instance_identity
             value = {**value, 'instance_id': instance_identity(STATE_DIR)}
         return jsonify(value)
@@ -288,18 +289,55 @@ def query_records_clear():
 
 
 def query_records_recent():
-    if set(request.args) - {'limit', 'before', 'source', 'domain', 'qtype'} or any(len(request.args.getlist(k)) != 1 for k in request.args):
+    from runtime.query_recorder import RECORD_FILTERS, RECORD_NUMBERS
+    return _query_records_params('recent', RECORD_FILTERS, RECORD_NUMBERS)
+
+
+def query_records_summary():
+    return _query_records_params('analytics', {'hours'}, {'hours'}, hours=1)
+
+
+def _query_records_params(operation, allowed, numbers, **defaults):
+    if set(request.args) - allowed or any(len(request.args.getlist(k)) != 1 for k in request.args):
         return jsonify({'error': '查询筛选参数无效'}), 400
-    payload = {'operation': 'recent', **request.args.to_dict()}
+    payload = {'operation': operation, **request.args.to_dict()}
     try:
-        for key in ('limit', 'before', 'qtype'):
+        for key in numbers:
             if key in payload:
                 if not re.fullmatch(r'[0-9]{1,19}', payload[key]):
                     raise ValueError('数值筛选参数无效')
                 payload[key] = int(payload[key])
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
-    return _query_records(payload)
+    return _query_records({**defaults, **payload})
+
+
+def dns_filter_status():
+    return _filter_response('filter_status')
+
+
+def dns_filter_check():
+    if set(request.args) != {'domain'} or len(request.args.getlist('domain')) != 1:
+        return jsonify({'error': '只接受一个待检查域名'}), 400
+    return _filter_response('filter_check', request.args['domain'])
+
+
+def dns_filter_action():
+    from runtime.dns_filter import validate_action
+    try:
+        body = validate_action(request.get_json())
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return _filter_response('filter_action', body, status=202)
+
+
+def _filter_response(operation, payload=None, *, status=200):
+    try:
+        return jsonify(runtime_client.manager_request(operation, payload)), status
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400 if operation == 'filter_check' else 409
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc)}), 503
 
 
 def api_read_file(filename):

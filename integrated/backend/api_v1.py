@@ -48,7 +48,11 @@ OPERATIONS = [
     ("/query-recording", "GET", "query_recording_status", "query_recording_status", "查询采集状态与保留上限，仅管理权限"),
     ("/query-recording", "PUT", "query_recording_configure", "query_recording_configure", "启停被动查询采集，默认关闭"),
     ("/query-records", "GET", "query_records_recent", "query_records_recent", "读取最近真实入口查询，不推测缓存或分流路径"),
+    ("/query-records/summary", "GET", "query_records_summary", "query_records_summary", "查询入口事务的固定窗口统计与采集覆盖"),
     ("/query-records", "DELETE", "query_records_clear", "query_records_clear", "清空持久查询记录并丢弃待采集事件"),
+    ("/dns-filter", "GET", "dns_filter_status", "dns_filter_status", "读取 DNS 过滤配置、订阅预览与任务"),
+    ("/dns-filter/check", "GET", "dns_filter_check", "dns_filter_check", "按解析核心当前过滤快照检查域名"),
+    ("/dns-filter/actions", "POST", "dns_filter_action", "dns_filter_action", "受理 DNS 过滤管理任务"),
 ]
 
 
@@ -223,6 +227,7 @@ def register(server):
                       "permissions": {"observe": True, "diagnose": True,
                                       "configure": not observer, "maintain": not observer}})
         if observer:
+            value["features"].pop("dns_filter", None)
             value["features"] = {**value["features"], "config_history": False,
                                  "config_apply": False, "redis_snapshot": False, "restart_dns_core": False,
                                  "conditional_config_write": False, "config_state": False, "query_recording": False}

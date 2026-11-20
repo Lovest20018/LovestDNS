@@ -61,6 +61,7 @@ def main():
     parser.add_argument('--components-bundle', type=Path, help='Verified isolated component bundle; omitted only for upstream baseline builds')
     parser.add_argument('--components', default='redis,unbound,dnscrypt', help='Components to replace for controlled single-component trials')
     parser.add_argument('--dnscrypt-source-candidate', type=Path, help='Explicit reviewed normal combined candidate; never used by default')
+    parser.add_argument('--mosdns-filter', type=Path, help='Verified Linux MosDNS filter build directory')
     args = parser.parse_args()
     version = args.version or re.search(r'^VERSION = "([^"]+)"', (ROOT / 'integrated/backend/server.py').read_text(), re.M)[1]
     if not re.fullmatch(r'[A-Za-z0-9_.-]+', version):
@@ -124,6 +125,12 @@ def main():
                 args.components_bundle, package, component_lock, args.components.split(','))
         if candidate_installer:
             components = candidate_installer.install(args.dnscrypt_source_candidate, package, components)
+        filter_build = None
+        if args.mosdns_filter:
+            installer = load('mosdns_filter', ROOT / 'packaging/components/mosdns_filter.py')
+            target = package / 'components'
+            target.mkdir(exist_ok=True)
+            filter_build = installer.install(args.mosdns_filter, target / 'mosdns-filter', target / 'mosdns-filter.json')
         app = package / 'app'
         shutil.copytree(ROOT / 'integrated/runtime', app / 'runtime', ignore=shutil.ignore_patterns('__pycache__'))
         shutil.copytree(ROOT / 'integrated/backend', app / 'backend', ignore=shutil.ignore_patterns('__pycache__'))
@@ -137,6 +144,7 @@ def main():
         shutil.copyfile(ROOT / 'packaging/native/install.py', package / 'install.py')
         shutil.copyfile(ROOT / 'packaging/native/requirements.lock.txt', package / 'requirements.lock.txt')
         (package / 'build-info.json').write_text(json.dumps({**lock, 'components': components,
+            **({'mosdns_filter': filter_build} if filter_build else {}),
             'application': {'source_commit': frontend['source_commit'], 'source_sha256': source_provenance['sha256'],
                             'method': 'native-source-build'}}, sort_keys=True, indent=2) + '\n')
         shutil.copyfile(ROOT / 'packaging/components.lock.json', package / 'components.lock.json')
@@ -160,7 +168,8 @@ def main():
                     'installation_receipt_v1': True,
                     'architecture': 'amd64', 'debian': ['12', '13'], 'upstream': lock,
                     'original_upstream_files': origin, 'components': components, 'files': files,
-                    'runtime': 'systemd + Debian Python; frozen MosDNS runtime and isolated optional DNS component runtimes; no Docker daemon or chroot'}
+                    'runtime': 'systemd + Debian Python and isolated DNS component runtimes',
+                    **({'mosdns_filter': filter_build} if filter_build else {})}
         if candidate_installer:
             manifest.update(candidate_only=True, release_approved=False, performance_acceptance=False)
         (package / 'manifest.json').write_text(json.dumps(manifest, sort_keys=True, indent=2) + '\n')

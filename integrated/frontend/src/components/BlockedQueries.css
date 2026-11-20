@@ -1,0 +1,15 @@
+.blocked-queries { min-width:0; }
+.dns-filter-page .blocked-queries {
+  padding:1rem 1.25rem;
+  border:1px solid var(--suite-line);
+  border-radius:10px;
+  background:var(--suite-panel);
+}
+.dns-filter-page .blocked-queries li + li { border-top:1px solid var(--suite-line); }
+.blocked-queries header, .blocked-query-meta { display:flex; align-items:baseline; gap:.4rem .8rem; flex-wrap:wrap; }
+.blocked-queries header { justify-content:space-between; }
+.blocked-queries li { padding:.45rem 0; overflow-wrap:anywhere; }
+.blocked-query-meta { color:var(--text-secondary); font-size:.82rem; }
+.blocked-queries .blocked-query-meta a, .blocked-queries header a { display:inline; padding:0; }
+.blocked-queries ul { list-style:none; margin:0; padding:0; }
+.blocked-queries h3 { margin:0; }

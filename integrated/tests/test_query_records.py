@@ -178,6 +178,48 @@ def test_store_retention_literal_filters_pagination_and_restart(tmp_path):
     assert not store.recent()['events']
 
 
+def test_overview_and_fixed_window_match_log_across_boundaries(tmp_path, monkeypatch):
+    from runtime import query_store
+    start = 1800000000
+    end = start + 3600
+    monkeypatch.setattr(query_store.time, 'time', lambda: end)
+    db = Store(tmp_path)
+    db.record_coverage(start, start + 600)
+    db.record_coverage(start + 900, start + 1000)
+    old = {'observed_at': start - 1, 'domain': 'example.test', 'source_ip': '192.0.2.1', 'qtype': 1}
+    db.append([old, {**old, 'observed_at': start, 'outcome': 'response_observed', 'rcode': 'NOERROR', 'elapsed_ms': 1},
+               {**old, 'observed_at': start, 'domain': 'long.example.test', 'outcome': 'response_observed', 'elapsed_ms': 2},
+               {**old, 'observed_at': start + 300, 'source_ip': '192.0.2.2', 'outcome': 'no_response_observed', 'elapsed_ms': 500},
+               {**old, 'observed_at': end}])
+    result = db.analytics(1)
+    assert result['total'] == 3 and result['source_count'] == 2
+    assert result['p95_ms'] == 2 and result['latency_samples'] == 2
+    assert [(b['count'], b['coverage']) for b in result['buckets'][:5]] == [
+        (2, 'complete'), (1, 'complete'), (0, 'unknown'), (0, 'partial'), (0, 'unknown')]
+    window = dict(start=start, end=start + 300, snapshot=result['snapshot'])
+    db.append([{**old, 'observed_at': start}])
+    matches = db.recent(**window, source='192.0.2.1', limit=1)
+    assert len(matches['events']) == len(db.recent(**window, before=matches['next_before'])['events']) == 1
+    assert len(db.recent(**window, exact='example.test')['events']) == 1
+    assert len(db.recent(**window, response='NOERROR')['events']) == 1
+    db.clear()
+    assert db.recent(**window)['history_changed']
+    assert db.analytics(1)['domains'] == []
+
+
+def test_old_query_database_preserves_events_but_coverage_is_unknown(tmp_path):
+    import sqlite3
+    timestamp = time.time() - 10
+    with sqlite3.connect(tmp_path / 'events.sqlite') as db:
+        db.execute('CREATE TABLE events (seq INTEGER PRIMARY KEY AUTOINCREMENT, observed REAL NOT NULL, source TEXT NOT NULL, domain TEXT NOT NULL, qtype INTEGER NOT NULL, payload TEXT NOT NULL)')
+        db.execute('INSERT INTO events(observed,source,domain,qtype,payload) VALUES(?,?,?,?,?)',
+                   (timestamp, '192.0.2.1', 'old.example.test', 1, '{}'))
+    store = Store(tmp_path)
+    result = store.analytics(1)
+    assert result['total'] == 1 and result['latency_samples'] == 0
+    assert all(bucket['coverage'] == 'unknown' for bucket in result['buckets'])
+
+
 def test_store_physical_cap_applies_to_every_new_connection(tmp_path):
     store = Store(tmp_path, max_bytes=128 * 1024)
     with store.connect() as db:
@@ -305,6 +347,8 @@ def test_slow_entry_check_keeps_pending_query_but_real_clock_step_resets(monkeyp
     monkeypatch.setattr(query_recorder, 'PacketSocket', Capture)
     recorder = SimpleNamespace(stop=stop, enabled=True, generation=1, lock=threading.RLock(), run=None,
                                session='clock-regression', counters=query_recorder.Counter(),
+                               store=SimpleNamespace(invalidate_coverage_after=lambda _: None),
+                               core_events=SimpleNamespace(renew=lambda *_: None),
                                emit=lambda generation, value: events.append(value))
     Recorder.capture_loop(recorder)
     assert len(captures) == 1 and captures[0].closed

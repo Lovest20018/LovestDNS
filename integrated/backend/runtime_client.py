@@ -22,17 +22,17 @@ def sample_age(value, now=None):
 def manager_request(operation, task=None):
     if not hasattr(socket, "AF_UNIX"):
         raise RuntimeError("本平台没有本地 Unix socket，维护服务不可用")
-    if operation not in {"capabilities", "plan", "tasks", "task", "submit", "config_state"}:
+    if operation not in {"capabilities", "plan", "tasks", "task", "submit", "config_state", "filter_status", "filter_action", "filter_check"}:
         raise ValueError("Unsupported manager request")
     payload = {"operation": operation}
-    if operation in {"submit", "task"}:
+    if operation in {"submit", "task", "filter_action", "filter_check"}:
         payload["task"] = task
     path = Path(os.environ.get("SUITE_RUN_DIR", "/run/paopaodns-suite")) / "manager.sock"
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.settimeout(5)
             sock.connect(str(path))
-            sock.sendall(json.dumps(payload).encode() + b"\n")
+            sock.sendall(json.dumps(payload, ensure_ascii=False).encode() + b"\n")
             with sock.makefile("rb") as stream:
                 raw = stream.readline(4 * 1024 * 1024 + 1)
     except OSError as exc:

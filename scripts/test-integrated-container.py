@@ -34,6 +34,7 @@ def encrypted_evidence(before,after):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--image", default="lovestdns:test")
+    parser.add_argument("--require-filter", action="store_true")
     parser.add_argument("--upgrade-image", help="Recreate on this image after the initial control run")
     parser.add_argument("--offline", action="store_true", help="Use network=none and call HTTP through docker exec")
     parser.add_argument("--cpuset-cpus", help="Optional test container CPU placement")
@@ -195,6 +196,9 @@ print(json.dumps({'case':info['trial']['case'],'binary_sha256':hashlib.sha256(bi
         base = start("no")
         wait_ready(base)
         print("PASS: CNAUTO=no core readiness", flush=True)
+        if args.require_filter:
+            filter_state = request(base, "/api/v1/dns-filter")["data"]
+            assert filter_state["mode"] == "recursive" and not filter_state["available"]
         identity = request(base, "/api/v1/instance", observer=True)["data"]["id"]
         assert request(base, "/api/v1/capabilities", observer=True)["data"]["permissions"]["configure"] is False
         denied(base, "/api/v1/status", 403, observer=True)
@@ -235,6 +239,64 @@ print(json.dumps({'case':info['trial']['case'],'binary_sha256':hashlib.sha256(bi
         assert sample["layers"]["forward"]["available"], sample
         assert docker("exec", name, "redis-cli", "-s", "/tmp/redis.sock", "GET", "suite-migration-marker") == "preserved"
         print("PASS: CNAUTO=yes, both Unbound layers, instance identity and Redis RDB retention", flush=True)
+        if args.require_filter:
+            filter_domain = "suite-test.example"
+
+            def filter_query(transport):
+                return request(base, "/api/v1/dns-test", {"domain": filter_domain, "record_type": "A",
+                                                           "transport": transport})["data"]
+
+            def filter_action(action, **fields):
+                state = request(base, "/api/v1/dns-filter")["data"]
+                assert state["available"] and state["mode"] == "mosdns", state
+                job = request(base, "/api/v1/dns-filter/actions", {"action": action, "revision": state["revision"],
+                                                                  **fields})["data"]["id"]
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline:
+                    state = request(base, "/api/v1/dns-filter")["data"]
+                    task = next(task for task in state["jobs"] if task["id"] == job)
+                    if task["phase"] != "pending":
+                        assert task["phase"] == "succeeded", task
+                        return state
+                    time.sleep(.2)
+                raise AssertionError("filter activation timed out")
+
+            request(base, "/api/v1/query-recording", {"enabled": True}, method="PUT")
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                recording = request(base, "/api/v1/query-recording")["data"]
+                if recording["active"] and recording["source"] == "mosdns_entry_events":
+                    break
+                time.sleep(.2)
+            else:
+                raise AssertionError("MosDNS entry recording did not start")
+            for transport in ("udp", "tcp"):
+                assert filter_query(transport)["results"] == ["192.0.2.10"]
+            rule = "||" + filter_domain + "^"
+            active = filter_action("configure", enabled=True, local_rules=rule)
+            assert active["live_enabled"]
+            for transport in ("udp", "tcp"):
+                answer = filter_query(transport)
+                assert answer["rcode"] == "REFUSED", answer
+            deadline = time.monotonic() + 15
+            while time.monotonic() < deadline:
+                logs = request(base, "/api/v1/query-records?decision=block&exact=" + filter_domain)["data"]["events"]
+                matches = [item for item in logs if item["filter"]["revision"] == active["revision"]]
+                if {item["transport"] for item in matches} == {"udp", "tcp"}:
+                    assert all(item["filter"]["rule"] == rule for item in matches)
+                    break
+                time.sleep(.2)
+            else:
+                raise AssertionError("Missing DNS filter records for the active policy")
+            assert request(base, "/api/v1/dns-filter/check?domain=" + filter_domain)["data"]["action"] == "block"
+            status = filter_action("allow", domain=filter_domain, mode="temporary")
+            assert status["allow"][filter_domain] > time.time()
+            assert filter_query("tcp")["results"] == ["192.0.2.10"]
+            filter_action("allow", domain=filter_domain, mode="remove")
+            assert filter_query("udp")["rcode"] == "REFUSED"
+            assert not filter_action("configure", enabled=False, local_rules=rule)["live_enabled"]
+            request(base, "/api/v1/query-recording", {"enabled": False}, method="PUT")
+            print("PASS: warmed container DNS path, UDP/TCP block evidence and exact temporary allowance", flush=True)
         assert 'CUSTOM_VALUE="preserved"' in request(base,"/api/file/custom_env.ini")["content"]
         if args.upgrade_image:
             print("PASS: recreated from control to upgrade image with the same data/state volumes", flush=True)
@@ -259,16 +321,18 @@ print(json.dumps({'case':info['trial']['case'],'binary_sha256':hashlib.sha256(bi
         # touches only the disposable container, never the image or preview.
         old_runtime = docker("exec", name, "sha256sum", "/tmp/mosdns.yaml").split()[0]
         old_mod = request(base, "/api/v1/file/custom_mod.yaml")["data"]["content"]
-        docker("exec", name, "/bin/sh", "-ec", '''mv /usr/sbin/mosdns /usr/sbin/mosdns.suite-test-original
-cat > /usr/sbin/mosdns <<'WRAPPER'
+        filter_installed = docker("exec", name, "/bin/sh", "-c", "if test -x /opt/suite/components/mosdns-filter; then echo yes; fi").strip() == "yes"
+        binary = "/opt/suite/components/mosdns-filter" if filter_installed else "/usr/sbin/mosdns"
+        docker("exec", name, "/bin/sh", "-ec", '''mv "$1" "$1.suite-test-original"
+cat > "$1" <<'WRAPPER'
 #!/bin/sh
 if [ "$1" = start ] && grep -q suite-rejected-candidate.example /tmp/mosdns.yaml; then
     exit 1
 fi
-exec /usr/sbin/mosdns.suite-test-original "$@"
+exec "$0.suite-test-original" "$@"
 WRAPPER
-chmod 755 /usr/sbin/mosdns
-''')
+chmod 755 "$1"
+''', "filter-fixture", binary)
         try:
             rejected = "Hosts:\n- env_key: SUITE_LOCAL_IP\n  zone: suite-rejected-candidate.example\n"
             request(base, "/api/v1/file/custom_mod.yaml", {"content": rejected}, method="PUT")
@@ -282,7 +346,7 @@ chmod 755 /usr/sbin/mosdns
             assert request(base, "/api/v1/file/custom_mod.yaml")["data"]["content"] == rejected
             assert request(base, "/api/v1/dns-test", {"domain": "suite-host.example", "record_type": "A"}, observer=True)["data"]["results"] == ["192.0.2.25"]
         finally:
-            docker("exec", name, "/bin/sh", "-ec", "mv /usr/sbin/mosdns.suite-test-original /usr/sbin/mosdns")
+            docker("exec", name, "mv", binary + ".suite-test-original", binary)
             request(base, "/api/v1/file/custom_mod.yaml", {"content": old_mod}, method="PUT")
         print("PASS: failed real process start, runtime rollback, retained desired file and DNS recovery", flush=True)
         snapshot_task = request(base, "/api/v1/maintenance/tasks", {"action": "save_redis_snapshot",

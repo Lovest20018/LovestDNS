@@ -6,7 +6,7 @@ import { RECORD_TYPES, REPORT_LIMIT, parseSuiteReport } from '../reports';
 import { useSuite } from '../suiteContext';
 import { useGateway } from '../gatewayContext';
 import { Notice, Section } from '../components/SuiteUI';
-import { diagnosticTargets, dnsAddress } from '../dnsListeners';
+import { diagnosticTargets, dnsAddress, entryListeners } from '../dnsListeners';
 import RecentQueries from '../components/RecentQueries';
 import { diagnosticHash } from '../diagnosticRoute';
 import type { DiagnosticTab } from '../diagnosticRoute';
@@ -37,6 +37,11 @@ export default function SuiteDiagnostics() {
   useEffect(() => () => request.current?.abort(), []);
   const defaultServer = caps?.dns_defaults.server ?? '127.0.0.1';
   const defaultPort = caps?.dns_defaults.port ?? 53;
+  const [probeId] = useState(() => Array.from(crypto.getRandomValues(new Uint8Array(5)), n => n.toString(16).padStart(2, '0')).join(''));
+  const ports = [...new Set(entryListeners(paused || runtimeStale ? null : runtime).map(endpoint => endpoint.port))];
+  const directName = `entry-${probeId}.example.com`;
+  const defaultName = `device-${probeId}.example.com`;
+  const recordsFor = (name: string) => '#/diagnostics?tab=records&exact=' + encodeURIComponent(name);
   const presets = diagnosticTargets(caps, paused || runtimeStale ? null : runtime);
   const tabs: DiagnosticTab[] = ['query', 'device', 'compare'];
   if (canRecord) tabs.push('records');
@@ -73,9 +78,10 @@ export default function SuiteDiagnostics() {
     </nav>
     {route.tab === 'device' ? <Section title="检查设备是否使用这台 DNS" icon={HeartPulse}>
       <ol className="suite-device-steps">
-        <li>在设备的网络设置中核对 DNS 服务器地址。填写部署主机的局域网地址，使用系统或路由器实际映射的 DNS 端口。</li>
-        <li>在设备自身执行 <code>nslookup example.com</code>，查看输出中的 DNS 服务器和回答。服务端发起的样本查询只检查服务器这一侧。</li>
-        <li>{canRecord ? <>在<a href={diagnosticHash({ ...route, tab: 'records' })}>查询记录</a>中按设备来源 IP 核对目标域名。记录关闭时可以临时开启；经路由器转发时可能显示路由器的地址。</> : '可以在服务端主动查询同一域名，与设备的结果对比。'}</li>
+        <li>在被测设备执行以下命令。将 DNS主机IP 换成设备可达的地址。{caps?.deployment === 'container' ? '端口请使用宿主机发布的 UDP 端口。' : `当前观测到的入口端口：${ports.join('、') || '待确认'}。如有端口映射，请使用映射后的端口。`}</li>
+        <li>测试指定入口 <code>nslookup -port={caps?.deployment === 'native' && ports.length === 1 ? ports[0] : '入口端口'} {directName}. DNS主机IP</code> {canRecord && <a href={recordsFor(directName)}>查看入口测试记录</a>}</li>
+        <li>测试设备默认 DNS <code>nslookup {defaultName}.</code> {canRecord && <a href={recordsFor(defaultName)}>查看默认 DNS 测试记录</a>}</li>
+        <li>{canRecord ? '请先开启查询记录。两次查询都可能返回 NXDOMAIN。按各自测试名查到入口记录即可核对来源 IP，经路由器转发时可能显示路由器地址。' : '当前权限无法读取入口记录，仅凭设备收到回答不能确认请求经过此实例。'}</li>
       </ol>
     </Section> : route.tab === 'records' ? <RecentQueries route={route} navigate={navigate} /> : <>
     <Section title={mode === 'query' ? '主动查询' : '链路对照'} subtitle="查询从当前 DNS 实例发起；链路可用性取决于运行模式" icon={HeartPulse}

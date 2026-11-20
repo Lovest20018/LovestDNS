@@ -2,7 +2,7 @@
 
 LovestDNS 基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS)，将 DNS 解析、缓存、规则配置和运行诊断集中到一个 Web 面板，支持独立的 Debian 原生部署。
 
-[下载 v0.1.1](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.1) · [安装与升级](docs/lovestdns-native-deployment.md) · [发行说明](docs/releases/v0.1.1.md) · [全部文档](docs/README.md)
+[下载 v0.2.0](https://github.com/Lovest20018/LovestDNS/releases/tag/v0.2.0) · [安装与升级](docs/lovestdns-native-deployment.md) · [发行说明](docs/releases/v0.2.0.md) · [全部文档](docs/README.md)
 
 ## 功能
 
@@ -10,6 +10,7 @@ LovestDNS 基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS)，将 DNS 解�
 - 网页编辑上游、域名分流、TTL 和高级规则，提供历史记录、差异及恢复。
 - 运行 DNS 查询和 UDP/TCP 链路对照，导入或导出诊断报告。
 - 按需开启查询记录，按来源 IP、域名、类型筛选；数据有时间和容量上限。
+- 开发中的集成版可从解析概览下钻到查询日志。含 MosDNS 过滤扩展的构建支持 AdGuard Home 常用 DNS 规则、订阅和误拦截放行。[使用说明](docs/dns-filtering.md)
 - 网页检查、确认并安装软件更新，支持软件更新专用 HTTP/SOCKS5 代理。
 - 正式版更新通道默认开启，预览版需主动选择；默认不自动安装更新。
 - 可选 LovestGateway 联动与 `/api/v1/` 外部接入；独立部署时功能完整。
@@ -19,11 +20,11 @@ LovestDNS 基于 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS)，将 DNS 解�
 正式发行包支持 **Debian 12 / 13、amd64、systemd**，运行时无需 Docker。其他架构暂不提供发行包。
 
 ```sh
-curl -fL https://github.com/Lovest20018/LovestDNS/releases/download/v0.1.1/install.py -o install.py
+curl -fL https://github.com/Lovest20018/LovestDNS/releases/download/v0.2.0/install.py -o install.py
 curl -fL https://raw.githubusercontent.com/Lovest20018/LovestDNS/main/.env.native.example -o lovestdns-install.env
 chmod 600 lovestdns-install.env
 nano lovestdns-install.env
-sudo python3 install.py --version 0.1.1 --config ./lovestdns-install.env
+sudo python3 install.py --version 0.2.0 --config ./lovestdns-install.env
 sudo lovestdnsctl health
 ```
 
@@ -40,7 +41,7 @@ sudo lovestdnsctl health
 旧版本无法直连 GitHub 时，可先传入已校验的安装包升级一次，再配置更新代理。主机升级保留实际实例名：
 
 ```sh
-sudo python3 install.py --version 0.1.1 --instance <实例名>
+sudo python3 install.py --version 0.2.0 --instance <实例名>
 ```
 
 默认实例省略 `--instance`。摘要以同一 Release 附件为准，旧版本与新版本的摘要不能混用。

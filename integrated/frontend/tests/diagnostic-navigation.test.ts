@@ -59,3 +59,15 @@ test('home and domain-list query shortcuts keep record filters without contamina
   assert.equal(explicit.source, '');
   assert.equal(explicit.before, null);
 });
+
+test('time bucket and source drill-down keep the snapshot and exact domain', () => {
+  const bucket = parseDiagnosticRoute('#/diagnostics?tab=records&start=1800000000&end=1800000300&snapshot=77&exact=example.test');
+  const link = diagnosticHash({ ...bucket, source: '192.0.2.14', response: 'REFUSED' });
+  assert.deepEqual(Object.fromEntries(queryRecordParams(parseDiagnosticRoute(link))), {
+    limit: '50', source: '192.0.2.14', exact: 'example.test', response: 'REFUSED',
+    start: '1800000000', end: '1800000300', snapshot: '77',
+  });
+  const observer = parseDiagnosticRoute(link, '', false);
+  assert.equal(observer.snapshot, null);
+  assert.equal(observer.exactDomain, '');
+});

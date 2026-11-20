@@ -49,3 +49,8 @@ RUN /opt/venv/bin/python /opt/suite/build/component_bundle.py \
       --bundle /opt/suite/component-input --lock /opt/suite/components.lock.json --select "$DNS_COMPONENTS" \
     && /opt/venv/bin/python -c 'import hashlib,json,pathlib; p=pathlib.Path("/opt/suite"); lock=json.loads((p/"components.lock.json").read_text()); assert hashlib.sha256(pathlib.Path("/usr/sbin/mosdns").read_bytes()).hexdigest() == lock["frozen"]["mosdns"]["sha256"]; info=json.loads((p/"build-info.json").read_text()); manifest=json.loads((p/"components/manifest.json").read_text()); info["components"]={"selected":manifest["selected"],"lock_sha256":manifest["lock_sha256"],"versions":{k:manifest["components"][k]["version"] for k in manifest["selected"]}}; (p/"build-info.json").write_text(json.dumps(info,sort_keys=True,indent=2)+"\n")' \
     && rm -r /opt/suite/component-input
+COPY packaging/mosdns-filter.lock.json /opt/suite/packaging/
+COPY packaging/components/mosdns_filter.py /opt/suite/packaging/components/
+COPY packaging/components/mosdns-filter/ /opt/suite/packaging/components/mosdns-filter/
+COPY .build/mosdns-filter/mosdns-filter .build/mosdns-filter/manifest.json /opt/suite/filter-input/
+RUN /opt/venv/bin/python /opt/suite/packaging/components/mosdns_filter.py --install-container /opt/suite

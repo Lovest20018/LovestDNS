@@ -145,20 +145,67 @@ def openapi_document(version):
         'addresses': array(text, maxItems=4), 'addresses_complete': boolean,
         'truncated': {'type': ['boolean', 'null']}, 'elapsed_ms': nullable_number,
         'outcome': {'enum': ['response_observed', 'no_response_observed']},
-        'timing_scope': {'const': 'passive_entry_packet_interval'}, 'branch': {'type': 'null'}, 'cache_hit': {'type': 'null'}}
-    schemas['QueryEvent'] = obj(event_fields, list(event_fields))
+        'timing_scope': {'enum': ['passive_entry_packet_interval', 'mosdns_entry_processing']}, 'branch': {'type': 'null'}, 'cache_hit': {'type': 'null'}}
+    revision = {'type': 'string', 'pattern': '^(?:[a-f0-9]{64})?$'}
+    filter_fields = {'action': {'enum': ['block', 'allow', 'pass']}, 'revision': revision,
+                     'id': text, 'source': text, 'rule': text, 'until': integer}
+    schemas['FilterDecision'] = obj(filter_fields, ['action', 'revision'])
+    schemas['QueryEvent'] = obj({**event_fields, 'filter': ref('FilterDecision')}, list(event_fields))
     recording_fields = {'enabled': boolean, 'active': boolean, 'phase': {'enum': ['disabled', 'starting', 'recording', 'unavailable']},
         'reason': nullable_text, 'sampled_at': timestamp, 'session_id': text,
-        'source': {'const': 'linux_passive_entry_packets'}, 'scope': {'const': 'service_network_namespace'},
-        'timing_scope': {'const': 'passive_entry_packet_interval'}, 'endpoints': array(obj({'address': text, 'port': port,
+        'source': {'enum': ['linux_passive_entry_packets', 'mosdns_entry_events']}, 'scope': {'const': 'service_network_namespace'},
+        'timing_scope': {'enum': ['passive_entry_packet_interval', 'mosdns_entry_processing']}, 'endpoints': array(obj({'address': text, 'port': port,
             'transport': {'enum': ['udp', 'tcp']}, 'component': text, 'pid': integer, 'start_ticks': text}, ['address', 'port', 'transport', 'component', 'pid', 'start_ticks'])),
         'counters': dictionary(integer), 'queue_depth': integer, 'retained_rows': integer, 'database_bytes': integer,
         'memory_limits': obj({key: integer for key in ('event_queue', 'pending_queries', 'tcp_streams', 'response_wait_seconds')}, ['event_queue', 'pending_queries', 'tcp_streams', 'response_wait_seconds']),
         'limits': obj({key: integer for key in ('retention_seconds', 'rows', 'storage_bytes', 'database_bytes')}, ['retention_seconds', 'rows', 'storage_bytes', 'database_bytes'])}
     schemas['QueryRecording'] = obj(recording_fields, list(recording_fields))
-    schemas['QueryRecords'] = obj({'instance_id': {'type': 'string', 'format': 'uuid'}, 'status': ref('QueryRecording'), 'events': array(ref('QueryEvent'), maxItems=100), 'next_before': nullable_number}, ['instance_id', 'status', 'events', 'next_before'])
+    instance = {'type': 'string', 'format': 'uuid'}
+    schemas['QueryRecords'] = obj({'instance_id': instance, 'status': ref('QueryRecording'),
+        'events': array(ref('QueryEvent'), maxItems=100), 'next_before': nullable_number,
+        'history_changed': boolean}, ['instance_id', 'status', 'events', 'next_before'])
+    rank = array(obj({'value': text, 'count': integer}, ['value', 'count']), maxItems=10)
+    bucket = obj({'start': integer, 'end': integer, 'count': integer,
+                  'coverage': {'enum': ['complete', 'partial', 'unknown']}}, ['start', 'end', 'count', 'coverage'])
+    summary = {'instance_id': instance, 'status': ref('QueryRecording'), 'start': integer, 'end': integer,
+        'snapshot': integer, 'total': integer, 'source_count': integer, 'latency_samples': integer, 'latency_scopes': dictionary(integer),
+        'p95_ms': nullable_number,
+        'buckets': array(bucket, maxItems=24), 'domains': rank, 'sources': rank,
+        'evaluated': integer, 'blocked': integer, 'blocked_sources': rank}
+    schemas['QuerySummary'] = obj(summary, list(summary))
+    interval = {'enum': [0, 21600, 86400, 604800]}
+    counts = {key: integer for key in ('valid', 'duplicates', 'ignored', 'invalid', 'unsupported', 'protected')}
+    issue = {'line': integer, 'rule': text, 'kind': text, 'reason': text, 'truncated': boolean}
+    preview_counts = {**counts, 'types': array(text), 'issues': array(obj(issue, list(issue)), maxItems=100)}
+    preview = {'id': text, 'name': text, 'host': text, 'parse': obj(preview_counts, list(preview_counts))}
+    subscription = {'id': text, 'name': text, 'host': text, 'enabled': boolean, 'interval': interval, 'updated': integer,
+                    'parse': obj(counts, list(counts))}
+    job = {'id': text, 'action': text, 'phase': {'enum': ['pending', 'succeeded', 'failed']}, 'message': text}
+    filter_status = {'enabled': boolean, 'local_rules': text, 'sources': array(obj(subscription, list(subscription)), maxItems=12),
+                     'allow': dictionary(nullable_number), 'rules': integer, 'revision': revision,
+                     'mode': {'enum': ['recursive', 'mosdns', 'unavailable']}, 'available': boolean,
+                     'live_revision': {'type': ['string', 'null']}, 'live_enabled': boolean,
+                     'draft': {'anyOf': [obj(preview, list(preview)), {'type': 'null'}]},
+                     'jobs': array(obj(job, list(job)), maxItems=8)}
+    schemas['FilterStatus'] = obj(filter_status, list(filter_status))
+    schemas['FilterCheck'] = obj({**filter_fields, 'action': {'enum': ['block', 'allow', 'pass', 'disabled']}, 'domain': text},
+                                 ['domain', 'action', 'revision'])
+    schemas['FilterJob'] = obj({'id': text}, ['id'])
+    action_fields = {
+        'configure': {'enabled': boolean, 'local_rules': text},
+        'preview': {'name': text, 'url': text, 'interval': interval},
+        'refresh': {'id': text},
+        'apply_preview': {'preview': text, 'partial': boolean},
+        'subscription': {'id': text, 'enabled': boolean, 'interval': interval, 'remove': boolean},
+        'allow': {'domain': text, 'mode': {'enum': ['permanent', 'temporary', 'remove']}},
+    }
+    schemas['FilterAction'] = {'oneOf': [
+        {**obj({'action': {'const': action}, 'revision': revision, **props}, ['action', 'revision', *props]), 'additionalProperties': False}
+        for action, props in action_fields.items()]}
     output = {"config_state": "ConfigState", "instance": "Instance", "capabilities": "Capabilities", "runtime": "Runtime", "metrics": "Metrics", "status": "Status", "env": "Env", "file_read": "File", "file_write": "SavedFile", "dns_query": "DnsResult", "dns_compare": "DnsReport", "dns_health": "DnsHealth", "apply_plan": "ApplyPlan", "task_list": "Tasks", "task_submit": "TaskResponse", "task_read": "TaskResponse", "history_list": "History", "history_read": "RevisionContent", "history_restore": "SavedFile", "logs": "Logs",
-              'query_recording_status': 'QueryRecording', 'query_recording_configure': 'QueryRecording', 'query_records_clear': 'QueryRecording', 'query_records_recent': 'QueryRecords'}
+              'query_recording_status': 'QueryRecording', 'query_recording_configure': 'QueryRecording', 'query_records_clear': 'QueryRecording',
+              'query_records_recent': 'QueryRecords', 'query_records_summary': 'QuerySummary',
+              'dns_filter_status': 'FilterStatus', 'dns_filter_check': 'FilterCheck', 'dns_filter_action': 'FilterJob'}
     for name in set(output.values()):
         schemas[name + "Response"] = obj({"data": ref(name), "meta": ref("Meta")}, ["data", "meta"])
     operations = OPERATIONS + [("/instance", "GET", "instance", None, "持久实例身份"), ("/capabilities", "GET", "capabilities", None, "版本、权限与能力"),
@@ -178,8 +225,14 @@ def openapi_document(version):
             parameters += [{'name': name, 'in': 'query', 'schema': prop} for name, prop in (
                 ('limit', {'type': 'integer', 'minimum': 1, 'maximum': 100, 'default': 50}),
                 ('before', {'type': 'integer', 'minimum': 1}), ('source', text), ('domain', {'type': 'string', 'maxLength': 253}),
-                ('qtype', {'type': 'integer', 'minimum': 0, 'maximum': 65535}))]
-        success = "202" if operation == "task_submit" else "200"
+                ('qtype', {'type': 'integer', 'minimum': 0, 'maximum': 65535}),
+                ('exact', {'type': 'string', 'maxLength': 1021}), ('response', text), ('decision', {'enum': ['block', 'allow', 'pass']}),
+                ('start', integer), ('end', integer), ('snapshot', integer))]
+        if operation == 'query_records_summary':
+            parameters.append({'name': 'hours', 'in': 'query', 'schema': {'type': 'integer', 'enum': [1, 24], 'default': 1}})
+        if operation == 'dns_filter_check':
+            parameters.append({'name': 'domain', 'in': 'query', 'required': True, 'schema': text})
+        success = "202" if operation in ("task_submit", "dns_filter_action") else "200"
         paths.setdefault(route, {})[method.lower()] = endpoint = {"operationId": operation, "summary": title,
             "description": "管理或只读 Token" if operation in READ_OPERATIONS else "仅管理 Token", "parameters": parameters, "security": [{"BearerToken": []}],
             "x-allowed-roles": ["admin", "observer"] if operation in READ_OPERATIONS else ["admin"],
@@ -201,6 +254,8 @@ def openapi_document(version):
         body = {"dns_query": ref("Query"), "dns_compare": ref("Comparison"), "task_submit": ref("TaskSubmission"), "file_write": obj({"content": text, "expected_revision": file_version}, ["content"]), "history_restore": obj({"expected_revision": file_version})}.get(operation)
         if operation == 'query_recording_configure':
             body = {**obj({'enabled': boolean}, ['enabled']), 'additionalProperties': False}
+        if operation == 'dns_filter_action':
+            body = ref('FilterAction')
         if body:
             endpoint["requestBody"] = {"required": operation != "history_restore", "content": {"application/json": {"schema": body}}}
     # Browser-only adapter; bearer credentials never authorize these operations.

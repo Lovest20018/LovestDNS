@@ -5,8 +5,10 @@ import type { MaintenanceTask } from './suiteApi';
 import { clearMaintenanceRequests, createMaintenanceRequest, pendingMaintenanceRequest, rememberMaintenanceRequest } from './maintenanceRequests';
 import { isActiveTask, MaintenanceContext, requestExpired } from './maintenanceContext';
 import type { Submission } from './maintenanceContext';
+import { useSuite } from './suiteContext';
 
 export default function MaintenanceProvider({ instance, allowed, children }: { instance?: string; allowed: boolean; children: ReactNode }) {
+  const { paused } = useSuite();
   const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [reading, setReading] = useState(false);
@@ -80,10 +82,10 @@ export default function MaintenanceProvider({ instance, allowed, children }: { i
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
-      if (!document.hidden) await refresh();
+      if (!document.hidden && (!paused || pendingMaintenanceRequest(instance) || latest.current.some(isActiveTask))) await refresh();
       if (!stopped) timer = setTimeout(poll, pendingMaintenanceRequest(instance) || latest.current.some(isActiveTask) ? 1800 : 7000);
     };
-    const visible = () => { if (!document.hidden) void refresh(); };
+    const visible = () => { if (!document.hidden && !paused) void refresh(); };
     if (allowed) {
       void poll();
       window.addEventListener('online', visible);
@@ -94,11 +96,11 @@ export default function MaintenanceProvider({ instance, allowed, children }: { i
       clearTimeout(timer);
       inFlight.current?.abort();
       inFlight.current = null;
-      sending.current?.abort();
       window.removeEventListener('online', visible);
       document.removeEventListener('visibilitychange', visible);
     };
-  }, [allowed, instance, refresh]);
+  }, [allowed, instance, paused, refresh]);
+  useEffect(() => () => sending.current?.abort(), [allowed, instance]);
 
   const submit = async (action: MaintenanceTask['action'], expected: string | null = null) => {
     if (!instance || !allowed || sending.current || latest.current.some(isActiveTask)) return false;

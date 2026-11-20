@@ -24,7 +24,8 @@ def main():
     if not data.is_dir() or os.environ.get("LOVESTDNS_SYSTEMD") != "1":
         raise SystemExit("Start this runtime through the installed systemd unit")
     preserve_inputs(data, state)
-    for name in ("ready", "core-env.json", "mosdns-env.json", "supervisor.sock", "observer.sock", "manager.sock", "query-recorder.sock"):
+    for name in ("ready", "core-env.json", "mosdns-env.json", "supervisor.sock", "observer.sock", "manager.sock",
+                 "query-recorder.sock", "dns-filter.sock", "filter-events.sock"):
         (run / name).unlink(missing_ok=True)
     hints = data / "rule-assets/named.cache"
     try:

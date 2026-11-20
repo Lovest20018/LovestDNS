@@ -20,6 +20,7 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--instance', required=True)
+    parser.add_argument('--require-filter', action='store_true')
     args = parser.parse_args()
     if os.geteuid() != 0 or not args.instance or '/' in args.instance:
         parser.error('Run as root against a named test instance')
@@ -121,6 +122,9 @@ def main():
         for transport in ('udp', 'tcp'):
             assert query('native-test.example', transport) == ['192.0.2.10']
         print('PASS: native identity, authentication, observer permissions, history/restore and UDP/TCP recursion', flush=True)
+        if args.require_filter:
+            state = request('/api/v1/dns-filter')['data']
+            assert state['mode'] == 'recursive' and not state['available']
 
         redis('SET', 'native-retention-marker', 'preserved')
         redis('-n', '1', 'SET', 'native-retention-marker', 'preserved-db1')
@@ -133,6 +137,33 @@ def main():
         for transport in ('udp', 'tcp'):
             assert query('native-test.example', transport) == ['192.0.2.10']
         print('PASS: split DNS, both Unbound layers, identity and both Redis databases retained after restart', flush=True)
+        if args.require_filter:
+            state = request('/api/v1/dns-filter')['data']
+            assert state['available'] and not state['live_enabled'], 'The filter fixture requires a fresh, disabled policy'
+
+            def set_filter(enabled, rules):
+                current = request('/api/v1/dns-filter')['data']
+                job = request('/api/v1/dns-filter/actions', {'action': 'configure', 'revision': current['revision'],
+                              'enabled': enabled, 'local_rules': rules})['data']['id']
+                for _ in range(75):
+                    current = request('/api/v1/dns-filter')['data']
+                    item = next(j for j in current['jobs'] if j['id'] == job)
+                    if item['phase'] != 'pending':
+                        assert item['phase'] == 'succeeded' and current['live_enabled'] == enabled, item
+                        return
+                    time.sleep(.2)
+                raise RuntimeError('Native DNS filter activation timed out')
+
+            try:
+                set_filter(True, '||native-test.example^')
+                for transport in ('udp', 'tcp'):
+                    result = request('/api/v1/dns-test', {'domain': 'native-test.example', 'record_type': 'A',
+                                     'transport': transport}, observer=True)['data']
+                    assert result['rcode'] == 'REFUSED', result
+            finally:
+                set_filter(False, state['local_rules'])
+            assert query('native-test.example') == ['192.0.2.10']
+            print('PASS: native policy applies before the warmed DNS path and disabling restores its answer', flush=True)
 
         request('/api/v1/file/custom_env.ini', {'content': original_env + 'NATIVE_LOCAL_IP="192.0.2.25"\n'}, method='PUT')
         rule = 'Hosts:\n- env_key: NATIVE_LOCAL_IP\n  zone: native-host.example\n'
@@ -142,8 +173,10 @@ def main():
         assert query('native-host.example') == ['192.0.2.25']
         print('PASS: idempotent real custom_mod application and target DNS answer', flush=True)
 
-        binary = home / 'core/mosdns'
-        original = binary.with_name('mosdns.native-test-original')
+        binary = home / 'components/mosdns-filter'
+        if not binary.is_file():
+            binary = home / 'core/mosdns'
+        original = binary.with_name(binary.name + '.native-test-original')
         binary.rename(original)
         try:
             binary.write_text('#!/bin/sh\nif [ "$1" = start ] && grep -q native-rejected.example /tmp/mosdns.yaml; then exit 1; fi\nexec ' + shlex.quote(str(original)) + ' "$@"\n')

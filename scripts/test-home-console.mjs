@@ -63,13 +63,16 @@ try{
  assert.equal(await e("document.querySelector('.suite-home-auxiliary').open"),false);
  assert(await e("(()=>{const box=document.querySelector('.suite-instance'),status=box.querySelector('.suite-status'),name=box.querySelector('strong');return status.getBoundingClientRect().right<=box.getBoundingClientRect().right-8 && name.scrollWidth>name.clientWidth && name.title.includes('用于验证长实例名称布局')})()"),'long instance name must truncate without pushing status out');
  await shot('home-desktop');
- await wait("document.querySelector('.suite-home-followup').textContent.includes('本次启动后暂无配置应用记录')");
- assert(!await e("document.querySelector('.suite-home-followup a[href=\"#/config?tab=apply\"]')!==null"));
+ await e("document.querySelector('.suite-home-details > summary').click()");
+ await wait("document.querySelector('.suite-home-details .suite-home-followup').textContent.includes('本次启动后暂无配置应用记录')");
+ assert(!await e("document.querySelector('.suite-home-details .suite-home-followup a[href=\"#/config?tab=apply\"]')!==null"));
  await click('测试本机解析');
  await wait("document.querySelector('.suite-probe-result')?.textContent.includes('本机解析测试通过')");
  assert(await e("document.querySelector('.suite-probe-result').textContent.includes('2 / 2 个域名取得 A 记录')"));
  await e("document.querySelector('a[href=\"#/diagnostics?tab=device\"]').click()");
- await wait("document.body.innerText.includes('在设备自身执行')");
+ await wait("document.querySelector('.suite-device-steps code')?.textContent.includes('-port=15453')");
+ const deviceTests=await e("Array.from(document.querySelectorAll('.suite-device-steps a'), a => new URLSearchParams(a.hash.split('?')[1]).get('exact'))");
+ assert.equal(new Set(deviceTests).size,2);
  await e("location.hash='#/lists?file=trackerslist.txt'");
  await wait("document.querySelector('textarea')?.matches(':disabled')===false && document.querySelector('textarea')?.value.includes('Tracker')");
  const trackerTemplate=await e("document.querySelector('textarea').value");
@@ -77,7 +80,9 @@ try{
  await input('textarea',trackerTemplate+'http://tracker.example/announce\n');
  await wait("document.querySelector('.suite-file-toolbar').textContent.includes('有未保存修改')");
  await e("location.hash='#/'");
- await wait("document.querySelector('.suite-home-followup')?.textContent.includes('查看未保存草稿')");
+ await wait("!!document.querySelector('.suite-home-details')");
+ await e("document.querySelector('.suite-home-details').open=true");
+ await wait("document.querySelector('.suite-home-details .suite-home-followup')?.textContent.includes('查看未保存草稿')");
  await e("location.hash='#/lists?file=trackerslist.txt'");
  await wait("document.querySelector('textarea')?.value.includes('tracker.example')");
  await input('textarea',trackerTemplate);
@@ -125,7 +130,7 @@ try{
  await e("document.querySelector('.suite-config-workflow>summary').click()");
  await wait("document.querySelector('.suite-action-status')?.textContent.includes('重启完成 · DNS 已恢复应答')");
  await e("document.querySelector('.suite-action-status a').click()");
- assert.equal(await e('document.activeElement?.id'),'config-query-domain');
+ await wait("document.activeElement?.id==='config-query-domain'");
  await send('Emulation.setDeviceMetricsOverride',{width:1360,height:1050,deviceScaleFactor:1,mobile:false});
  await input('.suite-inline-query input','example.com');await click('验证样本查询');
  await wait("document.body.textContent.includes('本次样本取得目标记录')");
@@ -203,7 +208,7 @@ try{
  await wait("['确认重启 DNS','预览并校验当前配置'].every(label=>[...document.querySelectorAll('button')].some(b=>b.textContent===label&&!b.disabled))");
  await control({probe_failure:true},'/fixture/home-control');
  await e("location.hash='#/'");
- await wait("document.querySelector('.suite-home-followup')?.textContent.includes('重启 DNS · 失败')");
+ await wait("[...document.querySelectorAll('.suite-home > .suite-notice')].some(n=>n.textContent.includes('重启 DNS · 失败'))");
  await e("window.__realNow = Date.now; Date.now = () => window.__realNow() - 3600000");
  try {
   await click('测试本机解析');
@@ -228,8 +233,9 @@ try{
  await e("window.dispatchEvent(new Event('online'))");
  await wait("document.querySelector('.suite-home-health h2')?.textContent.includes('正在重启 DNS') && document.querySelector('.suite-probe-result.is-historical')?.textContent.includes('历史样本')");
  await control({restart_seconds:0,mixed_config:true},'/fixture/home-control');
+ await e("document.querySelector('.suite-home-details').open=true");
  await e("window.dispatchEvent(new Event('online'))");
- await wait("document.querySelector('.suite-home-followup')?.textContent.includes('1 项配置与应用记录一致，8 项暂无本次启动的应用记录')");
+ await wait("document.querySelector('.suite-home-details .suite-home-followup')?.textContent.includes('1 项配置与应用记录一致，8 项暂无本次启动的应用记录')");
  assert(await e("document.querySelector('.suite-probe-result.is-historical') && !document.querySelector('.suite-probe-result.is-passed')"),'a completed restart must not restore older green probe evidence');
  await click('测试本机解析');
  await wait("document.querySelector('.suite-probe-result.is-passed')?.textContent.includes('本机解析测试通过')");

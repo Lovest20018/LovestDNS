@@ -1,6 +1,6 @@
 # LovestDNS 集成版开发说明
 
-当前应用版本为 `0.1.1`。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md)与源码构建的 Docker 集成版。软件更新默认使用正式版通道，可选择预览版及专用代理。[v1 提供方基线](../docs/contracts/v1/README.md)记录固定契约、样例、摘要和复核命令。[源码结构](../docs/project-layout.md) · [发行说明](../docs/releases/v0.1.1.md)
+当前应用版本为 `0.2.0`。支持 [Debian 原生 systemd 部署](../docs/lovestdns-native-deployment.md)与源码构建的 Docker 集成版。软件更新默认使用正式版通道，可选择预览版及专用代理。[v1 提供方基线](../docs/contracts/v1/README.md)记录固定契约、样例、摘要和复核命令。[源码结构](../docs/project-layout.md) · [发行说明](../docs/releases/v0.2.0.md)
 
 历史版本号、镜像和容器标识用于对应已有契约和验收证据。API `kind`、报告类型、数据文件名和内部运行路径沿用原值，保持兼容。
 
@@ -43,9 +43,12 @@ cp .env.integrated.example .env
 openssl rand -hex 32
 nano .env
 python3 scripts/build-components.py --output .build/components-bundle
+python3 packaging/components/mosdns_filter.py --output .build/mosdns-filter
 docker compose -f docker-compose.integrated.yaml build
 docker compose -f docker-compose.integrated.yaml up -d
 ```
+
+过滤扩展使用 Go 1.27.3，从冻结 MosDNS 二进制记录的源码提交构建。原生包构建可通过 `--mosdns-filter .build/mosdns-filter` 安装扩展及来源清单。容器候选镜像从同一目录校验并安装。使用 `python scripts/test-dns-filter.py --mosdns .build/mosdns-filter/mosdns-filter` 在 Linux 回环端口验证。
 
 访问 `http://127.0.0.1:8080`。默认新建独立 DNS 数据卷和面板状态卷，不自动接管已有 PaoPaoDNS 数据。DNS 使用宿主机 53/TCP、53/UDP；Web 默认仅绑定回环地址，均可通过 Compose 变量调整。`DNS_DATA_DIR` 和 `DNS_STATE_DIR` 可改为宿主机绝对路径；已有 Compose 的项目名和卷名保持不变，避免意外改用空卷。
 

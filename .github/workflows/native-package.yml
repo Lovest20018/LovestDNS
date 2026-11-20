@@ -23,8 +23,14 @@ jobs:
       - run: .build/native-tools/bin/python -m pytest integrated/tests scripts/tests -q
       - run: .build/native-tools/bin/python scripts/export-api-contract.py --check
       - run: python scripts/build-integrated-ui.py
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - run: python packaging/components/mosdns_filter.py --output .build/mosdns-filter
+      - run: .build/native-tools/bin/python scripts/test-dns-filter.py --mosdns .build/mosdns-filter/mosdns-filter
       - run: .build/native-tools/bin/python scripts/build-components.py --output .build/components-bundle
-      - run: .build/native-tools/bin/python scripts/build-native-package.py --components-bundle .build/components-bundle --frontend-dist .build/integrated-web/dist --output .build/lovestdns-native-debian-amd64.tar.gz
+      - run: .build/native-tools/bin/python scripts/build-native-package.py --components-bundle .build/components-bundle --mosdns-filter .build/mosdns-filter --frontend-dist .build/integrated-web/dist --output .build/lovestdns-native-debian-amd64.tar.gz
       - name: Verify distributable through the production installer
         shell: bash
         run: |

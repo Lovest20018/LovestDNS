@@ -30,6 +30,14 @@ def read_overrides(path):
     return values
 
 
+def filter_command(command, env, binary, state, run):
+    if not binary.is_file():
+        return command
+    env['LOVESTDNS_FILTER_STATE'] = str(Path(state) / 'dns-filter')
+    env['LOVESTDNS_FILTER_RUN'] = str(run)
+    return [str(binary), *command[1:]]
+
+
 def prepare_unbound(role, directory="/tmp"):
     if role not in {"raw", "forward"}:
         raise ValueError("Unknown Unbound role")
@@ -103,6 +111,8 @@ def main():
         else:
             env.update(read_overrides("/data/custom_env.ini"))
             active.write_text(json.dumps(env))
+        command = filter_command(command, env, Path('/opt/suite/components/mosdns-filter'),
+                                 os.environ.get('SUITE_STATE_DIR', '/var/lib/paopaodns-suite'), RUN_DIR)
     os.execve(command[0], command, env)
 
 

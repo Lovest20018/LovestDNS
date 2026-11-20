@@ -66,11 +66,16 @@ HTTP 200 表示请求本身完成，不等于 DNS 解析成功。DNS 查询应�
 | GET/POST | `/api/v1/maintenance/tasks` | 否 | 查询或提交幂等维护任务 |
 | GET | `/api/v1/maintenance/tasks/{task_id}` | 否 | 按编号查询任务状态与结果 |
 | GET | `/api/v1/core-logs/{component}` | 否 | 读取最近 200 行脱敏日志 |
+| GET | `/api/v1/query-records/summary` | 否 | 最近 1 或 24 小时入口统计、采集覆盖和下钻快照 |
+| GET | `/api/v1/query-records` | 否 | 按窗口、游标、来源 IP、域名与响应筛选 |
+| GET | `/api/v1/dns-filter` | 否 | 已保存版本、核心活动版本、订阅预览与任务 |
+| GET | `/api/v1/dns-filter/check` | 否 | 对一个域名读取活动过滤判定 |
+| POST | `/api/v1/dns-filter/actions` | 否 | 提交过滤任务。返回 202 后以任务状态确认生效 |
 | GET | `/api/v1/openapi.json` | 是 | 获取机器可读接口契约 |
 
 完整参数、响应和错误码以运行实例的 `/api/v1/openapi.json` 为准。OpenAPI 3.1 为每个业务接口定义具体返回结构，并通过真实处理函数响应的 JSON Schema 校验。
 
-开发候选 OpenAPI、23 组确定性脱敏样例及源码/契约摘要见 [v1 提供方基线](contracts/v1/README.md)。从仓库根目录运行 `python scripts/export-api-contract.py --check` 可重放真实处理函数并检查漂移，`--write` 用于审阅后重新导出。当前候选为 `0.1.0-dev.lovestdns-native.20261104.16`；Linux amd64 隔离容器验收已完成，部署地址与剩余范围见 [validation-host 验收记录](verification.md)，仍不是稳定发行。
+开发候选 OpenAPI、确定性脱敏样例及源码摘要见 [v1 提供方基线](contracts/v1/README.md)。运行 `python scripts/export-api-contract.py --check` 可重放处理函数并检查漂移，`--write` 用于重新导出。
 
 ## 时间、指标和失败语义
 

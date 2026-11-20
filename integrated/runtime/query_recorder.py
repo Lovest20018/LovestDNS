@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import socket
 import socketserver
 import sqlite3
@@ -12,32 +13,56 @@ import threading
 import time
 import uuid
 
+from runtime.filter_events import CoreEvents
 from runtime.query_capture import PacketSocket, local_addresses
-from runtime.query_store import Store
+from runtime.query_store import MAX_AGE, Store
 from runtime.query_wire import Correlator, MAX_PENDING, MAX_STREAMS, WAIT_SECONDS
 
 MAX_QUEUE = 512
 MAX_RESPONSE = 512 * 1024
+SUMMARY_CACHE_SECONDS = 3
+RECORD_FILTERS = {'limit', 'before', 'source', 'domain', 'qtype', 'exact', 'response', 'start', 'end', 'snapshot', 'decision'}
+RECORD_NUMBERS = {'limit': (1, 100), 'before': (1, 2 ** 53 - 1), 'qtype': (0, 65535),
+                  'start': (0, 253402300799), 'end': (1, 253402300800), 'snapshot': (0, 2 ** 53 - 1)}
+COVERAGE_LOSS = ('kernel_drops', 'queue_drops', 'storage_drops', 'storage_errors', 'pending_evictions',
+                 'stream_evictions', 'tcp_gaps', 'tcp_untracked_packets', 'discarded_pending',
+                 'discarded_events', 'unparsed_packets', 'invalid_timing', 'capture_errors', 'core_event_drops')
 
 
 def validate_request(value):
     if not isinstance(value, dict):
         raise ValueError('请求必须是对象')
     op = value.get('operation')
-    allowed = {'status': {'operation'}, 'recent': {'operation', 'limit', 'before', 'source', 'domain', 'qtype'},
-               'configure': {'operation', 'enabled'}, 'clear': {'operation'}}
-    if op not in allowed or set(value) - allowed[op]:
+    allowed = {'status': {'operation'}, 'recent': {'operation', *RECORD_FILTERS},
+               'analytics': {'operation', 'hours'}, 'configure': {'operation', 'enabled'}, 'clear': {'operation'}}
+    if not isinstance(op, str) or op not in allowed or set(value) - allowed[op]:
         raise ValueError('查询记录请求无效')
     if op == 'configure' and type(value.get('enabled')) is not bool:
         raise ValueError('enabled 必须是布尔值')
+    if op == 'analytics' and (type(value.get('hours')) is not int or value['hours'] not in (1, 24)):
+        raise ValueError('统计范围必须是最近 1 小时或 24 小时')
     if op == 'recent':
-        for key, lower, upper in [('limit', 1, 100), ('before', 1, 2 ** 63 - 1), ('qtype', 0, 65535)]:
+        for key, (lower, upper) in RECORD_NUMBERS.items():
             if key in value and (type(value[key]) is not int or not lower <= value[key] <= upper):
                 raise ValueError(f'{key} 超出范围')
+        start, end = value.get('start'), value.get('end')
+        if start is not None or end is not None or 'snapshot' in value:
+            if start is None or end is None or not 0 < end - start <= MAX_AGE:
+                raise ValueError('起止时间必须在同一个 24 小时窗口内')
         if 'source' in value:
+            if not isinstance(value['source'], str) or '%' in value['source']:
+                raise ValueError('来源必须是完整 IP 地址')
             value['source'] = str(ipaddress.ip_address(value['source']))
-        if 'domain' in value and (not isinstance(value['domain'], str) or len(value['domain']) > 253 or any(ord(c) < 32 for c in value['domain'])):
-            raise ValueError('域名筛选最多 253 个字符')
+        for key, size in (('domain', 253), ('exact', 1021)):
+            if key in value and (not isinstance(value[key], str) or len(value[key]) > size or any(ord(c) < 32 for c in value[key])):
+                raise ValueError(f'域名筛选最多 {size} 个字符')
+        if 'exact' in value:
+            value['exact'] = value['exact'].lower() if value['exact'] == '.' else value['exact'].lower().removesuffix('.')
+        if 'response' in value and (not isinstance(value['response'], str)
+                                     or not re.fullmatch(r'no_response_observed|[A-Z0-9_]{1,20}', value['response'])):
+            raise ValueError('响应筛选无效')
+        if 'decision' in value and value['decision'] not in ('block', 'allow', 'pass'):
+            raise ValueError('过滤判定筛选无效')
     return value
 
 
@@ -90,6 +115,10 @@ class Recorder:
             settings = json.loads(self.settings.read_text())
             self.enabled = validate_request({'operation': 'configure', **settings})['enabled']
         self.store = Store(state / 'queries')
+        self.core_events = CoreEvents(self)
+        self.core_active = False
+        self.summary_slot = threading.BoundedSemaphore(1)
+        self.summary_cache = {}
 
     def configure(self, enabled):
         with self.lock:
@@ -107,6 +136,8 @@ class Recorder:
                 temporary.unlink(missing_ok=True)
             if self.enabled != enabled:
                 self.generation += 1
+                self.summary_cache.clear()
+                self.core_events.session = None
             self.enabled = enabled
             self.phase = 'starting' if enabled else 'disabled'
             self.reason = None
@@ -118,8 +149,10 @@ class Recorder:
             phase = 'unavailable' if stale else self.phase
             return {'enabled': self.enabled, 'active': self.enabled and phase == 'recording', 'phase': phase,
                     'reason': 'recorder_stale' if stale else self.reason, 'sampled_at': self.updated_at, 'session_id': self.session,
-                    'source': 'linux_passive_entry_packets', 'scope': 'service_network_namespace',
-                    'timing_scope': 'passive_entry_packet_interval', 'endpoints': list(self.endpoints),
+                    'source': 'mosdns_entry_events' if self.core_active else 'linux_passive_entry_packets',
+                    'scope': 'service_network_namespace',
+                    'timing_scope': 'mosdns_entry_processing' if self.core_active else 'passive_entry_packet_interval',
+                    'endpoints': list(self.endpoints),
                     'counters': dict(self.counters), 'queue_depth': self.events.qsize(),
                     'memory_limits': {'event_queue': MAX_QUEUE, 'pending_queries': MAX_PENDING,
                                       'tcp_streams': MAX_STREAMS, 'response_wait_seconds': WAIT_SECONDS},
@@ -133,10 +166,32 @@ class Recorder:
         elif op == 'clear':
             with self.lock:
                 self.generation += 1
+                self.core_events.session = None
                 self.store.clear()
+                self.summary_cache.clear()
         elif op == 'recent':
             return {'status': self.status(), **self.store.recent(**request)}
+        elif op == 'analytics':
+            return self.analytics(request['hours'])
         return self.status()
+
+    def analytics(self, hours):
+        with self.lock:
+            generation = self.generation
+            cached = self.summary_cache.get(hours)
+            if cached and time.monotonic() - cached[0] < SUMMARY_CACHE_SECONDS:
+                return {'status': self.status(), **cached[1]}
+        if not self.summary_slot.acquire(blocking=False):
+            raise RuntimeError('正在计算解析概览')
+        try:
+            data = self.store.analytics(hours)
+            with self.lock:
+                if self.generation != generation:
+                    raise RuntimeError('查询记录采集状态已改变，请重试')
+                self.summary_cache[hours] = (time.monotonic(), data)
+                return {'status': self.status(), **data}
+        finally:
+            self.summary_slot.release()
 
     def emit(self, generation, event):
         try:
@@ -180,6 +235,7 @@ class Recorder:
         capture, correlator, signature = None, None, None
         deadline = 0
         clock_offset = time.time() - time.monotonic()
+        streak_start, last_check, recorded_until, previous_loss = None, None, None, None
         try:
             while not self.stop.is_set():
                 mono = time.monotonic()
@@ -189,15 +245,20 @@ class Recorder:
                         with self.lock:
                             enabled, generation = self.enabled, self.generation
                         endpoints = entry_endpoints(self.run) if enabled else []
-                        addresses = local_addresses() if enabled else set()
-                        current = (generation, json.dumps(endpoints, sort_keys=True), tuple(sorted(addresses)))
+                        try:
+                            core_epoch = self.core_events.renew(endpoints, generation)
+                        except (OSError, ValueError):
+                            core_epoch = None
+                        addresses = local_addresses() if enabled and core_epoch is None else set()
+                        current = (generation, core_epoch, json.dumps(endpoints, sort_keys=True), tuple(sorted(addresses)))
                         if current != signature:
+                            streak_start, recorded_until = None, None
                             if capture:
                                 capture.close()
                                 capture = None
                             if correlator:
                                 correlator.reset()
-                            if enabled:
+                            if enabled and core_epoch is None:
                                 capture = PacketSocket([e['port'] for e in endpoints])
                                 correlator = Correlator(endpoints, lambda event, generation=generation: self.emit(generation, event),
                                                         self.counters, f'{self.session}:{generation}:{uuid.uuid4().hex}', addresses)
@@ -205,26 +266,46 @@ class Recorder:
                         # Entry validation can block. Pair fresh clocks here so
                         # its duration cannot look like a wall-clock step.
                         offset = time.time() - time.monotonic()
-                        if abs(offset - clock_offset) > .1 and correlator:
+                        clock_step = abs(offset - clock_offset) > .1
+                        if clock_step and correlator:
                             correlator.reset()
                             self.counters['clock_resets'] += 1
-                        clock_offset = offset
                         if capture:
                             drops = capture.drops()
                             if drops:
                                 self.counters['kernel_drops'] += drops
                                 correlator.reset()
                         with self.lock:
-                            self.phase = 'recording' if enabled else 'disabled'
-                            self.reason, self.endpoints, self.updated_at = None, endpoints, time.time()
-                    except (OSError, ValueError, KeyError, TypeError):
+                            now = time.time()
+                            loss = tuple(self.counters[key] for key in COVERAGE_LOSS)
+                            if clock_step and offset < clock_offset:
+                                self.store.invalidate_coverage_after(int(now))
+                            if (streak_start is None or last_check is None or mono - last_check > 2
+                                    or clock_step or loss != previous_loss):
+                                streak_start, recorded_until = int(now) + 1, None
+                            last_check, previous_loss = mono, loss
+                            if generation == self.generation:
+                                self.core_active = core_epoch is not None
+                                self.phase = 'recording' if enabled else 'disabled'
+                                self.reason, self.endpoints, self.updated_at = None, endpoints, now
+                                if enabled:
+                                    covered_until = int(now) - WAIT_SECONDS - 2
+                                    left = recorded_until if recorded_until is not None else streak_start
+                                    if covered_until - left >= 5:
+                                        self.store.record_coverage(left, covered_until)
+                                        recorded_until = covered_until
+                        clock_offset = offset
+                    except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):
                         if capture:
                             capture.close()
                         if correlator:
                             correlator.reset()
                         capture, correlator, signature = None, None, None
+                        streak_start, recorded_until = None, None
                         with self.lock:
                             self.phase, self.reason, self.endpoints = 'unavailable', 'entry_or_capture_unavailable', []
+                            self.core_active = False
+                            self.core_events.session = None
                             self.updated_at = time.time()
                 if capture is None:
                     self.stop.wait(.2)
@@ -255,19 +336,20 @@ def main():
     run = Path(os.environ.get('SUITE_RUN_DIR', '/run/paopaodns-suite'))
     os.umask(0o077)
     recorder = Recorder(state, run)
+    recorder.core_events.start()
     threading.Thread(target=recorder.write_loop, daemon=True).start()
     threading.Thread(target=recorder.capture_loop, daemon=True).start()
 
     class Handler(socketserver.StreamRequestHandler):
         def handle(self):
             self.request.settimeout(2)
-            raw = self.rfile.readline(2049)
+            raw = self.rfile.readline(8193)
             try:
-                if len(raw) > 2048 or not raw.endswith(b'\n'):
+                if len(raw) > 8192 or not raw.endswith(b'\n'):
                     raise ValueError('请求过大')
                 result = recorder.request(json.loads(raw))
                 response = {'ok': True, 'result': result}
-            except (ValueError, TypeError, OSError, sqlite3.Error):
+            except (ValueError, TypeError, OSError, sqlite3.Error, RuntimeError):
                 response = {'ok': False, 'error': '查询记录服务暂不可用或请求无效'}
             payload = json.dumps(response, allow_nan=False).encode() + b'\n'
             if len(payload) > MAX_RESPONSE:
@@ -276,7 +358,28 @@ def main():
 
     path = run / 'query-recorder.sock'
     path.unlink(missing_ok=True)
-    with socketserver.UnixStreamServer(str(path), Handler) as service:
+
+    class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+        daemon_threads = True
+        slots = threading.BoundedSemaphore(4)
+
+        def process_request(self, request, address):
+            if not self.slots.acquire(blocking=False):
+                self.shutdown_request(request)
+                return
+            try:
+                super().process_request(request, address)
+            except BaseException:
+                self.slots.release()
+                raise
+
+        def process_request_thread(self, request, address):
+            try:
+                super().process_request_thread(request, address)
+            finally:
+                self.slots.release()
+
+    with Server(str(path), Handler) as service:
         path.chmod(0o600)
         service.serve_forever(poll_interval=.2)
 
