@@ -3,14 +3,14 @@
   "artifacts": {
     "openapi.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "05cc32b63ce2245e91214301ba4f0ff7dfcf582b0670d2f32feb5ad811d5324d"
+      "sha256": "97c4dbbd7bbdc0ed597d3dcbd215ab65d54dcab2d9d7208ef4178e0803f1f299"
     },
     "samples.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "41d2c1537ea92fefb43196fed6cc0ecf3ebf4e1855938f0d56237664768134d9"
+      "sha256": "954948731d2075fa0a4fb042888f723ff1a9fb6b6fdf1651357ab6bd699f8710"
     }
   },
-  "candidate_version": "0.2.1",
+  "candidate_version": "0.2.2-console.1",
   "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
   "format_version": 1,
   "provenance": "All responses from actual Flask handlers with synthetic I/O and clocks; no live core/network acceptance evidence",
@@ -45,7 +45,7 @@
       "integrated/backend/history.py": "068715c1e54af2ec880712da543bd7a7c1e88f5567c213f0b2fd6007dea28713",
       "integrated/backend/installation.py": "64190ebaa3b32c2dfb6f5aa67a8a35303e77be1547114d8a6a866cfc44fd6a84",
       "integrated/backend/runtime_client.py": "f97b233696bcfb36eba5249d6557a57e0f3b8ef589dd064417a9b01f6dcd9408",
-      "integrated/backend/server.py": "ea420b42c54de2a464a3574b27b5e35b0909e8af7a522619368141ca5cd241dd",
+      "integrated/backend/server.py": "db4171c932ad07ed2bcbfe2bb2401db49e42ad5791475b46602110cc95d40ee8",
       "integrated/backend/software_update.py": "b52458da2c3da101c1f9def879a71a2aaf24134511fecaf5b1ffdc6f190b42bb",
       "integrated/frontend/package-lock.json": "a9cc6c4341237b1ddb91874a72cf08878df13787d20fc3cbc19b1bfc56a915a7",
       "integrated/frontend/package.json": "465e17dc4fde55be78c58247330b5bd39920eef42123a3917c564b41b2a08d38",
@@ -406,7 +406,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "cfe10ec6dacdb065d0796a37628abab1ebc30e4f2c5bf437d1a0fe07c22cf6c9"
+    "sha256": "e70387d54f9eea6b83e1ac283fa1439465e47403fda299062fe14347c2202ba8"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",
