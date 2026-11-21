@@ -183,6 +183,31 @@ try {
   assert.equal((await (await fetch(origin + '/fixture/navigation-state')).json()).filter_refreshes, 0);
   await back('#/settings?tab=updates');
 
+  await send('Emulation.setDeviceMetricsOverride', { width: 2560, height: 1000, deviceScaleFactor: 1, mobile: false });
+  for (const [route, title, file] of [
+    ['#/', '概览', 'overview'],
+    ['#/lists?file=force_dnscrypt_list.txt', '域名分流', 'routing'],
+    ['#/diagnostics?tab=compare', '链路对照', 'diagnostics'],
+    ['#/filter', '拦截记录', 'filtering'],
+    ['#/system?tab=status', '运行状态', 'maintenance'],
+    ['#/settings?tab=runtime', '运行参数', 'settings'],
+  ]) {
+    await go(route, title);
+    const frame = await evaluate(`(() => {
+      const bounds = (selector) => document.querySelector(selector).getBoundingClientRect();
+      const main = bounds('.suite-main');
+      const content = bounds('.suite-content');
+      return {
+        left: content.left - main.left,
+        right: main.right - content.right,
+        heading: bounds('.suite-page-heading h1').left - bounds('.suite-breadcrumb').left,
+      };
+    })()`);
+    assert.deepEqual(frame, { left: 0, right: 0, heading: 0 }, `${title} should fill the workspace and align with the breadcrumb`);
+    await assertFits(`${title} at 2560px`);
+    await screenshot(`wide-${file}.png`);
+  }
+
   for (const width of [1360, 390, 320]) {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
     for (const theme of ['light', 'dark']) {
@@ -216,7 +241,7 @@ try {
   await go('#/settings?tab=updates', '软件更新');
   await wait("document.body?.textContent.includes('通过宿主机更新容器')");
   assert.equal(errors.length, 0, JSON.stringify(errors));
-  console.log('PASS: grouped navigation, permissions, aliases, editor and task returns, gateway, release channel, mobile and themes');
+  console.log('PASS: grouped navigation, permissions, aliases, editor and task returns, gateway, release channel, full-width pages, mobile and themes');
   console.log('Screenshots: ' + output);
 } catch (error) {
   if (evaluate) console.error(await evaluate('location.hash + "\\n" + document.body.innerText').catch(() => fixtureLog));

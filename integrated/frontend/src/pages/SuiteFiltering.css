@@ -1,4 +1,3 @@
-.suite-content:has(.dns-filter-page) { max-width: 1760px; margin-inline: 0 auto; }
 .dns-filter-page { --filter-tint: color-mix(in srgb, var(--suite-teal) 7%, var(--suite-panel)); }
 .dns-filter-statusbar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px;
