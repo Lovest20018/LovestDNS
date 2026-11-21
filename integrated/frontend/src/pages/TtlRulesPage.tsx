@@ -227,10 +227,6 @@ export default function TtlRulesPage() {
       </div>
 
       <details className="card suite-editor-help"><summary><Clock size={16} /> TTL 语法和生效说明</summary>
-        <div className="card-title">
-          <Clock size={18} />
-          TTL 规则说明
-        </div>
         <div className="card-desc">
           RULES_TTL 值大于 0 时生效。规则仅对 A 记录和 AAAA 记录生效。
           保存后按后端返回的监听条件处理，并查询目标域名验证。升级会保留此配置文件。

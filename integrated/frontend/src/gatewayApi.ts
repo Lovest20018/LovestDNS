@@ -5,4 +5,6 @@ export interface GatewayRow { id?: string; source: string; domain?: string; clie
 export interface GatewayConnections { items: GatewayRow[]; view: string; sampled_at?: number; fetched_at?: number; freshness: { stale?: boolean }; scope: string; filter_scope: string; complete_history: false; next_cursor?: string; next_before?: number; gap?: boolean }
 export interface GatewayFakeIP { status?: string; source?: string; domain?: string; fakeip?: string; cidr?: string; dns_ttl_seconds?: number; valid_until?: number | null; validity?: string; historical_ownership_verified?: boolean; sampled_at?: number; fetched_at?: number }
 export const gatewayConfig = (signal?: AbortSignal) => suiteFetch<GatewayConfig>('/api/v1/gateway/config', { signal });
-export function gatewayChanged() { window.dispatchEvent(new Event('lovestdns-gateway-changed')); }
+export const disconnectGateway = (revision: string, signal?: AbortSignal) => suiteFetch<GatewayConfig>('/api/v1/gateway/config', {
+  method: 'DELETE', body: JSON.stringify({ expected_revision: revision }), signal,
+});

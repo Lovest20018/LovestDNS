@@ -12,6 +12,7 @@ import MaintenanceProvider from './MaintenanceProvider';
 import UpdateNetworkProvider from './UpdateNetworkProvider';
 import { isActiveTask, useMaintenance } from './maintenanceContext';
 import GatewayProvider from './GatewayProvider';
+import { useGateway } from './gatewayContext';
 import { useSuite } from './suiteContext';
 import { browserAuth, errorText, setBrowserCsrf } from './suiteApi';
 import type { BrowserSession } from './suiteApi';
@@ -64,6 +65,7 @@ const INSTANCE_SETTINGS = [
   { tab: 'updates', label: '软件更新', maintain: true },
   { tab: 'service', label: '服务信息' },
   { tab: 'external', label: '外部接入', configure: true },
+  { tab: 'gateway', label: '网关联动', configure: true },
   { tab: 'devices', label: '来源设备', configure: true },
 ];
 
@@ -75,7 +77,12 @@ function routeFromHash(hash: string) {
   let canonical = '';
   if (path === '/settings' || path === '/deploy') {
     page = path === '/settings' && tab === 'runtime' ? 'env' : 'deploy';
-    if (tab === 'gateway') tab = 'external';
+    if (tab === 'external' && params.get('section') === 'gateway') {
+      tab = 'gateway';
+      params.set('tab', tab);
+      params.delete('section');
+      canonical = `#/settings?${params}`;
+    }
     if (!INSTANCE_SETTINGS.some((item) => item.tab === tab) && page === 'deploy') tab = 'service';
   }
   if (path === '/gateway') {
@@ -126,6 +133,7 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
   const { caps, error, runtimeError, paused, setPaused, loading, refreshing, refresh } = useSuite();
   const { tasks } = useMaintenance();
   const filter = useFilterView();
+  const { settingsVisible: gatewaySettingsVisible } = useGateway();
   const active = tasks.find(isActiveTask);
   const [hash, setHash] = useState(() => location.hash);
   const { page, tab, canonical } = routeFromHash(hash);
@@ -257,9 +265,11 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
         {(error || actionError) && <div className="suite-global-error"><HeartPulse size={16} /><div><strong>{error ? '连接暂时中断，草稿已保留' : '操作未完成'}</strong><p>{error || actionError}</p></div><button className="btn btn-secondary btn-sm" onClick={() => void refresh()}>重试</button></div>}
         {runtimeError && !error && !active && page !== 'dashboard' && <div className="suite-global-warning"><Activity size={16} /><span>运行状态读取暂不可用。{runtimeError}</span></div>}
         {paused && <div className="suite-refresh-paused" role="status"><div><strong>自动刷新已暂停</strong><p>页面保留上次结果。进行中的维护任务会继续跟踪，DNS 查询记录沿用当前开关。</p></div></div>}
-        {primaryPage === 'deploy' && caps && <nav className="suite-settings-nav" aria-label="系统设置分区">
-          {caps.permissions.configure && <section aria-label="DNS 配置"><strong>DNS 配置</strong><div>{DNS_SETTINGS.map((item) => <a key={item.page} href={item.href} aria-current={page === item.page ? 'page' : undefined}>{item.label}</a>)}</div></section>}
-          <section aria-label="实例管理"><strong>实例管理</strong><div>{INSTANCE_SETTINGS.filter((item) => (!item.maintain || caps.permissions.maintain || caps.deployment === 'container') && (!item.configure || caps.permissions.configure)).map((item) => <a key={item.tab} href={`#/settings?tab=${item.tab}`} aria-current={page === 'deploy' && tab === item.tab ? 'page' : undefined}>{item.label}</a>)}</div></section>
+        {primaryPage === 'deploy' && caps && <nav className="suite-page-tabs" aria-label="系统设置分区">
+          {caps.permissions.configure && DNS_SETTINGS.map((item) => <a key={item.page} href={item.href} aria-current={page === item.page ? 'page' : undefined}>{item.label}</a>)}
+          {INSTANCE_SETTINGS.filter((item) => (!item.maintain || caps.permissions.maintain || caps.deployment === 'container')
+            && (!item.configure || caps.permissions.configure) && (item.tab !== 'gateway' || gatewaySettingsVisible))
+            .map((item) => <a key={item.tab} href={`#/settings?tab=${item.tab}`} aria-current={page === 'deploy' && tab === item.tab ? 'page' : undefined}>{item.label}</a>)}
         </nav>}
         {primaryPage === 'system' && caps && <nav className="suite-page-tabs" aria-label="维护分区">
           {[['status', '运行状态'], ...(caps.permissions.maintain ? [['logs', '组件日志']] : []), ['cache', '缓存与快照'], ...(caps.permissions.maintain ? [['history', '配置历史']] : [])].map(([key, label]) => <a key={key} href={`#/system?tab=${key}`} aria-current={(page === 'cache' ? 'cache' : ['logs', 'history'].includes(tab) ? tab : 'status') === key ? 'page' : undefined}>{label}</a>)}

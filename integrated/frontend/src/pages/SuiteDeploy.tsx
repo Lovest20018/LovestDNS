@@ -1,9 +1,10 @@
 import { ExternalLink, KeyRound, Network, Server, ShieldCheck, TerminalSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSuite } from '../suiteContext';
+import { useGateway } from '../gatewayContext';
 import { errorText, externalApiSetting } from '../suiteApi';
 import { Section, Empty, Notice, Permission } from '../components/SuiteUI';
-import GatewaySettings from '../components/GatewaySettings';
+import GatewaySettings, { GatewayOptIn } from '../components/GatewaySettings';
 import { nativeMaintenanceCommands } from '../settingsIdentity';
 import CopyableText from '../components/CopyableText';
 import SourceDevices from '../components/SourceDevices';
@@ -13,10 +14,10 @@ import './SuitePage.css';
 
 export default function SuiteDeploy() {
   const { caps } = useSuite();
+  const { settingsVisible: gatewaySettingsVisible } = useGateway();
   const readRoute = () => new URLSearchParams(window.location.hash.split('?')[1]);
   const [route, setRoute] = useState(readRoute);
-  const target = route.get('tab');
-  const tab = target === 'gateway' ? 'external' : target;
+  const tab = route.get('tab');
   const canConfigure = caps?.permissions.configure;
   useEffect(() => {
     const sync = () => setRoute(readRoute());
@@ -24,7 +25,7 @@ export default function SuiteDeploy() {
     return () => window.removeEventListener('hashchange', sync);
   }, []);
   useEffect(() => {
-    const section = target === 'gateway' ? 'gateway-integration' : route.get('section') === 'commands' ? 'host-commands' : route.get('section') === 'gateway' ? 'gateway-integration' : '';
+    const section = route.get('section') === 'commands' ? 'host-commands' : '';
     if (!section) return;
     const frame = requestAnimationFrame(() => {
       const element = document.getElementById(section);
@@ -32,7 +33,7 @@ export default function SuiteDeploy() {
       element?.scrollIntoView({ block: 'start' });
     });
     return () => cancelAnimationFrame(frame);
-  }, [route, target]);
+  }, [route]);
   const [apiEnabled, setApiEnabled] = useState<boolean | null>(null);
   const [savingApi, setSavingApi] = useState(false);
   const [apiError, setApiError] = useState('');
@@ -76,7 +77,9 @@ export default function SuiteDeploy() {
       </dl>
       <p className="suite-note">Token 在主机配置，修改后重启服务加载。两个 Token 应分别设置；当前网页不显示或修改 Token。</p>
     </Section>
-      <GatewaySettings />
+      <GatewayOptIn />
+    </Permission> : tab === 'gateway' ? <Permission allowed={!!canConfigure}>
+      {gatewaySettingsVisible ? <GatewaySettings /> : <GatewayOptIn />}
     </Permission> : tab === 'updates' ? native ? <Permission allowed={caps.permissions.maintain} kind="maintain">
       <SoftwareUpdate loadedVersion={caps.version} />
       <details className="suite-update-network-panel"><summary>更新通道与代理</summary><SoftwareUpdateNetwork /></details>

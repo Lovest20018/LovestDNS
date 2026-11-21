@@ -303,7 +303,6 @@ function DomainFileEditor({ activeTab, scope }: { activeTab: string; scope: stri
       </div>
 
       <details className="card suite-editor-help"><summary><FileText size={16} /> 匹配优先级说明</summary>
-        <div className="card-title"><FileText size={18} /> 匹配优先级</div>
         <div className="priority-flow">
           <span className="priority-item" style={{ background: 'rgba(139,92,246,0.15)', color: '#8b5cf6' }}>custom_mod (top)</span>
           <span className="priority-arrow">&gt;</span>

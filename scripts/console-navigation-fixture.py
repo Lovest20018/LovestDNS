@@ -9,7 +9,8 @@ from flask import jsonify, request
 root = Path(__file__).resolve().parents[1]
 home = runpy.run_path(str(root / 'scripts/home-console-fixture.py'))
 server = home['server']
-state = {'gateway': True, 'role': 'admin', 'deployment': 'native', 'filter_refreshes': 0}
+GATEWAY_URL = 'https://192.0.2.100:18788/api/v1'
+state = {'gateway': True, 'gateway_revision': 1, 'role': 'admin', 'deployment': 'native', 'filter_refreshes': 0}
 
 
 @server.app.post('/fixture/navigation')
@@ -35,11 +36,33 @@ def synthetic_gateway():
     now = time.time()
     summary = {'instance': {'id': 'gateway-synthetic', 'name': 'Synthetic Gateway'}, 'features': {'connection_history': True, 'fakeip_lookup': True},
                'mode': 'direct', 'runtime': {'status': 'ready'}, 'sampled_at': now, 'fetched_at': now, 'freshness': {'stale': False}}
+    if path == '/api/v1/gateway/config':
+        revision = f"synthetic-{state['gateway_revision']}"
+        if request.method in ('PUT', 'DELETE'):
+            body = request.get_json()
+            if body.get('expected_revision') != revision:
+                return jsonify({'error': {'code': 'CONFLICT', 'message': '联动配置已改变，请重新读取'}}), 409
+            if request.method == 'PUT' and (body.get('url') != GATEWAY_URL or not (body.get('token') or state['gateway'])):
+                return jsonify({'error': {'code': 'INVALID_ARGUMENT', 'message': '请填写测试网关地址与只读 Token'}}), 400
+            state['gateway'] = request.method == 'PUT'
+            state['gateway_revision'] += 1
+            revision = f"synthetic-{state['gateway_revision']}"
+        config = {'enabled': state['gateway'], 'revision': revision, 'has_token': state['gateway']}
+        if state['gateway']:
+            config.update(url=GATEWAY_URL, name='Synthetic Gateway')
+        return jsonify({'data': config, 'meta': {'api_version': '1'}})
+    record = {
+        'id': 'synthetic-connection-85', 'source': 'sniffbox_lifecycle', 'domain': 'example.com',
+        'client': '192.0.2.20', 'destination': '192.0.2.21', 'upstream_peer': '192.0.2.22:1080',
+        'state': 'closed', 'started_at': now - 300, 'chains': [],
+        'decision': {'application_result': 'unknown', 'connect_result': 'connected', 'outbound_id': None,
+                     'reason': 'mihomo_decision_unavailable', 'rule_id': 'mode:suburl', 'rule_kind': 'mode_dispatch',
+                     'source': 'sniffbox_outbound_dispatch', 'status': 'unavailable'},
+    }
     data = {
-        '/api/v1/gateway/config': {'enabled': state['gateway'], 'revision': 'synthetic-1', 'has_token': True, 'url': 'https://192.0.2.100:18788/api/v1', 'name': 'Synthetic Gateway'},
         '/api/v1/gateway/test': summary,
         '/api/v1/gateway/summary': summary,
-        '/api/v1/gateway/connections': {'items': [], 'view': 'recent', 'sampled_at': now, 'fetched_at': now, 'freshness': {'stale': False},
+        '/api/v1/gateway/connections': {'items': [record], 'view': 'recent', 'sampled_at': now, 'fetched_at': now, 'freshness': {'stale': False},
                                        'scope': 'synthetic', 'filter_scope': 'exact', 'complete_history': False},
         '/api/v1/gateway/fakeip': {'status': 'matched', 'domain': 'example.com', 'fakeip': '198.18.0.3', 'sampled_at': now, 'fetched_at': now},
     }.get(path)

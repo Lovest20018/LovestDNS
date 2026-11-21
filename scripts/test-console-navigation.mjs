@@ -62,6 +62,25 @@ try {
     await evaluate(`[...document.querySelectorAll(${JSON.stringify(scope + ' a')})].find(link => link.textContent.trim() === ${JSON.stringify(text)}).click()`);
   };
   const selected = async (scope, text) => wait(`document.querySelector(${JSON.stringify(scope + ' a[aria-current=page]')})?.textContent.trim() === ${JSON.stringify(text)}`);
+  const settingsNav = '[aria-label="系统设置分区"]';
+  const gatewayToggle = '.suite-gateway-toggle input';
+  const gatewayTab = `${settingsNav} a[href="#/settings?tab=gateway"]`;
+  const settingsLinks = () => evaluate(`Array.from(document.querySelectorAll(${JSON.stringify(settingsNav + ' > *')}), (link) => link.tagName === 'A' ? link.textContent : null)`);
+  const activeTabStyle = (scope) => evaluate(`(() => {
+    const style = getComputedStyle(document.querySelector(${JSON.stringify(scope + ' a[aria-current=page]')}));
+    const properties = ['fontSize', 'fontWeight', 'color', 'backgroundColor', 'borderBottomWidth',
+      'borderBottomColor', 'borderTopLeftRadius', 'paddingInlineStart', 'paddingBlockStart'];
+    return Object.fromEntries(properties.map(property => [property, style[property]]));
+  })()`);
+  const assertCompactDetails = async (selector) => {
+    const measured = await evaluate(`(() => {
+      const list = document.querySelector(${JSON.stringify(selector)});
+      const fontSizes = (query) => [...new Set([...list.querySelectorAll(query)].map(node => getComputedStyle(node).fontSize))];
+      const weights = [...new Set([...list.querySelectorAll('dd')].map(node => getComputedStyle(node).fontWeight))];
+      return { labels: fontSizes('dt'), values: fontSizes('dd'), weights };
+    })()`);
+    assert.deepEqual(measured, { labels: ['12px'], values: ['13px'], weights: ['500'] }, `${selector} should use compact metadata typography`);
+  };
   const back = async (expected) => {
     await evaluate('history.back()');
     await wait(`location.hash === ${JSON.stringify(expected)}`);
@@ -90,7 +109,7 @@ try {
 
   await nav('系统设置');
   await wait("document.querySelector('#settings-search')");
-  await selected('.suite-settings-nav', '运行参数');
+  await selected(settingsNav, '运行参数');
   await go('#/env', '运行参数');
   await go('#/ttl', 'TTL 规则');
   await wait("document.querySelector('textarea')?.value.includes('example.com@@')");
@@ -99,13 +118,16 @@ try {
   await wait("document.querySelector('[aria-label=历史配置文件]')?.value==='force_ttl_rules.txt'");
   await back('#/ttl');
   await go('#/deploy', '服务信息');
-  await selected('.suite-settings-nav', '服务信息');
+  await selected(settingsNav, '服务信息');
   await go('#/settings', '服务信息');
   await nav('查看主机命令', '.suite-notice');
   await wait("document.activeElement.id==='host-commands'");
 
   await go('#/status', '运行状态');
   await selected('[aria-label="维护分区"]', '运行状态');
+  await wait("document.querySelector('details.suite-home-component dd')");
+  await evaluate("document.querySelector('details.suite-home-component').open = true");
+  await assertCompactDetails('.suite-home-component[open] dl');
   await nav('缓存与快照', '[aria-label="维护分区"]');
   await selected('[aria-label="维护分区"]', '缓存与快照');
   await back('#/status');
@@ -129,15 +151,15 @@ try {
   await selected('[aria-label="查询与诊断分区"]', '网关观测');
   await back('#/diagnostics?tab=query&domain=example.com');
   await wait(`document.querySelector('.suite-report-heading') && document.querySelector('[aria-label="DNS 端口"]').value==='5300' && document.querySelector('[aria-label="DNS 传输"]').value==='tcp'`);
-  await go('#/settings?tab=gateway', '外部接入');
-  await wait("document.activeElement.id==='gateway-integration'");
-  await wait(`document.querySelector('[aria-label="网关 API 地址"]')?.value`);
+  await go('#/settings?tab=external', '外部接入');
+  await wait(`document.querySelector('${gatewayToggle}')?.checked`);
+  assert(!await evaluate("document.querySelector('#gateway-integration')"));
   const externalFonts = await evaluate(`(() => {
     const style = (selector) => getComputedStyle(document.querySelector(selector));
     const body = style('.suite-app').fontFamily;
     const help = style('.suite-detail-help');
     return {
-      consistent: ['.suite-api-setting button', '#gateway-integration input', '.suite-detail-list a', '.suite-detail-help']
+      consistent: ['.suite-api-setting button', '.suite-gateway-toggle input', '.suite-detail-list a', '.suite-detail-help']
         .every((selector) => style(selector).fontFamily === body),
       technical: style('.suite-detail-list code').fontFamily,
       body,
@@ -152,20 +174,75 @@ try {
   assert.equal(externalFonts.helpWeight, '400');
   assert.equal(externalFonts.helpSize, '12px');
   assert.equal(externalFonts.noteSize, '13px');
+  await nav('网关联动', settingsNav);
+  await selected(settingsNav, '网关联动');
+  await wait(`document.querySelector('[aria-label="网关 API 地址"]')?.value`);
+  assert(!await evaluate("document.querySelector('.suite-api-setting')"));
+  await screenshot('gateway-settings-1280-light.png');
+  await send('Emulation.setDeviceMetricsOverride', { width: 320, height: 900, deviceScaleFactor: 1, mobile: false });
+  await wait("document.querySelector('.suite-sidebar').getBoundingClientRect().right <= 0");
+  await assertFits('gateway settings at 320px');
+  assert(await evaluate(`(() => {
+    const row = document.querySelector('.suite-gateway-settings .suite-target-row');
+    const width = row.getBoundingClientRect().width;
+    return Array.from(row.querySelectorAll('input')).every(input => input.getBoundingClientRect().width === width);
+  })()`), 'Each gateway field should fill the form on phones');
+  await screenshot('gateway-settings-320-light.png');
+  await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 960, deviceScaleFactor: 1, mobile: false });
   await click('测试连接');
   await wait("document.body?.textContent.includes('连接测试通过')");
   await nav('查看网关观测 →', '#gateway-integration');
   await wait("document.querySelector('.suite-gateway-fakeip')");
+  await click('展开', '.suite-gateway-table');
+  await wait("document.querySelector('.suite-gateway-detail')?.textContent.includes('mihomo_decision_unavailable')");
+  await assertCompactDetails('.suite-gateway-detail dl');
   await evaluate("document.querySelector('.suite-gateway-fakeip').open=true");
   await change('[aria-label="FakeIP 查询值"]', 'example.com');
   await click('查询 FakeIP');
   await wait("document.querySelector('.suite-gateway-fakeip').textContent.includes('198.18.0.3')");
+  await assertCompactDetails('.suite-gateway-fakeip dl');
   await back('#/settings?tab=gateway');
   await wait("document.body?.textContent.includes('连接测试通过')");
-  await control({ gateway: false });
+  await go('#/settings?tab=external&section=gateway', '网关联动');
+  await wait("location.hash === '#/settings?tab=gateway'");
+  await wait(`document.querySelector('[aria-label="网关 API 地址"]')?.value`);
+  await nav('外部接入', settingsNav);
+  await wait(`document.querySelector('${gatewayToggle}')?.checked`);
+  await evaluate(`window.confirm = () => false; document.querySelector('${gatewayToggle}').click()`);
+  assert(await evaluate(`document.querySelector('${gatewayToggle}').checked`), 'Cancelling must preserve the active connection');
+  await evaluate(`window.confirm = () => true; document.querySelector('${gatewayToggle}').click()`);
+  await wait(`!document.querySelector('${gatewayTab}') && document.querySelector('${gatewayToggle}')?.checked === false`);
+  const gatewayConfig = () => evaluate("fetch('/api/v1/gateway/config').then(response => response.json()).then(result => result.data)");
+  assert.equal((await gatewayConfig()).has_token, false);
+
+  await go('#/settings?tab=gateway', '网关联动');
+  await wait(`document.querySelector('${gatewayToggle}') && !document.querySelector('#gateway-integration')`);
+  await nav('外部接入', settingsNav);
+  await wait(`document.querySelector('${gatewayToggle}')?.checked === false`);
+  await evaluate(`document.querySelector('${gatewayToggle}').click()`);
+  await wait(`document.querySelector('${gatewayTab}')`);
+  assert.equal((await gatewayConfig()).enabled, false, 'Displaying the setup tab must not enable gateway reads');
+  await evaluate(`document.querySelector('${gatewayToggle}').click()`);
+  await wait(`!document.querySelector('${gatewayTab}')`);
+  await evaluate(`document.querySelector('${gatewayToggle}').click()`);
+  await nav('网关联动', settingsNav);
+  await send('Page.reload');
+  await selected(settingsNav, '网关联动');
+  await wait(`document.querySelector('[aria-label="网关 API 地址"]')?.disabled === false`);
+  await change('[aria-label="网关 API 地址"]', 'https://192.0.2.100:18788/api/v1');
+  await change('[aria-label="网关只读 Token"]', 'synthetic-gateway-observer-token-only');
+  await click('保存并启用');
+  await wait("document.body?.textContent.includes('联动已启用')");
+  assert.equal((await gatewayConfig()).enabled, true);
+  await click('断开并清除凭据');
+  await wait(`location.hash === '#/settings?tab=external' && !document.querySelector('${gatewayTab}')`);
+  assert.equal((await gatewayConfig()).has_token, false);
+  await wait(`document.querySelector('${gatewayToggle}')?.disabled === false`);
+  await screenshot('gateway-opt-in-1280-light.png');
+  await go('#/diagnostics?tab=query', '主动查询');
+  assert(!await evaluate(`document.querySelector('.suite-diagnostic-tabs a[href="#/diagnostics?tab=gateway"]')`));
   await go('#/gateway', '网关观测');
   await wait("location.hash==='#/diagnostics?tab=gateway'");
-  await send('Page.reload');
   await wait("document.body?.textContent.includes('尚未启用网关联动')");
 
   await go('#/system?tab=updates', '软件更新');
@@ -216,38 +293,32 @@ try {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
     for (const theme of ['light', 'dark']) {
       await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+      await go('#/system?tab=status', '运行状态');
+      const sharedStyle = await activeTabStyle('[aria-label="维护分区"]');
       if (width < 900) await evaluate("document.querySelector('[aria-label=打开导航]').click()");
       await nav('系统设置');
       await wait("document.querySelector('#settings-search')");
-      if (width < 900) await wait("document.activeElement.matches('.suite-page-heading h1')");
+      if (width < 900) await wait("document.activeElement.matches('.suite-page-heading h1') && document.querySelector('.suite-sidebar').getBoundingClientRect().right <= 0");
       await assertFits(`settings ${width} ${theme}`);
-      const groups = await evaluate(`Array.from(document.querySelectorAll('.suite-settings-nav > section'), (group) => {
-        const label = group.querySelector('strong');
-        const { left, top, bottom } = group.getBoundingClientRect();
-        const links = Array.from(group.querySelectorAll('a'), (link) => ({
-          size: getComputedStyle(link).fontSize,
-          height: link.getBoundingClientRect().height,
-        }));
-        return { label: label.textContent, size: getComputedStyle(label).fontSize, links, left, top, bottom };
+      assert.deepEqual(await activeTabStyle(settingsNav), sharedStyle, `Settings and maintenance tabs should match at ${width}px in ${theme} mode`);
+      assert.deepEqual(await settingsLinks(), ['运行参数', '配置状态与应用', 'TTL 规则', '高级配置文件', '软件更新', '服务信息', '外部接入', '来源设备']);
+      const tabs = await evaluate(`Array.from(document.querySelectorAll('${settingsNav} > a'), (link) => {
+        const {top, height} = link.getBoundingClientRect();
+        const text = document.createRange();
+        text.selectNodeContents(link);
+        return {top, height, lines: new Set(Array.from(text.getClientRects(), (box) => box.top)).size};
       })`);
-      assert.deepEqual(groups.map(group => group.label), ['DNS 配置', '实例管理']);
-      for (const group of groups) {
-        assert.equal(group.size, '13px');
-        assert(group.links.every(link => link.size === '14px' && (width >= 900 || link.height >= 44)));
-      }
-      const [dns, instance] = groups;
-      if (width >= 900) {
-        assert(dns.top === instance.top && dns.left < instance.left, 'Desktop settings groups should sit side by side');
-      } else {
-        assert(dns.left === instance.left && dns.bottom < instance.top, 'Narrow settings groups should stack');
-      }
+      assert(tabs.every(tab => tab.lines === 1), 'Settings tab labels should fit on one line');
+      if (width >= 900) assert(tabs.every(tab => tab.top === tabs[0].top), 'Desktop settings tabs should share one row');
+      else assert(tabs.every(tab => tab.height >= 44), 'Settings tabs should keep their mobile touch targets');
       await screenshot(`settings-${width}-${theme}.png`);
     }
   }
 
-  await control({ role: 'observer' });
+  await control({ role: 'observer', gateway: true });
   await send('Page.reload');
-  await wait(`!document.querySelector('.suite-settings-nav [aria-label="DNS 配置"]') && document.querySelector('.suite-settings-nav')`);
+  await wait(`!!document.querySelector('${settingsNav}')`);
+  assert.deepEqual(await settingsLinks(), ['服务信息']);
   await evaluate("document.querySelector('[aria-label=打开导航]').click()");
   await nav('系统设置');
   await wait("location.hash==='#/settings?tab=service'");
@@ -258,14 +329,16 @@ try {
   assert(!await evaluate("[...document.querySelectorAll('button')].some(button=>button.textContent.includes('保存 Redis 快照'))"));
   await go('#/settings?tab=external', '外部接入');
   await wait("document.body?.textContent.includes('需要管理权限')");
+  await go('#/settings?tab=gateway', '网关联动');
+  await wait("document.body?.textContent.includes('需要管理权限')");
 
   await control({ role: 'admin', deployment: 'container' });
   await send('Page.reload');
-  await wait(`document.querySelector('.suite-settings-nav [aria-label="DNS 配置"]')`);
+  await wait(`document.querySelector('${settingsNav} a[href="#/settings?tab=runtime"]')`);
   await go('#/settings?tab=updates', '软件更新');
   await wait("document.body?.textContent.includes('通过宿主机更新容器')");
   assert.equal(errors.length, 0, JSON.stringify(errors));
-  console.log('PASS: grouped navigation, permissions, aliases, editor and task returns, gateway, release channel, full-width pages, mobile and themes');
+  console.log('PASS: shared tabs, permissions, aliases, editor and task returns, optional gateway settings, release channel, full-width pages, mobile and themes');
   console.log('Screenshots: ' + output);
 } catch (error) {
   if (evaluate) console.error(await evaluate('location.hash + "\\n" + document.body.innerText').catch(() => fixtureLog));

@@ -9,6 +9,9 @@ export interface GatewayState {
   loading: boolean;
   error: string;
   reload: () => Promise<void>;
+  settingsVisible: boolean;
+  setSetupRequested: (requested: boolean) => void;
+  applyConfig: (config: GatewayConfig) => void;
 }
 export const GatewayContext = createContext<GatewayState | null>(null);
 export function useGateway() {

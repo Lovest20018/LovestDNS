@@ -61,8 +61,7 @@
 .suite-home-component>summary>span:first-child { min-width:0; flex:1; }
 .suite-home-component strong { font-size:13px; overflow-wrap:anywhere; }
 .suite-home-component small { display:block; color:var(--suite-muted); margin-top:3px; }
-.suite-home-component .suite-kpi-list { margin-top:12px; }
-.suite-home-component .suite-kpi-list>div { grid-template-columns:74px minmax(0,1fr); }
+.suite-home-component > .suite-detail-list { margin-top:12px; }
 .suite-home-trends { margin-top:14px; }
 .suite-home-trends>summary,.suite-home-auxiliary>summary { padding:9px 0; font-size:14px; }
 .suite-home-auxiliary .suite-home-components { margin-top:6px; }
@@ -74,6 +73,7 @@
 .suite-save-next { border:0; background:none; padding:4px; color:var(--suite-blue); font:inherit; text-decoration:underline; cursor:pointer; }
 .suite-config-workflow .suite-apply-options { grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr)); }
 .suite-config-workflow .suite-maintenance-tasks { margin-top:12px; }
+.suite-apply-plan details > ul { font-size:var(--suite-detail-size); overflow-wrap:anywhere; }
 .suite-config-workflow>h2 { margin:0; font-size:16px; }
 .suite-inline-query { padding:16px; margin-top:14px; border-top:1px solid var(--suite-line); }
 .suite-inline-query form { display:flex; flex-wrap:wrap; align-items:end; gap:10px; }

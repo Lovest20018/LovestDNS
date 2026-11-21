@@ -25,7 +25,7 @@ function handling(row: GatewayRow) {
   return outbound ?? '处理方式未知';
 }
 function RecordDetails({ row }: { row: GatewayRow }) {
-  return <dl className="suite-kpi-list">
+  return <dl className="suite-kpi-list suite-detail-list">
     <div><dt>记录来源</dt><dd>{SOURCES[row.source] ?? row.source}</dd></div>
     <div><dt>记录 ID</dt><dd>{row.id ?? '未知'}</dd></div>
     <div><dt>连接时间</dt><dd>{timeText(row.started_at)}</dd></div>
@@ -87,7 +87,7 @@ export default function GatewayObservation() {
         {(records.next_cursor || records.next_before) && <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => connections(true)}>下一页</button>}
       </>}
       {summary.features.fakeip_lookup && <details className="suite-editor-help suite-gateway-fakeip"><summary>FakeIP 缓存查询</summary><form onSubmit={(e) => { e.preventDefault(); void read(`/api/v1/gateway/fakeip?${new URLSearchParams({ [lookupType]: lookup })}`, 'fake'); }}><fieldset disabled={busy} className="suite-diagnostic-fields"><div className="suite-target-row"><label>查询类型<select className="form-select" value={lookupType} onChange={(e) => { setLookupType(e.target.value); setFake(null); }}><option value="domain">域名</option><option value="ip">IP</option></select></label><label>查询值<input aria-label="FakeIP 查询值" className="form-input" required maxLength={253} value={lookup} onChange={(e) => { setLookup(e.target.value); setFake(null); }} /></label><button className="btn btn-secondary">查询 FakeIP</button></div></fieldset></form>
-        {fake && <dl className="suite-kpi-list">{Object.entries(fake).map(([key, value]) => <div key={key}><dt>{FAKE_LABELS[key] ?? key}</dt><dd>{value == null ? '未知' : key === 'sampled_at' || key === 'fetched_at' ? timeText(value as number) : typeof value === 'boolean' ? value ? '是' : '否' : value === 'no_records' ? '当前缓存无记录' : String(value)}</dd></div>)}</dl>}
+        {fake && <dl className="suite-kpi-list suite-detail-list">{Object.entries(fake).map(([key, value]) => <div key={key}><dt>{FAKE_LABELS[key] ?? key}</dt><dd>{value == null ? '未知' : key === 'sampled_at' || key === 'fetched_at' ? timeText(value as number) : typeof value === 'boolean' ? value ? '是' : '否' : value === 'no_records' ? '当前缓存无记录' : String(value)}</dd></div>)}</dl>}
       </details>}
       <p className="suite-note">模式派发与 Mihomo 规则分别取自各自记录。观测可能不完整；FakeIP 当前映射不证明历史归属。</p>
     </>}
