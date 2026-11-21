@@ -1,10 +1,21 @@
 import { createContext, useContext } from 'react';
-import type { FilterState } from './filterApi';
+import type { FilterAction, FilterSourceType, FilterState, readFilterTask } from './filterApi';
 
 export interface FilterDraft { revision: string; enabled: boolean; local: string }
+export interface SubscriptionDraft { name: string; url: string; interval: number; type: FilterSourceType }
+export interface FilterTask {
+  phase: 'pending' | 'uncertain' | 'succeeded' | 'failed';
+  id?: string;
+  message: string;
+}
 interface FilterView {
   draft: FilterDraft | null;
   setDraft: (draft: FilterDraft | null) => void;
+  subscriptionDraft: SubscriptionDraft | null;
+  setSubscriptionDraft: (draft: SubscriptionDraft | null) => void;
+  task: FilterTask | null;
+  acknowledgeTask: () => void;
+  apply: (action: FilterAction) => ReturnType<typeof readFilterTask>;
   state: FilterState | null;
   error: string;
   refresh: () => Promise<void>;

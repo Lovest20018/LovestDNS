@@ -1,7 +1,10 @@
 import { createContext, useContext } from 'react';
-import type { GatewayConfig } from './gatewayApi';
+import type { GatewayConfig, GatewaySummary } from './gatewayApi';
 
+export type GatewayConnectionTest = { revision: string; url: string; summary: GatewaySummary };
 export interface GatewayState {
+  connectionTest: GatewayConnectionTest | null;
+  setConnectionTest: (test: GatewayConnectionTest | null) => void;
   config: GatewayConfig | null;
   loading: boolean;
   error: string;

@@ -178,16 +178,17 @@ def openapi_document(version):
     counts = {key: integer for key in ('valid', 'duplicates', 'ignored', 'invalid', 'unsupported', 'protected')}
     issue = {'line': integer, 'rule': text, 'kind': text, 'reason': text, 'truncated': boolean}
     preview_counts = {**counts, 'types': array(text), 'issues': array(obj(issue, list(issue)), maxItems=100)}
-    preview = {'id': text, 'name': text, 'host': text, 'parse': obj(preview_counts, list(preview_counts))}
+    preview = {'id': text, 'name': text, 'host': text,
+               'parse': obj({**preview_counts, 'scopes': dictionary(integer)}, list(preview_counts))}
     source_type = {'enum': ['block', 'allow'], 'default': 'block'}
     subscription = {'id': text, 'name': text, 'host': text, 'enabled': boolean, 'interval': interval, 'updated': integer,
-                    'parse': obj(counts, list(counts))}
+                    'parse': obj({**counts, 'scopes': dictionary(integer)}, list(counts))}
     job = {'id': text, 'action': text, 'phase': {'enum': ['pending', 'succeeded', 'failed']}, 'message': text}
     filter_status = {'enabled': boolean, 'local_rules': text, 'sources': array(obj({**subscription, 'type': source_type}, list(subscription)), maxItems=12),
                      'allow': dictionary(nullable_number), 'rules': integer, 'revision': revision,
                      'mode': {'enum': ['recursive', 'mosdns', 'unavailable']}, 'available': boolean,
                      'live_revision': {'type': ['string', 'null']}, 'live_enabled': boolean,
-                     'draft': {'anyOf': [obj({**preview, 'type': source_type}, list(preview)), {'type': 'null'}]},
+                     'draft': {'anyOf': [obj({**preview, 'type': source_type, 'source_id': text}, list(preview)), {'type': 'null'}]},
                      'jobs': array(obj(job, list(job)), maxItems=8)}
     schemas['FilterStatus'] = obj(filter_status, list(filter_status))
     schemas['FilterCheck'] = obj({**filter_fields, 'action': {'enum': ['block', 'allow', 'pass', 'disabled']}, 'domain': text},

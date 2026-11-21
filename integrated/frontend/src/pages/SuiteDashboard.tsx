@@ -2,6 +2,7 @@ import { Activity, ArrowUpRight, Network, Radio, Shield } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useSuite } from '../suiteContext';
 import { filterStatus, useFilterView } from '../filterContext';
+import { filterPreviewHref } from '../filterApi';
 import { useGateway } from '../gatewayContext';
 import { errorText, suiteFetch, when } from '../suiteApi';
 import { Notice, Offline } from '../components/SuiteUI';
@@ -125,11 +126,11 @@ export default function SuiteDashboard() {
           {historical && <small>上次采样</small>}</div>
         {caps.features.dns_filter && caps.permissions.configure && <div><h3><Shield size={16} />广告过滤</h3>
           <a href="#/filter">{(filter.error || paused ? '上次读取 · ' : '') + filterStatus(filter.state)}</a>
-          {filter.state?.draft && <p><a href="#/filter?tab=rules">订阅待复核</a></p>}</div>}
+          {filter.state?.draft && <p><a href={filterPreviewHref(filter.state.draft)}>订阅待复核 · {filter.state.draft.name}</a></p>}</div>}
       </div>
     </section>
-    {!activeConfig && (runtime?.error ? <Notice tone="error">{runtime.error}</Notice> : runtime && !runtime.core_healthy ? <Notice tone="warning">核心组件需检查。<a href="#/system?component=bootstrap">查看启动日志</a></Notice> : null)}
-    {!!problems.length && <Notice tone="warning">辅助服务需检查。{problems.map((name, i) => <span key={name}>{i > 0 && '、'}<a href={`#/system?component=${encodeURIComponent(name)}`}>{name}</a></span>)}</Notice>}
+    {!activeConfig && (runtime?.error ? <Notice tone="error">{runtime.error}</Notice> : runtime && !runtime.core_healthy ? <Notice tone="warning">核心组件需检查。{caps.permissions.maintain && <a href="#/system?tab=logs&component=bootstrap">查看启动日志</a>}</Notice> : null)}
+    {!!problems.length && <Notice tone="warning">辅助服务需检查。{problems.map((name, i) => <span key={name}>{i > 0 && '、'}{caps.permissions.maintain ? <a href={`#/system?tab=logs&component=${encodeURIComponent(name)}`}>{name}</a> : name}</span>)}</Notice>}
     {shownSubmission && <Notice><a href="#/system?tab=tasks">{TASK_NAMES[shownSubmission.action]} · {shownSubmission.phase === 'sending' ? '正在提交' : shownSubmission.phase === 'failed' ? '提交失败' : '正在核对受理记录'}</a></Notice>}
     {!shownSubmission && latest?.state === 'failed' && <Notice tone="warning"><a href="#/system?tab=tasks">{taskLabel(latest)} · 查看任务详情</a></Notice>}
     {caps.features.query_recording && caps.permissions.configure

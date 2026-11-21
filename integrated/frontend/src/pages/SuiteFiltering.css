@@ -10,6 +10,10 @@
 .dns-filter-count strong { color: var(--suite-ink); font-size: 15px; font-variant-numeric: tabular-nums; }
 .dns-filter-statusbar > button { margin-inline-start: auto; }
 .dns-filter-status .suite-notice { margin-top: 8px; }
+.dns-filter-review > p { margin: 0 0 8px; color: var(--suite-muted); font-size: 13px; overflow-wrap: anywhere; }
+.dns-filter-page a { overflow-wrap: anywhere; }
+.dns-source-type { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; }
+.dns-source-type select { width: auto; }
 .dns-filter-rules:not([hidden]) {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; align-items: start;
 }
@@ -57,7 +61,9 @@
 .dns-source-tools details[open] { flex-basis: 100%; }
 .dns-filter-jobs { margin-top: 14px; border-top: 1px solid var(--suite-line); padding-top: 12px; }
 .dns-filter-preview ul, .dns-filter-jobs ul { max-height: 16rem; overflow: auto; padding-inline-start: 20px; font-size: 13px; }
-.dns-filter-preview li code { display: block; overflow-wrap: anywhere; }
+.dns-filter-preview li code { display: block; }
+.dns-filter-page code, .dns-filter-check h3 { overflow-wrap: anywhere; }
+.dns-filter-check h3 { font-size: 15px; margin: 0 0 10px; }
 .dns-filter-preview > p, .dns-filter-preview > label { font-size: 13px; line-height: 1.6; margin: 0; overflow-wrap: anywhere; }
 .dns-filter-preview > button { justify-self: start; }
 .dns-filter-allow { margin: 10px 0 0; padding: 0; list-style: none; }
@@ -74,4 +80,8 @@
 @media (max-width: 700px) {
   .dns-filter-statusbar { gap: 8px 12px; }
   .dns-filter-page .blocked-query-summary:has([aria-expanded=true]) { padding-inline: 8px; }
+}
+@media (max-width: 360px) {
+  .dns-filter-new:not([hidden]) { grid-template-columns: minmax(0, 1fr); }
+  .dns-filter-new label:has(input[type=url]) { grid-row: auto; }
 }

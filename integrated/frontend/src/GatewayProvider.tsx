@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { gatewayConfig } from './gatewayApi';
 import type { GatewayConfig } from './gatewayApi';
+import type { GatewayConnectionTest } from './gatewayContext';
 import { GatewayContext } from './gatewayContext';
 import { errorText } from './suiteApi';
 import { useSuite } from './suiteContext';
 
 export default function GatewayProvider({ children }: { children: ReactNode }) {
   const { caps } = useSuite();
+  const [connectionTest, setConnectionTest] = useState<GatewayConnectionTest | null>(null);
   const [config, setConfig] = useState<GatewayConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -36,5 +38,5 @@ export default function GatewayProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', load);
     };
   }, [caps?.instance_id, reload]);
-  return <GatewayContext.Provider value={{ config, loading, error, reload }}>{children}</GatewayContext.Provider>;
+  return <GatewayContext.Provider value={{ config, loading, error, reload, connectionTest, setConnectionTest }}>{children}</GatewayContext.Provider>;
 }

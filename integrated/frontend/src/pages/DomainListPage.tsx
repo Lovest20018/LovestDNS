@@ -1,10 +1,11 @@
 import { parseListContent, serializeListContent } from '../domainEditor';
 import type { DomainEntry } from '../domainEditor';
 import EditorToolbar from '../components/EditorToolbar';
-import { useSuiteConfig } from '../suiteContext';
+import { useSuite, useSuiteConfig } from '../suiteContext';
 import { useUnsavedChanges } from '../unsaved';
+import { draftEpoch } from '../fileDrafts';
 import { useFileEditor } from '../useFileEditor';
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { LIST_FILE_INFO } from '../types';
 import { Plus, X, FileText, Download, Copy, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '../hooks';
@@ -52,19 +53,46 @@ function subscribeRoute(listener: () => void) {
   window.addEventListener('hashchange', listener);
   return () => window.removeEventListener('hashchange', listener);
 }
-function activeListKey() {
-  const file = new URLSearchParams(window.location.hash.split('?')[1]).get('file');
-  return ALL_LISTS.find(list => list.filename === file)?.key ?? 'force_dnscrypt_list';
-}
-export default function DomainListPage() {
-  const activeTab = useSyncExternalStore(subscribeRoute, activeListKey);
-  return <DomainFileEditor key={activeTab} activeTab={activeTab} />;
+const listPreferences = new Map<string, 'visual' | 'text'>();
+let preferenceScope = '';
+let lastList = 'force_dnscrypt_list';
+
+function clearDomainListPreferences() {
+  listPreferences.clear();
+  preferenceScope = '';
+  lastList = 'force_dnscrypt_list';
 }
 
-function DomainFileEditor({ activeTab }: { activeTab: string }) {
+const listHash = () => location.hash;
+
+export default function DomainListPage() {
+  const { caps } = useSuite();
+  const scope = `${draftEpoch()}:${caps?.instance_id}:${caps?.access_role}`;
+  const hash = useSyncExternalStore(subscribeRoute, listHash);
+  const file = new URLSearchParams(hash.split('?')[1]).get('file');
+  const explicitList = ALL_LISTS.find(list => list.filename === file);
+  const activeTab = explicitList?.key ?? (scope === preferenceScope ? lastList : 'force_dnscrypt_list');
+  useEffect(() => {
+    if (scope !== preferenceScope) {
+      clearDomainListPreferences();
+      preferenceScope = scope;
+    }
+    lastList = activeTab;
+    if (hash === '#/lists' && location.hash === hash) {
+      const filename = ALL_LISTS.find(list => list.key === activeTab)?.filename;
+      if (filename) {
+        history.replaceState(history.state, '', `#/lists?file=${encodeURIComponent(filename)}`);
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+      }
+    }
+  }, [activeTab, hash, scope]);
+  return <DomainFileEditor key={activeTab} activeTab={activeTab} scope={scope} />;
+}
+
+function DomainFileEditor({ activeTab, scope }: { activeTab: string; scope: string }) {
   const { error: connectionError } = useSuiteConfig();
   const { showToast, ToastComponent } = useToast();
-  const [editMode, setEditMode] = useState<'visual' | 'text'>('text');
+  const [editMode, setEditMode] = useState<'visual' | 'text'>(() => scope === preferenceScope ? listPreferences.get(activeTab) ?? 'text' : 'text');
   const activeList = ALL_LISTS.find((l) => l.key === activeTab)!;
   const editor = useFileEditor(activeList.filename, activeList.defaultContent);
   const { content: rawContent, setContent: setRawContent, busy: saving, result: saveResult } = editor;
@@ -80,7 +108,7 @@ function DomainFileEditor({ activeTab }: { activeTab: string }) {
   const getCurrentContent = () => rawContent;
   const hasUnsavedChanges = editor.dirty;
   useUnsavedChanges(hasUnsavedChanges);
-  const switchEditMode = (mode: 'visual' | 'text') => { if (!isTrackerList || mode === 'text') setEditMode(mode); };
+  const switchEditMode = (mode: 'visual' | 'text') => { if (!isTrackerList || mode === 'text') { listPreferences.set(activeTab, mode); setEditMode(mode); } };
 
   const updateEntry = (id: number, field: keyof DomainEntry, val: string | boolean) => {
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, [field]: val } : e)));
@@ -163,6 +191,7 @@ function DomainFileEditor({ activeTab }: { activeTab: string }) {
         {ALL_LISTS.map((list) => (
           <button
             key={list.key}
+            aria-pressed={activeTab === list.key}
             className={`tab-item ${activeTab === list.key ? 'active' : ''}`}
             onClick={() => { window.location.hash = `/lists?file=${encodeURIComponent(list.filename)}`; }}
           >
@@ -171,6 +200,12 @@ function DomainFileEditor({ activeTab }: { activeTab: string }) {
         ))}
       </div>
 
+      <div className="suite-local-links">
+        <a href="#/settings?tab=runtime&group=cn_routing">分流模式与上游</a>
+        {activeTab === 'force_forward_list' && <a href="#/settings?tab=runtime&group=custom_forward">自定义转发</a>}
+        {isTrackerList && <a href="#/settings?tab=runtime&group=cn_routing&setting=CN_TRACKER">Tracker 运行开关</a>}
+        <a href="#/ttl">编辑 TTL 规则</a>
+      </div>
       <EditorToolbar file={activeList.filename} dirty={hasUnsavedChanges} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} change={saveResult?.change} onSave={() => void editor.save()} />
       {editor.error && <p className="suite-editor-result is-error" role="alert">{editor.error}</p>}
 

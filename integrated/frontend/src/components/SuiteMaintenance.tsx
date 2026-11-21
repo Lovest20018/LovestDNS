@@ -100,6 +100,10 @@ export default function SuiteMaintenance({ caps, runtime, mode = 'system', confi
     return '';
   };
 
+  const highlighted = mode === 'system' ? tasks.filter(task => isActiveTask(task)
+    || (['failed', 'interrupted'].includes(task.state) && tasks.find(latest => latest.action === task.action) === task)) : [];
+  const history = mode === 'system' ? tasks.filter(task => !highlighted.includes(task)) : [];
+
   return <>
     {mode === 'config' && unsaved && <div className="suite-notice is-warning" role="status"><div>请先保存或还原以下草稿。<div className="suite-local-links">{draftNames.split(',').map(name => <a key={name} href={configFileLink(name)}>{configFileLabel(name)}</a>)}</div></div></div>}
     {blockedReason() && <p className="suite-note" role="status">{blockedReason()} <a href="#/system?tab=tasks">查看维护任务</a></p>}
@@ -156,8 +160,8 @@ export default function SuiteMaintenance({ caps, runtime, mode = 'system', confi
       {readError && <p role="status">暂时无法读取任务，正在重连。<a href="#/system?component=manager">查看管理日志</a></p>}
       {submission && <div className="suite-action-status" role="status">{feedback(submission.action)}</div>}
       {!tasks.length && !readError && <p className="suite-note">{loaded ? '暂无维护任务。' : '正在读取维护任务…'}</p>}
-      {(historyOpen ? tasks : tasks.slice(0, 1)).map(task => <div className="suite-task" key={task.id}><TaskResult task={task} historical={!!readError} /></div>)}
-      {tasks.length > 1 && <button className="btn btn-secondary btn-sm" aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>{historyOpen ? '收起历史任务' : `查看历史任务（${tasks.length - 1}）`}</button>}
+      {(historyOpen ? [...highlighted, ...history] : highlighted).map(task => <div className="suite-task" key={task.id}><TaskResult task={task} historical={!!readError} /></div>)}
+      {history.length > 0 && <button className="btn btn-secondary btn-sm" aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>{historyOpen ? '收起历史任务' : `查看历史任务（${history.length}）`}</button>}
     </div>}
   </>;
 }

@@ -37,7 +37,7 @@ try {
   send = (method, params = {}) => new Promise((resolve, reject) => { const next = ++id; const timer = setTimeout(() => { pending.delete(next); reject(new Error('Browser command timed out: ' + method)); }, 10000); pending.set(next, { resolve: value => { clearTimeout(timer); resolve(value); }, reject: error => { clearTimeout(timer); reject(error); } }); ws.send(JSON.stringify({ id: next, method, params })); });
   evaluate = async expression => { const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw Error(r.exceptionDetails.text); return r.result.value; };
   const wait = async expression => { for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await sleep(100); } throw Error('Timed out: ' + expression); };
-  const click = label => evaluate(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===${JSON.stringify(label)});if(!b)throw Error('Button missing');b.click();})()`);
+  const click = (label, within = '') => evaluate(`(()=>{const b=[...document.querySelectorAll(${JSON.stringify((within ? within + ' ' : '') + 'button')})].find(b=>b.getClientRects().length&&b.textContent.trim()===${JSON.stringify(label)});if(!b)throw Error('Button missing: '+${JSON.stringify(label)});b.click();})()`);
   const input = (selector, value) => evaluate(`(()=>{const n=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(n.tagName==='SELECT'?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(n,${JSON.stringify(value)});n.dispatchEvent(new Event(n.tagName==='SELECT'?'change':'input',{bubbles:true}));})()`);
   const control = async body => { const r = await fetch(base + '/fixture/query-control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); assert(r.ok); };
   const shot = async name => { await sleep(200); const r = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }); await fs.writeFile(path.join(out, name + '.png'), Buffer.from(r.data, 'base64')); };
@@ -53,6 +53,7 @@ try {
   await wait("document.body.textContent.includes('未开启查询记录')");
   assert(await evaluate("document.body.textContent.includes('暂无符合条件的记录')"));
   await shot('default-off');
+  await click('管理采集');
   await click('开启记录'); await wait("document.body.textContent.includes('后台记录已开启')");
   await click('刷新记录'); await wait("document.querySelectorAll('.query-record-table tbody tr').length===50");
   assert(await evaluate("document.querySelector('.query-record-table tbody tr').textContent.includes('129.synthetic-query')"));
@@ -61,12 +62,26 @@ try {
   await evaluate("document.documentElement.dataset.theme='light'");
   await click('查看较早记录'); await wait("document.querySelector('.query-record-table tbody tr')?.textContent.includes('79.synthetic-query')");
   await click('返回最近'); await wait("document.querySelector('.query-record-table tbody tr')?.textContent.includes('129.synthetic-query')");
-  await input('[aria-label="筛选来源 IP"]', '192.0.2.20'); await input('[aria-label="筛选查询类型"]', '1'); await click('筛选');
+  await input('[aria-label="筛选来源 IP"]', '192.0.2.20'); await input('[aria-label="筛选查询类型"]', '1'); await click('筛选', '.query-record-filters');
   await wait("document.querySelector('.query-record-table tbody tr')?.textContent.includes('128.synthetic-query')");
   assert(await evaluate("[...document.querySelectorAll('.query-record-table tbody tr')].every(r=>r.textContent.includes('192.0.2.20') && r.textContent.includes('UDP'))"));
   const filteredHash = await evaluate('location.hash');
   await evaluate("location.hash='#/'"); await wait("!!document.querySelector('.suite-home')");
   await wait("[...document.querySelectorAll('.query-analytics-bucket')].some(node=>Number(node.firstElementChild.dataset.count)>0)");
+  await input('[aria-label="统计时间范围"]', '24');
+  await wait("document.querySelectorAll('.query-analytics-bucket').length===24");
+  const overviewHref = await evaluate("document.querySelector('.analytics-log-link').hash");
+  const overviewRange = new URLSearchParams(overviewHref.split('?')[1]);
+  assert.equal(Number(overviewRange.get('end')) - Number(overviewRange.get('start')), 86400);
+  await evaluate("document.querySelector('.analytics-log-link').click()");
+  await wait("!!document.querySelector('.query-record-table tbody tr')");
+  await evaluate('history.back()');
+  await wait("document.activeElement?.classList.contains('analytics-log-link')");
+  assert.equal(await evaluate("document.querySelector('[aria-label=统计时间范围]').value"), '24');
+  assert.equal(await evaluate("document.querySelector('.analytics-log-link').hash"), overviewHref);
+  await shot('analytics-24h-restored');
+  await input('[aria-label="统计时间范围"]', '1');
+  await wait("document.querySelectorAll('.query-analytics-bucket').length===12");
   await evaluate("document.querySelector('.query-analytics-actions').scrollIntoView({block:'start'})");
   await shot('analytics-desktop');
   await wait("!!document.querySelector('.blocked-queries .query-record-expand')");
@@ -95,8 +110,47 @@ try {
   await shot('filter-records-desktop');
   await evaluate("document.querySelector('.dns-filter-page .blocked-queries .query-record-expand').click()");
   await wait("document.querySelector('.dns-filter-page .query-record-detail')?.textContent.includes('精确放行 10 分钟')");
+  await click('全部拦截记录');
+  await wait("document.querySelectorAll('.dns-filter-page .blocked-query-summary').length===25");
+  await click('下一页');
+  await wait("document.querySelector('.dns-filter-page .blocked-query-pages')?.textContent.includes('第 2 页') && !!document.querySelector('.dns-filter-page .blocked-query-summary button')");
+  await evaluate("document.querySelector('.dns-filter-page .blocked-query-summary button').click()");
+  const blockedId = await evaluate("document.querySelector('.dns-filter-page .blocked-query-summary button[aria-expanded=true]').dataset.queryFocus");
+  assert.equal(blockedId, 'block:synthetic-browser:28');
+  await click('添加备注');
+  await input('.dns-filter-page .source-device-editor input', '客厅电视');
+  await click('保存备注');
+  await wait("document.querySelector('.dns-filter-page .query-detail-device')?.textContent.includes('客厅电视')");
+  await evaluate("[...document.querySelectorAll('.dns-filter-page .query-record-detail a')].find(a=>a.textContent==='检查当前规则').click()");
+  await wait("location.hash.includes('check=32.synthetic-query.example.test.') && document.body.textContent.includes('当前规则判定 · 拦截')");
+  await evaluate('history.back()');
+  await wait(`document.activeElement?.dataset.queryFocus===${JSON.stringify(blockedId)} && document.querySelector('.blocked-query-pages')?.textContent.includes('第 2 页')`);
+  await evaluate("document.querySelector('.dns-filter-page .query-record-query').click()");
+  await wait("location.hash.includes('tab=query') && !!document.querySelector('[aria-label=查询域名]')");
+  await evaluate('history.back()');
+  await wait(`document.activeElement?.dataset.queryFocus===${JSON.stringify(blockedId)} && document.querySelector('.blocked-query-pages')?.textContent.includes('第 2 页')`);
+  assert(await evaluate("document.querySelector('.dns-filter-page .query-record-detail')?.textContent.includes('客厅电视')"));
+  await shot('filter-records-page-two-restored');
   await evaluate("location.hash='#/'");
   await wait("!!document.querySelector('.query-analytics-bucket')");
+  await wait("[...document.querySelectorAll('.query-analytics-ranking .analytics-rank-link')].filter(a=>a.hash.includes('source=192.0.2.20')&&a.textContent.includes('客厅电视')).length===2");
+  await evaluate("location.hash='#/settings?tab=devices'");
+  await wait("document.querySelector('.source-device-list li')?.textContent.includes('客厅电视')");
+  await input('.source-device-search input', '无匹配设备');
+  await wait("!document.querySelector('.source-device-list li')");
+  await input('.source-device-search input', '192.0.2.20');
+  await wait("document.querySelectorAll('.source-device-list li').length===1");
+  await click('编辑备注', '.source-device-list');
+  await input('.source-device-list .source-device-editor input', '电视');
+  await click('保存备注', '.source-device-list');
+  await wait("document.querySelector('.source-device-list li .source-address').textContent==='电视 · 192.0.2.20'");
+  await click('编辑备注', '.source-device-list');
+  await click('清除备注', '.source-device-list');
+  await wait("!document.querySelector('.source-device-list li')");
+  await evaluate("history.back()");
+  await wait("!!document.querySelector('.query-analytics-bucket')");
+  assert(await evaluate("!document.querySelector('.query-analytics-ranks').textContent.includes('电视')"));
+  assert(await evaluate("document.querySelector('[data-query-focus=total]').textContent==='130'"));
   await shot('home-overview-desktop');
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 1000, deviceScaleFactor: 1, mobile: false });
   await evaluate("document.querySelector('.query-analytics-actions').closest('section').scrollIntoView({block:'start'}); window.scrollBy(0,-90)");
@@ -123,15 +177,15 @@ try {
   await wait("document.querySelector('[aria-label=\"筛选来源 IP\"]')?.value==='192.0.2.20' && document.querySelectorAll('.query-record-table tbody tr').length===50");
   assert.equal(await evaluate('location.hash'), filteredHash);
   await evaluate("document.querySelector('.query-record-table tbody .query-record-expand').click()");
-  await evaluate("document.querySelector('.query-record-desktop .query-record-detail a').click()");
+  await evaluate("document.querySelector('.query-record-desktop .query-record-detail .query-record-query').click()");
   await wait("document.querySelector('[aria-label=\"查询域名\"]')?.value==='128.synthetic-query.example.test.'");
   assert.equal(await evaluate("document.querySelector('[aria-label=\"查询记录类型\"]').value"), 'A');
   assert(await evaluate("document.querySelector('[aria-label=\"查询域名\"]').getBoundingClientRect().bottom<innerHeight"));
   await evaluate("[...document.querySelectorAll('.suite-diagnostic-tabs a')].find(a=>a.textContent==='查询记录').click()");
   await wait("document.querySelector('[aria-label=\"筛选来源 IP\"]')?.value==='192.0.2.20' && document.querySelectorAll('.query-record-table tbody tr').length===50");
-  await input('[aria-label="筛选查询域名"]', '%'); await click('筛选'); await wait("!document.querySelector('.query-record-table')");
-  await wait("[...document.querySelectorAll('button')].find(b=>b.textContent==='清除筛选')?.disabled===false");
-  await click('清除筛选');
+  await input('[aria-label="筛选查询域名"]', '%'); await click('筛选', '.query-record-filters'); await wait("!document.querySelector('.query-record-table')");
+  await wait("[...document.querySelectorAll('.query-record-filters button')].find(b=>b.textContent==='清除筛选')?.disabled===false");
+  await click('清除筛选', '.query-record-filters');
   await wait("document.querySelectorAll('.query-record-table tbody tr').length===50");
   await control({ unavailable: true }); await click('刷新记录'); await wait("document.body.textContent.includes('合成采集服务不可用')");
   assert.equal(await evaluate("document.querySelectorAll('.query-record-table tbody tr').length"), 50);
@@ -144,6 +198,10 @@ try {
     await sleep(200);
     assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'), 'page overflow at ' + width);
     assert(await evaluate("getComputedStyle(document.querySelector('.query-record-desktop')).display==='none' && getComputedStyle(document.querySelector('.query-record-cards')).display!=='none'"), 'mobile uses readable record cards');
+    assert(await evaluate("getComputedStyle(document.querySelector('.query-record-filters')).display==='none'"), 'mobile filters start collapsed');
+    await evaluate("document.querySelector('.query-filter-mobile button').click()");
+    assert(await evaluate("document.querySelector('.query-filter-mobile button').getAttribute('aria-expanded')==='true' && getComputedStyle(document.querySelector('.query-record-filters')).display!=='none'"));
+    await evaluate("document.querySelector('.query-filter-mobile button').click()");
     assert(await evaluate("(()=>{const card=document.querySelector('.query-record-card');return [...card.querySelectorAll('code,strong,dt,dd')].every(n=>{const r=n.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1;});})()"), 'source, domain, response and elapsed time fit without sideways scrolling');
     await shot('recent-mobile-' + width);
     await evaluate("document.documentElement.dataset.theme='dark'"); await shot('recent-mobile-' + width + '-dark');
@@ -153,6 +211,7 @@ try {
     await shot('recent-mobile-' + width + '-response');
     await evaluate("document.querySelector('.query-record-card .query-record-expand').click()");
   }
+  await click('管理采集');
   await click('关闭记录'); await wait("document.body.textContent.includes('未开启查询记录')");
   assert.equal(await evaluate("document.querySelectorAll('.query-record-table tbody tr').length"), 50);
   await click('清空记录'); await click('取消');
@@ -166,21 +225,141 @@ try {
   await input('.dns-filter-domain-tool input', '128.synthetic-query.example.test');
   await click('按当前规则测试');
   await wait("document.body.textContent.includes('当前规则判定 · 拦截')");
+  await evaluate("location.hash='#/filter?tab=records&check=128.synthetic-query.example.test.'");
+  await wait("document.activeElement?.textContent==='检查 128.synthetic-query.example.test. 的当前规则' && document.body.textContent.includes('当前规则判定 · 拦截')");
   await evaluate("document.querySelector('a[href=\"#/filter?tab=allow\"]').click()");
   await wait("document.querySelector('.dns-filter-allow')?.textContent.includes('128.synthetic-query.example.test')");
   await evaluate("document.querySelector('a[href=\"#/filter?tab=rules\"]').click()");
   await wait("document.querySelector('.dns-filter-new')?.offsetWidth>0");
-  await input('.dns-filter-new input[type="url"]', 'https://example.test/rules');
+  await input('.dns-filter-new input[type="url"]', 'https://example.test/rules?access=fixture-secret');
   await input('.dns-filter-new input:not([type="url"])', '合成订阅兼容测试');
+  await input('.dns-filter-new select[aria-label="刷新周期"], .dns-filter-new label:has(option[value="604800"]) select', '604800');
+  await evaluate("location.hash='#/system'");
+  await wait("!document.querySelector('.dns-filter-page')");
+  await evaluate('history.back()');
+  await wait("document.querySelector('.dns-filter-new input[type=url]')?.value==='https://example.test/rules?access=fixture-secret'");
+  assert.equal(await evaluate("document.querySelector('.dns-filter-new input:not([type=url])').value"), '合成订阅兼容测试');
+  assert.equal(await evaluate("document.querySelector('.dns-filter-new label:has(option[value=\"604800\"]) select').value"), '604800');
+  assert(await evaluate("![location.href, JSON.stringify(localStorage), JSON.stringify(sessionStorage)].some(value=>value.includes('fixture-secret'))"));
+  await control({ filter_delay: true });
   await click('获取预览');
+  await wait("document.body.textContent.includes('正在处理过滤任务')");
+  await evaluate("location.hash='#/system'");
+  await wait("!document.querySelector('.dns-filter-page')");
+  await sleep(2400);
+  await evaluate('history.back()');
   await wait("document.body.textContent.includes('有效 1 · 重复 0')");
+  assert.equal(await evaluate("document.querySelector('.dns-filter-new input[type=url]').value"), '');
+  await control({ filter_delay: false });
   assert(await evaluate("[...document.querySelectorAll('button')].find(b=>b.textContent==='应用订阅').disabled"));
   await evaluate("document.querySelector('.dns-filter-preview input[type=checkbox]').click()");
   await shot('filter-subscription-preview');
   await click('应用订阅');
   await wait("document.querySelector('.dns-filter-subscription')?.textContent.includes('合成订阅兼容测试')");
+  await evaluate("location.hash='#/filter?tab=allow'");
+  await wait("!!document.querySelector('.dns-filter-allow')");
+  const manualDomain = 'unseen.' + 'a'.repeat(60) + '.example.test';
+  await input('input[placeholder="example.test"]', manualDomain);
+  await control({ filter_failure: true });
+  await click('添加放行');
+  await wait("document.body.textContent.includes('合成过滤任务失败')");
+  assert.equal(await evaluate("document.querySelector('input[placeholder=\"example.test\"]').value"), manualDomain);
+  await control({ filter_failure: false });
+  await click('添加放行');
+  await wait(`document.querySelector('.dns-filter-allow')?.textContent.includes(${JSON.stringify(manualDomain)})`);
+  await wait("document.querySelector('input[placeholder=\"example.test\"]').value===''");
+  await control({ filter_uncertain: true, filter_delay: true });
+  await input('input[placeholder="example.test"]', 'uncertain.example.test');
+  await click('添加放行');
+  await wait("document.body.textContent.includes('提交结果待核对')");
+  assert(await evaluate("[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='添加放行').disabled"));
+  await wait("document.querySelector('.dns-filter-allow')?.textContent.includes('uncertain.example.test')");
+  assert(await evaluate("document.querySelector('.dns-filter-jobs').open"));
+  assert(await evaluate("[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='添加放行').disabled"));
+  await click('已核对最近任务，恢复操作');
+  await wait("!document.body.textContent.includes('提交结果待核对')");
+  await control({ filter_uncertain: false, filter_delay: false });
+  await click('添加白名单订阅');
+  assert.equal(await evaluate("document.querySelector('.dns-filter-new select').value"), 'allow');
+  await input('.dns-filter-new input[type="url"]', 'https://example.test/allow');
+  await input('.dns-filter-new input:not([type="url"])', '白名单订阅合成夹具');
+  await click('获取预览');
+  await wait("document.body.textContent.includes('精确域名 1 · 域名及子域 2')");
+  await shot('filter-allow-desktop');
+  for (const width of [390, 320]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false });
+    await evaluate("document.querySelector('.dns-filter-allow').scrollIntoView({block:'center'})");
+    assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'), 'allow list overflows at ' + width);
+    await shot('filter-allow-mobile-' + width);
+  }
+  await evaluate("location.hash='#/'");
+  await wait("!!document.querySelector('a[href*=\"preview=\"]')");
+  const previewLink = await evaluate("document.querySelector('a[href*=\"preview=\"]').getAttribute('href')");
+  assert.match(previewLink, /^#\/filter\?tab=rules&preview=[a-f0-9]{32}$/);
+  for (const width of [390, 320]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false });
+    await evaluate(`location.hash=${JSON.stringify(previewLink)}`);
+    await wait("document.activeElement?.textContent==='白名单订阅合成夹具'");
+    assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'), 'subscription preview overflows at ' + width);
+    await shot('filter-preview-mobile-' + width);
+    await evaluate("document.documentElement.dataset.theme='dark'"); await shot('filter-preview-mobile-' + width + '-dark');
+    await evaluate("document.documentElement.dataset.theme='light';location.hash='#/'");
+    await wait("!!document.querySelector('.suite-home')");
+  }
+  await evaluate(`location.hash=${JSON.stringify(previewLink)}`);
+  await wait("document.activeElement?.textContent==='白名单订阅合成夹具'");
+  await evaluate("document.querySelector('.dns-filter-preview input[type=checkbox]').click()");
+  await click('应用订阅');
+  await wait("document.querySelector('.dns-filter-subscription:nth-of-type(n)') && [...document.querySelectorAll('.dns-filter-subscription')].some(row=>row.textContent.includes('白名单订阅合成夹具'))");
+  await send('Emulation.setDeviceMetricsOverride', { width: 1360, height: 1050, deviceScaleFactor: 1, mobile: false });
+  await control({ seed_records: true });
+  await evaluate("location.hash='#/'");
+  await wait(`!!document.querySelector('.query-analytics-ranking a[href*="source=192.0.2.20"]')`);
+  await evaluate(`document.querySelector('.query-analytics-ranking a[href*="source=192.0.2.20"]').click()`);
+  await wait("location.hash.includes('snapshot=') && !!document.querySelector('.query-record-table tbody .query-record-expand')");
+  await evaluate("document.querySelector('.query-record-table tbody .query-record-expand').click()");
+  await evaluate("document.querySelector('.query-record-desktop .query-record-query').click()");
+  await wait("location.hash.includes('tab=query')");
+  await control({ clear_records: true, seed_records: true });
+  await evaluate('history.back()');
+  await wait("document.activeElement?.dataset.queryFocus==='records-recent'");
+  await shot('query-cleared-history');
+  await click('返回最近记录');
+  await wait("location.hash.includes('source=192.0.2.20') && !/[?&](start|end|snapshot|before)=/.test(location.hash) && !!document.querySelector('.query-record-table tbody tr')");
+  assert.equal(await evaluate("document.activeElement?.getAttribute('aria-label')"), '查询结果');
+  await evaluate("location.hash='#/filter?tab=records'");
+  await wait("!!document.querySelector('.dns-filter-page .blocked-query-summary button')");
+  await click('全部拦截记录');
+  await wait("document.querySelectorAll('.dns-filter-page .blocked-query-summary').length===25");
+  await click('下一页');
+  await wait("document.querySelector('.blocked-query-pages')?.textContent.includes('第 2 页') && !!document.querySelector('.dns-filter-page .blocked-query-summary button')");
+  await evaluate("document.querySelector('.dns-filter-page .blocked-query-summary button').click()");
+  await evaluate("document.querySelector('.dns-filter-page .query-record-query').click()");
+  await wait("location.hash.includes('tab=query')");
+  await control({ clear_records: true, seed_records: true });
+  await evaluate('history.back()');
+  await wait("document.activeElement?.dataset.queryFocus==='blocks-recent' && document.querySelector('.blocked-query-pages')?.textContent.includes('第 2 页')");
+  await shot('filter-cleared-history');
+  await click('返回最近拦截');
+  await wait("!document.querySelector('.blocked-query-pages') && document.querySelectorAll('.dns-filter-page .blocked-query-summary').length===5");
+  assert.equal(await evaluate("document.activeElement?.textContent"), '全部拦截记录');
   assert.deepEqual(errors, []);
-  await fs.writeFile(path.join(out, 'result.json'), JSON.stringify({ passed: true, fixture: 'synthetic loopback browser fixture; no live DNS capture', widths: [1360, 390, 320], checks: ['default_off', 'explicit_enable_disable', '50_row_cursor_pagination', 'source_type_literal_domain_filters', 'filter_navigation_and_reload', 'analytics_bucket_source_and_snapshot', 'filter_rule_evidence_and_allow', 'record_to_active_query', 'unavailable_retains_previous_results', 'malformed_response_rejected', 'clear_confirmation_cancel_and_apply', 'light_dark_mobile_cards', 'filter_primary_navigation','home_and_filter_record_details','filter_tabs', 'current_rule_check_and_partial_subscription_import', 'no_runtime_exceptions'] }, null, 2));
+  await fs.writeFile(path.join(out, 'result.json'), JSON.stringify({
+    passed: true,
+    fixture: 'synthetic loopback browser fixture; no live DNS capture',
+    widths: [1360, 390, 320],
+    checks: [
+      'default_off', 'explicit_enable_disable', '50_row_cursor_pagination', 'source_type_literal_domain_filters',
+      'filter_navigation_and_reload', 'analytics_bucket_source_and_snapshot', 'analytics_24h_back_snapshot_and_focus',
+      'blocked_page_two_repeated_domain_event_id_and_focus', 'source_device_detail_rankings_search_edit_and_clear',
+      'cleared_query_and_block_events_recover_live_results_and_focus',
+      'filter_rule_evidence_and_allow', 'record_to_active_query', 'unavailable_retains_previous_results',
+      'malformed_response_rejected', 'clear_confirmation_cancel_and_apply', 'light_dark_mobile_cards_and_filter_panel',
+      'filter_primary_navigation', 'home_and_filter_record_details', 'filter_tabs',
+      'current_rule_check_and_partial_subscription_import', 'subscription_draft_and_task_resume',
+      'manual_allow_failure_and_unconfirmed_submit', 'allow_subscription_scopes_and_preview_focus', 'no_runtime_exceptions',
+    ],
+  }, null, 2));
   console.log('PASS: query recorder UI, filters, pagination, errors, clear, 1360/390/320 layouts. Output: ' + out);
 } catch (error) {
   await fs.writeFile(path.join(out, 'failure.json'), JSON.stringify({ error: String(error), stack: error.stack, fixture: fixtureError.slice(-2500), chrome: chromeError }, null, 2));

@@ -160,6 +160,7 @@ def lookup(domain, *args, **kwargs):
 
 
 server.base._dns_lookup = lookup
-httpd = fixture['make_server']('127.0.0.1', 0, server.app, threaded=True)
-print(json.dumps({'port': httpd.server_port}), flush=True)
-httpd.serve_forever()
+if __name__ == '__main__':
+    httpd = fixture['make_server']('127.0.0.1', 0, server.app, threaded=True)
+    print(json.dumps({'port': httpd.server_port}), flush=True)
+    httpd.serve_forever()

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { filterState } from './filterApi';
-import type { FilterState } from './filterApi';
+import { filterState, readFilterTask, submitFilter } from './filterApi';
+import type { FilterAction, FilterState } from './filterApi';
 import { FilterContext } from './filterContext';
-import type { FilterDraft } from './filterContext';
+import type { FilterDraft, FilterTask, SubscriptionDraft } from './filterContext';
 import { useUnsavedChanges } from './unsaved';
-import { errorText } from './suiteApi';
+import { ApiError, errorText } from './suiteApi';
 import { useSuite } from './suiteContext';
 
 export function FilterProvider({ children }: { children: ReactNode }) {
@@ -13,9 +13,13 @@ export function FilterProvider({ children }: { children: ReactNode }) {
   const allowed = !!(caps?.features.dns_filter && caps.permissions.configure);
   const [state, setState] = useState<FilterState | null>(null);
   const [draft, setDraft] = useState<FilterDraft | null>(null);
-  useUnsavedChanges(draft !== null);
+  const [subscriptionDraft, setSubscriptionDraft] = useState<SubscriptionDraft | null>(null);
+  const [task, setTask] = useState<FilterTask | null>(null);
+  useUnsavedChanges(draft !== null || !!(subscriptionDraft?.name || subscriptionDraft?.url));
   const [error, setError] = useState('');
   const request = useRef<AbortController | null>(null);
+  const operation = useRef<AbortController | null>(null);
+  useEffect(() => () => operation.current?.abort(), []);
   const publish = useCallback((value: FilterState) => {
     request.current?.abort();
     setState(value);
@@ -35,6 +39,39 @@ export function FilterProvider({ children }: { children: ReactNode }) {
       if (request.current === controller) request.current = null;
     }
   }, [allowed]);
+  const apply = async (action: FilterAction) => {
+    if (!allowed || !state?.available) throw new Error('当前入口未提供 DNS 过滤');
+    if (task?.phase === 'uncertain') throw new Error('请先到广告过滤核对上一次任务');
+    if (operation.current) throw new Error('已有过滤任务正在执行');
+    const controller = new AbortController();
+    operation.current = controller;
+    setTask({ phase: 'pending', message: '正在提交过滤任务' });
+    let id: string | undefined;
+    try {
+      ({ id } = await submitFilter(action, state.revision, controller.signal));
+      setTask({ id, phase: 'pending', message: '正在处理过滤任务' });
+      const result = await readFilterTask(id, controller.signal, publish);
+      setTask(result.job);
+      if (result.job.phase === 'succeeded') {
+        if (action.action === 'configure') setDraft(null);
+        if (action.action === 'preview') setSubscriptionDraft(null);
+      }
+      return result;
+    } catch (e) {
+      if (!controller.signal.aborted) {
+        const rejected = !id && e instanceof ApiError && e.status >= 400 && e.status < 500;
+        setTask(rejected ? { phase: 'failed', message: errorText(e) } : {
+          id, phase: 'uncertain',
+          message: id ? '任务记录已不可用，请核对服务端任务列表和活动版本。' :
+            '提交结果待核对，请检查服务端最近任务和活动版本后再决定是否重试。',
+        });
+        await refresh();
+      }
+      throw e;
+    } finally {
+      if (operation.current === controller) operation.current = null;
+    }
+  };
   useEffect(() => {
     const first = window.setTimeout(() => void refresh(), 0);
     const timer = allowed && !paused ? window.setInterval(() => {
@@ -42,5 +79,17 @@ export function FilterProvider({ children }: { children: ReactNode }) {
     }, 30000) : undefined;
     return () => { window.clearTimeout(first); window.clearInterval(timer); request.current?.abort(); };
   }, [allowed, paused, refresh]);
-  return <FilterContext.Provider value={{ state: allowed ? state : null, error, refresh, publish, draft, setDraft }}>{children}</FilterContext.Provider>;
+  const serviceBusy = !!state?.jobs.some(job => job.phase === 'pending');
+  useEffect(() => {
+    if (!allowed || !serviceBusy || task?.phase === 'pending') return;
+    const timer = window.setInterval(() => {
+      if (!request.current && !operation.current) void refresh();
+    }, 1250);
+    return () => window.clearInterval(timer);
+  }, [allowed, refresh, serviceBusy, task?.phase]);
+  const acknowledgeTask = () => {
+    if (task?.phase === 'uncertain' && !error && !operation.current && state && !serviceBusy) setTask(null);
+  };
+  return <FilterContext.Provider value={{ state: allowed ? state : null, error, refresh, publish, draft, setDraft,
+    subscriptionDraft, setSubscriptionDraft, task, acknowledgeTask, apply }}>{children}</FilterContext.Provider>;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Download, HeartPulse, Plus, Search, Upload, X } from 'lucide-react';
 import { suiteFetch, errorText, downloadJson } from '../suiteApi';
 import type { SuiteDnsResult, SuiteReport } from '../suiteApi';
@@ -7,6 +7,7 @@ import { useSuite } from '../suiteContext';
 import { useGateway } from '../gatewayContext';
 import { Notice, Section } from '../components/SuiteUI';
 import { diagnosticTargets, dnsAddress, entryListeners } from '../dnsListeners';
+import SuiteGateway from './SuiteGateway';
 import RecentQueries from '../components/RecentQueries';
 import { diagnosticHash } from '../diagnosticRoute';
 import type { DiagnosticTab } from '../diagnosticRoute';
@@ -14,10 +15,17 @@ import { useDiagnosticRoute } from '../useDiagnosticRoute';
 import './SuitePage.css';
 import './HomeWorkflow.css';
 
+const subscribeHash = (listener: () => void) => {
+  window.addEventListener('hashchange', listener);
+  return () => window.removeEventListener('hashchange', listener);
+};
+const gatewayTab = () => new URLSearchParams(location.hash.split('?')[1]).get('tab') === 'gateway' || location.hash.split('?')[0] === '#/gateway';
+
 type Target = { label: string; server: string; port: string; transport: 'udp' | 'tcp' };
 export default function SuiteDiagnostics() {
   const { caps, runtime, paused, runtimeStale } = useSuite();
   const { config: gateway } = useGateway();
+  const observing = useSyncExternalStore(subscribeHash, gatewayTab);
   const canRecord = caps?.features.query_recording === true && caps.permissions.configure;
   const { route, navigate } = useDiagnosticRoute(caps?.instance_id ?? '', canRecord);
   const mode = route.tab === 'compare' ? 'compare' : 'query';
@@ -43,8 +51,7 @@ export default function SuiteDiagnostics() {
   const defaultName = `device-${probeId}.example.com`;
   const recordsFor = (name: string) => '#/diagnostics?tab=records&exact=' + encodeURIComponent(name);
   const presets = diagnosticTargets(caps, paused || runtimeStale ? null : runtime);
-  const tabs: DiagnosticTab[] = ['query', 'compare'];
-  if (canRecord) tabs.push('records');
+  const tabs: DiagnosticTab[] = canRecord ? ['records', 'query', 'compare'] : ['query', 'compare'];
 
   const run = async () => {
     if (!caps || busy) return;
@@ -73,10 +80,10 @@ export default function SuiteDiagnostics() {
   };
   return <div className="suite-page">
     <nav className="suite-page-tabs suite-diagnostic-tabs" aria-label="查询与诊断分区">
-      {tabs.map(tab => <a key={tab} aria-current={route.tab === tab ? 'page' : undefined} aria-disabled={busy} href={diagnosticHash({ ...route, tab })} onClick={event => { if (busy) event.preventDefault(); }}>{({ records: '查询记录', query: '主动查询', compare: '链路对照' })[tab]}</a>)}
-      {gateway?.enabled && <a href="#/diagnostics?tab=gateway">网关观测</a>}
+      {tabs.map(tab => <a key={tab} aria-current={!observing && route.tab === tab ? 'page' : undefined} aria-disabled={busy} href={diagnosticHash({ ...route, tab })} onClick={event => { if (busy) event.preventDefault(); }}>{({ records: '查询记录', query: '主动查询', compare: '链路对照' })[tab]}</a>)}
+      {(gateway?.enabled || observing) && <a href="#/diagnostics?tab=gateway" aria-current={observing ? 'page' : undefined}>网关观测</a>}
     </nav>
-    {route.tab === 'records' ? <RecentQueries route={route} navigate={navigate} /> : <>
+    {observing ? <SuiteGateway /> : route.tab === 'records' ? <RecentQueries route={route} navigate={navigate} /> : <>
     <Section title={mode === 'query' ? '主动查询' : '链路对照'} subtitle="查询从当前 DNS 实例发起；链路可用性取决于运行模式" icon={HeartPulse}
       actions={<div className="suite-button-row"><button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => input.current?.click()}><Upload size={14} />导入报告</button><button className="btn btn-secondary btn-sm" disabled={!report || busy} onClick={() => report && downloadJson(report, `paopaodns-dns-${new Date(report.started_utc).getTime()}.json`)}><Download size={14} />导出报告</button><input ref={input} hidden aria-label="导入 DNS 报告" type="file" accept="application/json,.json" onChange={(e) => { const file = e.target.files?.[0]; if (file) void importReport(file); e.target.value = ''; }} /></div>}>
       <form onSubmit={(e) => { e.preventDefault(); void run(); }}>
@@ -103,7 +110,7 @@ export default function SuiteDiagnostics() {
     </Section>
     <details className="suite-editor-help"><summary>统计与标记说明</summary><p className="suite-note">主动查询耗时不代表持续服务统计。链路对照不清空缓存；ADDINFO 可能来自生成缓存时的历史查询，未返回标记时不推测路径。RCODE 以报文为准。</p></details>
     </>}
-    <div className="suite-local-links"><a className="btn btn-secondary btn-sm" href="#/status">查看服务状态</a><a className="btn btn-secondary btn-sm" href="#/system">维护与日志</a></div>
+    <div className="suite-local-links"><a className="btn btn-secondary btn-sm" href="#/status">查看服务状态</a>{caps?.permissions.maintain && <a className="btn btn-secondary btn-sm" href="#/system?tab=logs">组件日志</a>}</div>
   </div>;
 }
 

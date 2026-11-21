@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw, Save, Settings2 } from 'lucide-react';
 import { useFileEditor } from '../useFileEditor';
 import { ENV_VARS, GROUP_LABELS } from '../types';
@@ -13,6 +13,23 @@ export default function EnvConfigPage() {
   const { caps, runningEnv, statusError, error: connectionError } = useSuiteConfig();
   const running = runningEnv ?? {};
   const [search, setSearch] = useState('');
+  useEffect(() => {
+    const sync = () => {
+      const params = new URLSearchParams(location.hash.split('?')[1]);
+      const group = params.get('group');
+      if (!group || !(group in GROUP_LABELS)) return;
+      setSearch('');
+      const setting = params.get('setting');
+      requestAnimationFrame(() => {
+        const target = (setting ? document.getElementById(`setting-${setting}`) : null) ?? document.getElementById(`settings-${group}`);
+        target?.focus({ preventScroll: true });
+        target?.scrollIntoView({ block: 'start' });
+      });
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, []);
   const editor = useFileEditor('custom_env.ini');
   const { content, setContent: editContent, loaded, busy, dirty } = editor;
   const saved = editor.baseline ?? '';
@@ -37,10 +54,11 @@ export default function EnvConfigPage() {
     } catch (e) { setError(errorText(e)); }
   };
   return <div className="suite-page">
-    <Notice>启用“覆盖”时使用此处设置，关闭后使用服务启动设置。高级配置共用此处的草稿。<a href="#/advanced?file=custom_env.ini">编辑源文件</a></Notice>
+    <Notice>启用“覆盖”时使用此处设置，关闭后使用服务启动设置。高级配置文件共用此处的草稿。<a href="#/advanced?file=custom_env.ini">编辑源文件</a></Notice>
     {caps?.features.dns_filter && (values.CNAUTO ?? running.CNAUTO) === 'no'
       && <Notice tone="warning">纯递归模式生效后会停用 DNS 过滤。订阅与规则可在恢复 MosDNS 分流时继续使用。</Notice>}
     <div className="suite-editor-toolbar suite-editor-toolbar-feedback"><span>{dirty ? '有未保存修改' : loaded ? '配置已读取' : '等待读取配置'}</span><div><button className="btn btn-secondary" aria-label="重新读取配置" title="重新读取配置" disabled={busy} onClick={() => void load()}><RefreshCw size={15} />重新读取</button><button className="btn btn-primary" disabled={busy || !loaded || !dirty || !!connectionError} onClick={() => void save()}><Save size={15} />{busy ? '处理中…' : '保存配置'}</button></div>
+      {caps?.permissions.maintain && <a href="#/system?tab=history&file=custom_env.ini">查看此文件历史</a>}
       <ConfigNextStep message={error || editor.result?.msg} failed={!!error || editor.result?.success === false} />
     </div>
     {editor.error && <Notice tone="error">{editor.error}</Notice>}
@@ -48,7 +66,7 @@ export default function EnvConfigPage() {
     <div className="suite-settings-find"><label htmlFor="settings-search">查找设置<input id="settings-search" className="form-input" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索名称、变量或说明" /></label>{search && <button className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>清除搜索</button>}<nav aria-label="设置分组">{Object.entries(GROUP_LABELS).map(([group, info]) => <a key={group} href={`#settings-${group}`} onClick={(e) => { e.preventDefault(); setSearch(''); setTimeout(() => document.getElementById(`settings-${group}`)?.scrollIntoView({ behavior: 'smooth' }), 0); }}>{info.label}</a>)}</nav></div>
     {statusError && <Notice tone="warning">运行值读取失败，当前不展示旧值：{statusError}</Notice>}
     {!variables.some((v) => `${v.label} ${v.key} ${v.description}`.toLowerCase().includes(search.trim().toLowerCase())) && <Notice>没有匹配设置。<button className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>显示全部设置</button></Notice>}
-    {Object.entries(GROUP_LABELS).filter(([group]) => variables.some((v) => v.group === group && `${v.label} ${v.key} ${v.description}`.toLowerCase().includes(search.trim().toLowerCase()))).map(([group, info]) => <div id={`settings-${group}`} key={group} className="suite-settings-group"><Section title={info.label} icon={Settings2}>
+    {Object.entries(GROUP_LABELS).filter(([group]) => variables.some((v) => v.group === group && `${v.label} ${v.key} ${v.description}`.toLowerCase().includes(search.trim().toLowerCase()))).map(([group, info]) => <div id={`settings-${group}`} tabIndex={-1} key={group} className="suite-settings-group"><Section title={info.label} icon={Settings2}>
       <div className="suite-settings-grid">{variables.filter((v) => v.group === group && `${v.label} ${v.key} ${v.description}`.toLowerCase().includes(search.trim().toLowerCase())).map((v) => {
         const enabled = Object.hasOwn(values, v.key);
         const runtime = running[v.key];
@@ -67,6 +85,6 @@ export default function EnvConfigPage() {
         </div>;
       })}</div>
     </Section></div>)}
-    <Notice>DNS 监听地址和端口、Web 端口、目录与资源限制由主机服务配置管理。{native ? '修改这些参数后使用实例控制命令重启服务。' : '修改后通过主机重新创建容器。'} <a href="#/deploy">查看服务信息</a></Notice>
+    <Notice>DNS 监听地址和端口、Web 端口、目录与资源限制由主机服务配置管理。{native ? '修改这些参数后使用实例控制命令重启服务。' : '修改后通过主机重新创建容器。'} <a href="#/settings?tab=service&section=commands">查看主机命令</a></Notice>
   </div>;
 }

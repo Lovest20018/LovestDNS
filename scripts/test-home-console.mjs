@@ -58,7 +58,7 @@ try{
  await input('input[name=password]','synthetic-browser-password');await e("document.querySelector('.suite-login-submit').click()");
  await wait("document.querySelectorAll('.suite-nav a').length===5 && !!document.querySelector('.suite-home')");
  await wait("document.querySelector('.suite-home-address')?.textContent.includes('15453')");
- assert.equal(await e("[...document.querySelectorAll('button')].filter(b=>b.textContent.trim()==='刷新').length"),1);
+ assert.equal(await e("[...document.querySelectorAll('button')].filter(b=>b.getAttribute('aria-label')==='刷新状态').length"),1);
  assert(await e("(()=>{const box=document.querySelector('.suite-instance'),status=box.querySelector('.suite-status'),name=box.querySelector('strong');return status.getBoundingClientRect().right<=box.getBoundingClientRect().right-8 && name.scrollWidth>name.clientWidth && name.title.includes('用于验证长实例名称布局')})()"),'long instance name must truncate without pushing status out');
  await shot('home-desktop');
  assert.equal(await e("document.querySelector('.suite-runtime-status, .suite-home-details')"),null);
@@ -90,9 +90,9 @@ try{
  await input('textarea',trackerTemplate);
  await wait("document.querySelector('.suite-file-toolbar').textContent.includes('无未保存修改')");
  await e("location.hash='#/ttl'");
- await wait("document.querySelector('.suite-nav [aria-current=page]')?.textContent==='解析配置'");
+ await wait("document.querySelector('.suite-nav [aria-current=page]')?.textContent==='系统设置'");
  await e("location.hash='#/system?tab=apply'");
- await wait("document.activeElement?.id==='config-apply' && document.querySelector('.suite-nav [aria-current=page]')?.textContent==='解析配置'");
+ await wait("document.activeElement?.id==='config-apply' && document.querySelector('.suite-nav [aria-current=page]')?.textContent==='系统设置'");
  await e("location.hash='#/config?tab=apply'");
  await wait("location.hash==='#/config?tab=apply' && document.activeElement?.id==='config-apply'");
  await wait("!!document.querySelector('.suite-config-state .suite-config-version')");
@@ -251,7 +251,11 @@ try{
  await e("location.hash='#/settings'");await wait("document.body.textContent.includes('应用与前端')");
  assert(await e("document.querySelector('pre.suite-log').textContent.includes('sudo /usr/local/sbin/lovestdns-syntheticctl health')"));
  assert(!await e("document.body.textContent.includes('sudo lovestdnsctl')"));
- assert(await e("document.body.textContent.includes('/etc/lovestdns-synthetic/lovestdns-synthetic.env')"));
+ await e("location.hash='#/settings?tab=external'");
+ await wait("document.body.textContent.includes('/etc/lovestdns-synthetic/lovestdns-synthetic.env')");
+ await e("location.hash='#/settings'");
+ await wait("!!document.querySelector('.suite-build-details summary')");
+ await e("document.querySelector('.suite-build-details summary').click()");
  assert(await e("document.body.textContent.includes('a'.repeat(40)) && document.body.textContent.includes('b'.repeat(64)) && document.body.textContent.includes('c'.repeat(64))"));
  await e("document.querySelector('.suite-debug summary').focus()");
  await send('Page.bringToFront');
@@ -272,16 +276,20 @@ try{
  await wait("document.body.textContent.includes('c'.repeat(64))");
  await e("document.querySelector('a[href=\"#/settings?tab=updates\"]').click()");
  await wait("document.querySelector('.suite-update-network select')?.value==='preview'");
+ await e("document.querySelector('.suite-update-network-panel').open=true");
  await e("const channel=document.querySelector('.suite-update-network select'); channel.value='stable'; channel.dispatchEvent(new Event('change',{bubbles:true}))");
  await wait("document.querySelector('.suite-update-network').textContent.includes('更新网络有未保存的修改')");
- await e("document.querySelector('a[href=\"#/system?tab=updates\"]').click()");
+
  await wait("document.body.textContent.includes('更新设置有未保存的修改') && document.body.textContent.includes('0.1.2-dev.synthetic')");
  assert(await e("['检查更新','更新到此版本'].every(label=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===label&&b.disabled))"));
+ await e("location.hash='#/settings?tab=service'");
+ await wait("!!document.querySelector('.suite-build-details')");
  await e("history.back()");
  await wait("document.querySelector('.suite-update-network select')?.value==='stable'");
+ await e("document.querySelector('.suite-update-network-panel').open=true");
  await click('还原修改');
  await wait("document.querySelector('.suite-update-network select')?.value==='preview'");
- await e("document.querySelector('a[href=\"#/system?tab=updates\"]').click()");
+
  await wait("['检查更新','更新到此版本'].every(label=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===label&&!b.disabled))");
  assert.equal((await control({},'/fixture/home-control')).update_queued,false,'navigation and draft restoration must not queue an update');
  for(const width of [390,320]){

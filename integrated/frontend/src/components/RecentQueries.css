@@ -64,3 +64,12 @@
 .query-record-table tr:has(.query-record-expand[aria-expanded=true]) { background:var(--suite-panel-soft); }
 .query-record-table td .query-record-blocked, .query-record-card .query-record-blocked { color:var(--accent-orange); }
 .query-record-card-source { margin:.6rem 0; }
+.query-record-detail h4 { overflow-wrap: anywhere; margin: 0 0 .55rem; }
+.query-detail-device { display: flex; align-items: center; gap: .35rem .6rem; flex-wrap: wrap; margin: .65rem 0; }
+.query-detail-device > span { color: var(--suite-muted); }
+.query-filter-mobile.suite-button-row { display: none; }
+@media (max-width: 640px) {
+  .query-filter-mobile.suite-button-row { display: flex; flex-wrap: wrap; margin-bottom: .65rem; }
+  .query-record-filters[data-mobile-open=false] { display: none; }
+  .query-record-filters .suite-button-row > button[type=button] { display: none; }
+}

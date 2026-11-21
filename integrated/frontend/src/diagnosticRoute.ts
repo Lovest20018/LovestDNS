@@ -2,6 +2,7 @@ export type DiagnosticTab = 'records' | 'query' | 'compare';
 export interface DiagnosticRoute {
   tab: DiagnosticTab;
   deviceHelp?: boolean;
+  manage?: boolean;
   source: string;
   filterDomain: string;
   exactDomain: string;
@@ -46,6 +47,7 @@ export function parseDiagnosticRoute(hash: string, remembered = '', canRecord = 
   const decision = params.get('decision') ?? '';
   return {
     tab, ...(tab === 'query' && (requested === 'device' || params.get('help') === 'device') ? { deviceHelp: true } : {}),
+    ...(tab === 'records' && params.get('manage') === '1' ? { manage: true } : {}),
     source: canRecord ? (params.get('source') ?? '').slice(0, 45) : '',
     filterDomain: canRecord ? (params.get('filter_domain') ?? '').slice(0, 253) : '',
     exactDomain: canRecord ? (params.get('exact') ?? '').slice(0, 1021) : '',
@@ -54,7 +56,7 @@ export function parseDiagnosticRoute(hash: string, remembered = '', canRecord = 
     decision: canRecord && ['block', 'allow', 'pass'].includes(decision) ? decision : '',
     start: canRecord && window ? start : null,
     end: canRecord && window ? end : null,
-    snapshot: canRecord && window ? unsigned(params.get('snapshot')) : null,
+    snapshot: canRecord ? unsigned(params.get('snapshot')) : null,
     before: canRecord ? before : null, automatic: canRecord && params.get('auto') === '1',
     domain: (params.get('domain') ?? 'www.baidu.com').slice(0, 253),
     record: (params.get('record') ?? 'A').toUpperCase(),
@@ -64,6 +66,7 @@ export function parseDiagnosticRoute(hash: string, remembered = '', canRecord = 
 export function diagnosticHash(route: DiagnosticRoute): string {
   const params = new URLSearchParams({ tab: route.tab });
   if (route.tab === 'query' && route.deviceHelp) params.set('help', 'device');
+  if (route.tab === 'records' && route.manage) params.set('manage', '1');
   const filters = queryRecordParams(route);
   filters.delete('limit');
   filters.delete('domain');
@@ -86,8 +89,8 @@ export function queryRecordParams(route: DiagnosticRoute): URLSearchParams {
   if (route.start !== null && route.end !== null) {
     params.set('start', String(route.start));
     params.set('end', String(route.end));
-    if (route.snapshot !== null) params.set('snapshot', String(route.snapshot));
   }
+  if (route.snapshot !== null) params.set('snapshot', String(route.snapshot));
   if (route.before !== null) params.set('before', String(route.before));
   return params;
 }

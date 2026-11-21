@@ -1361,6 +1361,13 @@
                         "minimum": 0,
                         "type": "integer"
                       },
+                      "scopes": {
+                        "additionalProperties": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "type": "object"
+                      },
                       "types": {
                         "items": {
                           "type": "string"
@@ -1387,6 +1394,9 @@
                       "issues"
                     ],
                     "type": "object"
+                  },
+                  "source_id": {
+                    "type": "string"
                   },
                   "type": {
                     "default": "block",
@@ -1510,6 +1520,13 @@
                     "protected": {
                       "minimum": 0,
                       "type": "integer"
+                    },
+                    "scopes": {
+                      "additionalProperties": {
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "type": "object"
                     },
                     "unsupported": {
                       "minimum": 0,

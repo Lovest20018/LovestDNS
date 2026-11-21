@@ -5,7 +5,6 @@ import { suiteFetch, errorText } from '../suiteApi';
 import RuntimeStatus from '../components/RuntimeStatus';
 import SuiteHistory from '../components/SuiteHistory';
 import SuiteMaintenance from '../components/SuiteMaintenance';
-import SoftwareUpdate from '../components/SoftwareUpdate';
 import { Empty, Notice, Permission, Section } from '../components/SuiteUI';
 import './SuitePage.css';
 
@@ -16,10 +15,9 @@ function componentFromHash() {
 }
 function tabFromHash() {
   const params = new URLSearchParams(window.location.hash.split('?')[1]);
-  if (['#/status', '#/monitoring'].includes(window.location.hash.split('?')[0]) || params.get('tab') === 'status') return 'status';
   if (params.has('component') || params.get('tab') === 'logs') return 'logs';
   if (params.get('tab') === 'history') return 'history';
-  return params.get('tab') === 'updates' ? 'updates' : 'tasks';
+  return 'status';
 }
 export default function SuiteSystem() {
   const { caps, runtime } = useSuite();
@@ -63,19 +61,26 @@ export default function SuiteSystem() {
   }, [allowed, loadLogs, tab]);
   if (!caps) return <Empty title="等待 DNS 实例连接">连接后可查看维护任务和组件日志。</Empty>;
   return <div className="suite-page">
-    <nav className="suite-page-tabs" aria-label="维护分区">
-      <a href="#/system?tab=status" aria-current={tab === 'status' ? 'page' : undefined}>运行状态</a>
-      {caps.permissions.maintain && <>{[['tasks', '任务'], ['logs', '组件日志'], ['history', '配置历史'], ...(caps.deployment === 'native' ? [['updates', '软件更新']] : [])].map(([key, label]) =>
-        <a key={key} aria-current={tab === key ? 'page' : undefined} href={`#/system?tab=${key}`}>{label}</a>)}</>}
-      <a href="#/cache">缓存与快照</a>
-    </nav>
-    {tab === 'status' ? <RuntimeStatus /> : <Permission allowed={caps.permissions.maintain} kind="maintain">
-    {tab === 'tasks' && <SuiteMaintenance caps={caps} runtime={runtime} />}
+    {tab === 'status' ? <RuntimeStatus tasks={allowed && <MaintenanceTasks caps={caps} runtime={runtime} />} /> : <Permission allowed={caps.permissions.maintain} kind="maintain">
     {tab === 'history' && <SuiteHistory />}
-    {tab === 'updates' && (caps.deployment === 'native' ? <SoftwareUpdate loadedVersion={caps.version} /> : <Empty title="通过主机更新容器">请参阅服务信息中的部署说明。<a href="#/deploy">查看说明</a></Empty>)}
     {tab === 'logs' && <div id="component-logs"><Section title="组件日志" subtitle="最近 200 行，后端会脱敏 Token 和敏感环境变量" icon={ScrollText}>
       <div className="suite-query-form"><label>组件<select aria-label="日志组件" className="form-select" disabled={busy} value={component} onChange={(e) => { window.location.hash = `#/system?component=${encodeURIComponent(e.target.value)}`; }}>{COMPONENTS.map((name) => <option key={name}>{name}</option>)}</select></label><button className="btn btn-secondary" disabled={busy} onClick={() => void loadLogs()}><ScrollText size={16} />{busy ? '读取中…' : '读取日志'}</button></div>
       {error && <Notice tone="error">{error}</Notice>}{logs && <pre className="suite-log">{logs}</pre>}
     </Section></div>}
-  </Permission>}<div className="suite-local-links"><a href="#/deploy">服务信息与主机命令</a><a href="#/config?tab=apply">应用解析配置</a></div></div>;
+  </Permission>}<div className="suite-local-links"><a href="#/deploy">服务信息与主机命令</a>{caps.permissions.configure && <a href="#/config?tab=changes">查看配置差异</a>}</div></div>;
+}
+
+function MaintenanceTasks(props: Parameters<typeof SuiteMaintenance>[0]) {
+  const region = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const focus = () => {
+      if (new URLSearchParams(location.hash.split('?')[1]).get('tab') !== 'tasks') return;
+      region.current?.focus({ preventScroll: true });
+      region.current?.scrollIntoView({ block: 'start' });
+    };
+    const frame = requestAnimationFrame(focus);
+    window.addEventListener('hashchange', focus);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('hashchange', focus); };
+  }, []);
+  return <section id="maintenance-tasks" ref={region} tabIndex={-1} aria-label="维护任务"><SuiteMaintenance {...props} /></section>;
 }

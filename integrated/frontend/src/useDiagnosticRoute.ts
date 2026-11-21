@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { diagnosticHash, parseDiagnosticRoute } from './diagnosticRoute';
 import type { DiagnosticRoute } from './diagnosticRoute';
+import { clearQueryHistory } from './queryHistory';
 
 const STORAGE_PREFIX = 'lovestdns-diagnostics:';
 const subscribe = (listener: () => void) => {
@@ -10,6 +11,7 @@ const subscribe = (listener: () => void) => {
 const snapshot = () => window.location.hash;
 
 export function clearDiagnosticRoutes() {
+  clearQueryHistory();
   try {
     for (const key of Object.keys(sessionStorage)) if (key.startsWith(STORAGE_PREFIX)) sessionStorage.removeItem(key);
   } catch { /* Navigation also works when browser storage is unavailable. */ }
@@ -23,17 +25,17 @@ export function useDiagnosticRoute(instance: string, canRecord: boolean) {
   const route = parseDiagnosticRoute(hash, remembered, canRecord);
   const canonical = diagnosticHash(route);
   useEffect(() => {
-    if (!instance || hash.split('?')[0] !== '#/diagnostics') return;
+    if (!instance || hash.split('?')[0] !== '#/diagnostics' || new URLSearchParams(hash.split('?')[1]).get('tab') === 'gateway') return;
     try { sessionStorage.setItem(key, canonical); } catch { /* URL remains shareable. */ }
     if (window.location.hash === hash && hash !== canonical) {
-      window.history.replaceState(null, '', canonical);
+      window.history.replaceState(window.history.state, '', canonical);
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     }
   }, [canonical, hash, instance, key]);
   const navigate = useCallback((patch: Partial<DiagnosticRoute>, replace = false) => {
     const next = diagnosticHash({ ...parseDiagnosticRoute(window.location.hash, '', canRecord), ...patch });
     if (replace) {
-      window.history.replaceState(null, '', next);
+      window.history.replaceState(window.history.state, '', next);
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     } else if (window.location.hash !== next) window.location.hash = next;
   }, [canRecord]);

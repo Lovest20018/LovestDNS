@@ -91,7 +91,9 @@
   z-index: -1;
 }
 .analytics-rank-link code { font: inherit; overflow-wrap: anywhere; }
-.analytics-rank-link span { color: var(--suite-link); font-weight: 650; font-variant-numeric: tabular-nums; }
+.analytics-rank-link > span:last-child { color: var(--suite-link); font-weight: 650; font-variant-numeric: tabular-nums; }
+.analytics-log-link:focus-visible, .analytics-rank-link:focus-visible,
+.query-analytics-bucket:focus-visible { outline: 2px solid var(--suite-link); outline-offset: 2px; }
 .suite-home a.analytics-rank-link:hover { color: var(--suite-link); text-decoration: underline; }
 .analytics-rank-more { margin-top: 6px; padding: 5px 8px; background: none; border: 0; color: var(--suite-link); font: inherit; font-size: 12px; cursor: pointer; }
 @media (max-width: 1100px) {

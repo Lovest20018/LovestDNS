@@ -22,6 +22,7 @@ export interface QueryRecording {
 export interface QueryRecords {
   instance_id: string; status: QueryRecording; events: QueryEvent[]; next_before: number | null;
   history_changed?: boolean;
+  snapshot?: number;
 }
 export interface QueryBucket { start: number; end: number; count: number; coverage: 'complete' | 'partial' | 'unknown' }
 export interface QueryRank { value: string; count: number }

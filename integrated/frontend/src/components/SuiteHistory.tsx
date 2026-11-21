@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Download, History, RotateCcw } from 'lucide-react';
 import { suiteFetch, errorText, when, bytes, ApiError } from '../suiteApi';
 import type { Revision } from '../suiteApi';
 import type { FileContent, SaveResult } from '../api';
 import { configDiff } from '../configDiff';
 import { Empty, Notice, Section } from './SuiteUI';
+import { configFileLink } from '../configFiles';
 import { invalidateCleanDraft } from '../fileDrafts';
 
 const REASONS: Record<string, string> = { saved: '保存版本', before_save: '保存前版本', unconfirmed_candidate: '待核对的保存候选', recovered_external: '恢复核对时的磁盘版本' };
@@ -12,10 +13,20 @@ const REASONS: Record<string, string> = { saved: '保存版本', before_save: '�
 const FILES = ['custom_env.ini', 'custom_mod.yaml', 'unbound_custom.conf', 'force_forward_list.txt',
   'force_dnscrypt_list.txt', 'force_recurse_list.txt', 'force_ttl_rules.txt', 'custom_cn_mark.txt', 'trackerslist.txt'];
 
+function subscribeHistoryFile(listener: () => void) {
+  window.addEventListener('hashchange', listener);
+  return () => window.removeEventListener('hashchange', listener);
+}
+
+function historyFile() {
+  const file = new URLSearchParams(location.hash.split('?')[1]).get('file');
+  return file && FILES.includes(file) ? file : FILES[0];
+}
+
 export default function SuiteHistory() {
-  const [file, setFile] = useState(FILES[0]);
+  const file = useSyncExternalStore(subscribeHistoryFile, historyFile);
   return <Section title="配置历史与恢复" subtitle="每个文件保留最多 20 个版本。恢复后仍需根据生效条件应用和验证。" icon={History}>
-    <label className="suite-field">配置文件<select aria-label="历史配置文件" className="form-select" value={file} onChange={(e) => setFile(e.target.value)}>{FILES.map((name) => <option key={name}>{name}</option>)}</select></label>
+    <label className="suite-field">配置文件<select aria-label="历史配置文件" className="form-select" value={file} onChange={(e) => { location.hash = `#/system?tab=history&file=${encodeURIComponent(e.target.value)}`; }}>{FILES.map((name) => <option key={name}>{name}</option>)}</select></label>
     <FileHistory key={file} file={file} />
   </Section>;
 }
@@ -69,7 +80,7 @@ function FileHistory({ file }: { file: string }) {
   };
   const diff = preview ? configDiff(current, preview.content) : null;
   return <div className="suite-history">
-    {error && <Notice tone="error">{error}</Notice>}{notice && <Notice>{notice}</Notice>}
+    {error && <Notice tone="error">{error}</Notice>}{notice && <Notice>{notice} <a href={configFileLink(file)}>返回文件编辑与应用</a></Notice>}
     {revisions.length ? <div className="suite-revision-list">{revisions.map((item) => <button className={preview?.revision === item.id ? 'is-selected' : ''} key={item.id} disabled={busy} onClick={() => void read(item.id)}><span><strong>{when(item.created_at)}</strong><small>{REASONS[item.reason] ?? '历史版本'} · {bytes(item.bytes)}</small></span><code>#{item.id} · {item.sha256.slice(0, 10)}</code></button>)}</div>
       : <Empty title="暂无配置历史">从集成版首次保存配置开始记录；已有文件不会自动生成过去的版本。</Empty>}
     {preview && <div className="suite-history-preview"><div className="suite-toolbar"><strong>版本 #{preview.revision} → {file}</strong><button className="btn btn-secondary btn-sm" onClick={() => { const url = URL.createObjectURL(new Blob([preview.content], { type: 'text/plain;charset=utf-8' })); const link = document.createElement('a'); link.href = url; link.download = `${file}.revision-${preview.revision}`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }}><Download size={14} />下载此版本</button></div>

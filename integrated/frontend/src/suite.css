@@ -303,3 +303,27 @@
   .suite-page-tabs a { padding: 8px 3px; font-size: 13px; }
   .suite-page-tabs[aria-label="设置分区"] { grid-template-columns: 1fr 1.6fr 1fr; }
 }
+
+.suite-instance-refresh { display:flex; align-items:center; }
+.suite-instance-refresh .suite-refresh:first-child { border-radius:9px 0 0 9px; }
+.suite-instance-refresh .suite-refresh-toggle { border-left:0; border-radius:0 9px 9px 0; padding-inline:8px; }
+.suite-settings-nav { display:flex; flex-wrap:wrap; gap:12px 24px; border-bottom:1px solid var(--suite-line); margin-bottom:16px; }
+.suite-settings-nav section { min-width:0; }
+.suite-settings-nav section > strong { display:block; padding-inline:8px; color:var(--suite-muted); font-size:12px; }
+.suite-settings-nav section > div { display:flex; flex-wrap:wrap; }
+.suite-settings-nav a { display:flex; align-items:center; padding:10px 8px; color:var(--suite-muted); border-bottom:2px solid transparent; font-size:14px; text-decoration:none; }
+.suite-settings-nav a:hover,.suite-settings-nav a:focus-visible,.suite-settings-nav a[aria-current=page] { color:var(--suite-blue); background:var(--suite-panel-soft); }
+.suite-settings-nav a[aria-current=page] { border-color:currentColor; font-weight:650; }
+.suite-update-network-panel,.suite-build-details { padding:12px 14px; border:1px solid var(--suite-line); border-radius:10px; background:var(--suite-panel); }
+.suite-update-network-panel > summary,.suite-build-details > summary { cursor:pointer; font-weight:650; }
+.suite-build-details[open] > summary { margin-bottom:12px; }
+.suite-build-details > :not(summary) + :not(summary) { margin-top:12px; }
+@media (max-width:700px) {
+  .suite-settings-nav { display:grid; gap:8px; }
+  .suite-settings-nav section > div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .suite-settings-nav a { min-height:44px; box-sizing:border-box; }
+}
+@media (max-width:420px) {
+  .suite-topbar { gap:6px; }
+  .suite-top-actions { gap:4px; }
+}

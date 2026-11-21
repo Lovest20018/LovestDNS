@@ -74,7 +74,6 @@ export default function SoftwareUpdate({ loadedVersion }: { loadedVersion: strin
       <div className="suite-software-versions"><div><span>当前版本</span><strong>{status.current_version}</strong></div>
         {release && <div><span>最新发布{release.prerelease ? ' · 预发布版' : ''}</span><strong>{release.version}</strong></div>}</div>
       <p className="suite-muted">安装前校验官方安装包并备份现有配置与数据。升级时 DNS 和网页会短暂重启，失败时尝试恢复原版本；关闭网页不会中断任务。</p>
-      <p><a href="#/settings?tab=updates">设置更新通道与代理</a></p>
       {networkBlocked && <Notice tone="warning">{networkSaving ? '正在保存更新设置并提交检查。' : '更新设置有未保存的修改。请保存或还原后继续。'}</Notice>}
       {(active || status.message) && <Notice tone={phase === 'failed' ? 'error' : 'info'}>
         {active && <strong>{PHASES[phase]} · </strong>}{status.message}

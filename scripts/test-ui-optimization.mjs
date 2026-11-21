@@ -52,12 +52,16 @@ try {
   await send('Page.navigate', { url: origin });
   const login = async () => { await wait("document.querySelector('input[name=password]')"); await change('input[name=password]', 'synthetic-browser-password'); await evaluate("document.querySelector('.suite-login-submit').click()"); await wait("document.querySelector('.suite-page-heading')"); };
   await login();
+  await go('#/system?tab=status', '运行状态');
   await wait("document.querySelectorAll('.suite-home-component').length===8");
-  assert(await evaluate("!document.querySelector('.suite-home-details').open"));
-  await evaluate("document.querySelector('.suite-home-details summary').click()");
-  await control({ age: 24 }); await click('暂停自动刷新'); await click('刷新'); await sleep(1600);
-  assert((await evaluate('document.body.textContent')).includes('显示历史快照'));
-  await control({ age: 0 }); await click('恢复自动刷新', '.suite-refresh-paused');
+  assert(await evaluate("!document.querySelector('.suite-home-auxiliary').open"));
+  await control({ age: 24 });
+  await evaluate("document.querySelector('[aria-label=暂停自动刷新]').click()");
+  await evaluate("document.querySelector('[aria-label=刷新状态]').click()");
+  await wait("document.querySelector('.suite-refresh-paused')?.textContent.includes('自动刷新已暂停')");
+  await control({ age: 0 });
+  await evaluate("document.querySelector('[aria-label=恢复自动刷新]').click()");
+  await wait("!document.querySelector('.suite-refresh-paused')");
 
   await go('#/lists', '域名分流'); await wait("document.querySelector('textarea')?.value.includes('domain:example.com')");
   const originalList = await evaluate("document.querySelector('textarea').value");
@@ -70,7 +74,7 @@ try {
   await click('可视化编辑'); await click('文本编辑'); assert.equal(await evaluate("document.querySelector('textarea').value"), ttl);
   await go('#/lists', '域名分流'); await wait("document.querySelector('textarea')?.value.includes('draft.example')");
 
-  await go('#/advanced', '高级配置'); await wait("document.querySelector('textarea')?.value.includes('LOCAL_IP')");
+  await go('#/advanced', '高级配置文件'); await wait("document.querySelector('textarea')?.value.includes('LOCAL_IP')");
   await click('可视化编辑'); await click('添加变量');
   const newVariable = await evaluate("document.querySelectorAll('input[aria-label$=名称]').length");
   await change(`[aria-label="变量 ${newVariable} 名称"]`, 'EXTRA_VALUE');
@@ -79,7 +83,7 @@ try {
   assert((await evaluate("document.querySelector('textarea').value")).includes('EXTRA_VALUE="kept"'));
   const env = (await evaluate("document.querySelector('textarea').value")) + 'RULES_TTL="55"\n';
   await change('textarea', env);
-  await go('#/env', '基础设置'); await wait("document.querySelector('#setting-RULES_TTL')?.value==='55'");
+  await go('#/env', '运行参数'); await wait("document.querySelector('#setting-RULES_TTL')?.value==='55'");
   await control({ expire: true }); await evaluate("document.querySelector('[aria-label=刷新状态]').click()");
   await login(); await wait("document.querySelector('#setting-RULES_TTL')?.value==='55'");
   await click('保存配置'); await wait("[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='保存配置')?.disabled");
@@ -89,7 +93,7 @@ try {
   assert.equal(await evaluate("document.querySelector('#setting-RULES_TTL').value"), '66');
   assert.equal(await read('custom_env.ini'), 'VALUE="external"\n');
 
-  await go('#/advanced?file=custom_mod.yaml', '高级配置'); await wait("document.querySelector('input[placeholder=\"a.com domain:b.com\"]')?.value==='nas.example'");
+  await go('#/advanced?file=custom_mod.yaml', '高级配置文件'); await wait("document.querySelector('input[placeholder=\"a.com domain:b.com\"]')?.value==='nas.example'");
   // YAML node edits keep the existing comment instead of regenerating the file.
   await evaluate("document.querySelector('input[placeholder=\"a.com domain:b.com\"]').scrollIntoView()");
   await change('input[placeholder="a.com domain:b.com"]', 'changed.example');
@@ -103,7 +107,7 @@ try {
   // read/save. Releasing it must not roll the shared baseline back.
   await evaluate(`(()=>{const state={fetch:window.fetch,confirm:window.confirm,held:false};window.__saveOrder=state;window.confirm=()=>true;window.fetch=async(...args)=>{const response=await state.fetch.call(window,...args);if(!state.held&&String(args[0]).includes('/file/custom_env.ini')&&args[1]?.method==='PUT'){state.held=true;await new Promise(resolve=>state.release=resolve);state.released=true;}return response;};})()`);
   try {
-    await go('#/env', '基础设置'); await wait("document.querySelector('#setting-RULES_TTL')?.value==='66'");
+    await go('#/env', '运行参数'); await wait("document.querySelector('#setting-RULES_TTL')?.value==='66'");
     await click('重新读取');
     await wait("document.querySelector('[aria-label=重新读取配置]')?.disabled===false&&[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='保存配置')?.disabled");
     assert.equal(await read('custom_env.ini'), 'VALUE="external"\n');
@@ -111,8 +115,8 @@ try {
     await wait("document.querySelector('#setting-RULES_TTL')?.disabled===false");
     await change('#setting-RULES_TTL', '55');
     await click('保存配置'); await wait('window.__saveOrder.release');
-    await go('#/advanced', '高级配置');
-    await go('#/env', '基础设置'); await wait("document.querySelector('#setting-RULES_TTL')?.value==='55'");
+    await go('#/advanced', '高级配置文件');
+    await go('#/env', '运行参数'); await wait("document.querySelector('#setting-RULES_TTL')?.value==='55'");
     await click('重新读取');
     await wait("document.querySelector('#setting-RULES_TTL')?.disabled===false&&[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='保存配置')?.disabled");
     await change('#setting-RULES_TTL', '66'); await click('保存配置');
@@ -128,22 +132,22 @@ try {
     await evaluate('(()=>{const state=window.__saveOrder;state.release?.();window.fetch=state.fetch;window.confirm=state.confirm;delete window.__saveOrder;})()');
   }
 
-  await go('#/system?component=updater', '维护'); await wait("document.querySelector('.suite-log')?.textContent.includes('synthetic updater')");
+  await go('#/system?component=updater', '组件日志'); await wait("document.querySelector('.suite-log')?.textContent.includes('synthetic updater')");
   assert.equal(await evaluate("document.querySelector('[aria-label=日志组件]').value"), 'updater');
-  await go('#/system?component=manager', '维护');
+  await go('#/system?component=manager', '组件日志');
   await wait("document.querySelector('.suite-log')?.textContent.includes('synthetic manager')");
   assert.equal(await evaluate("document.querySelector('[aria-label=日志组件]').value"), 'manager');
   await evaluate('history.back()');
   await wait("document.querySelector('[aria-label=日志组件]')?.value==='updater'&&document.querySelector('.suite-log')?.textContent.includes('synthetic updater')");
   await evaluate("(()=>{const select=document.querySelector('[aria-label=日志组件]');select.value='manager';select.dispatchEvent(new Event('change',{bubbles:true}));})()");
   await wait("location.hash==='#/system?component=manager'&&document.querySelector('.suite-log')?.textContent.includes('synthetic manager')");
-  await go('#/diagnostics?domain=example.com', '查询与诊断'); await click('开始查询'); await wait("document.querySelector('.suite-report-summary')");
+  await go('#/diagnostics?domain=example.com', '主动查询'); await click('开始查询'); await wait("document.querySelector('.suite-report-summary')");
   await click('开始查询');
   assert(await evaluate("document.querySelector('.suite-report-summary')!==null"));
   await wait("document.querySelector('.suite-report-heading')?.textContent.includes('本次')||![...document.querySelectorAll('button')].some(x=>x.textContent.includes('查询中'))");
 
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 860, deviceScaleFactor: 1, mobile: false });
-  for (const [hash, title] of [['#/ttl', 'TTL 规则'], ['#/lists', '域名分流'], ['#/advanced', '高级配置'], ['#/', '概览']]) {
+  for (const [hash, title] of [['#/ttl', 'TTL 规则'], ['#/lists', '域名分流'], ['#/advanced', '高级配置文件'], ['#/', '概览']]) {
     await go(hash, title); await assertFits(title);
     if (hash === '#/ttl') { await wait("document.querySelector('textarea')"); assert(await evaluate("document.querySelector('textarea').getBoundingClientRect().top<800"), 'TTL editor is too far down'); }
     await screenshot(hash === '#/' ? 'dashboard-mobile.png' : title + '-mobile.png');

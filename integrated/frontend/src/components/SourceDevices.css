@@ -1,0 +1,8 @@
+.source-address { overflow-wrap: anywhere; }
+.source-device-editor { display: flex; flex-wrap: wrap; align-items: end; gap: .6rem; margin: .7rem 0; }
+.source-device-editor label, .source-device-search { display: grid; gap: .35rem; }
+.source-device-editor label { flex: 1 1 12rem; }
+.source-device-search { width: min(22rem, 100%); margin: 1rem 0; }
+.source-device-list { list-style: none; padding: 0; }
+.source-device-list > li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: .6rem 0; border-top: 1px solid var(--suite-line); }
+.source-device-list .source-device-editor { flex-basis: 100%; }
