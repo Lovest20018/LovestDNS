@@ -142,12 +142,16 @@ try {
       technical: style('.suite-detail-list code').fontFamily,
       body,
       helpWeight: help.fontWeight,
+      helpSize: help.fontSize,
+      noteSize: style('.suite-section .suite-note').fontSize,
     };
   })()`);
   assert(externalFonts.consistent, 'External integration controls and explanations should use the console UI font');
   assert.equal(externalFonts.technical, editorFont, 'API addresses and configuration files should use the same code font');
   assert.notEqual(externalFonts.technical, externalFonts.body);
   assert.equal(externalFonts.helpWeight, '400');
+  assert.equal(externalFonts.helpSize, '12px');
+  assert.equal(externalFonts.noteSize, '13px');
   await click('测试连接');
   await wait("document.body?.textContent.includes('连接测试通过')");
   await nav('查看网关观测 →', '#gateway-integration');
@@ -217,6 +221,26 @@ try {
       await wait("document.querySelector('#settings-search')");
       if (width < 900) await wait("document.activeElement.matches('.suite-page-heading h1')");
       await assertFits(`settings ${width} ${theme}`);
+      const groups = await evaluate(`Array.from(document.querySelectorAll('.suite-settings-nav > section'), (group) => {
+        const label = group.querySelector('strong');
+        const { left, top, bottom } = group.getBoundingClientRect();
+        const links = Array.from(group.querySelectorAll('a'), (link) => ({
+          size: getComputedStyle(link).fontSize,
+          height: link.getBoundingClientRect().height,
+        }));
+        return { label: label.textContent, size: getComputedStyle(label).fontSize, links, left, top, bottom };
+      })`);
+      assert.deepEqual(groups.map(group => group.label), ['DNS 配置', '实例管理']);
+      for (const group of groups) {
+        assert.equal(group.size, '13px');
+        assert(group.links.every(link => link.size === '14px' && (width >= 900 || link.height >= 44)));
+      }
+      const [dns, instance] = groups;
+      if (width >= 900) {
+        assert(dns.top === instance.top && dns.left < instance.left, 'Desktop settings groups should sit side by side');
+      } else {
+        assert(dns.left === instance.left && dns.bottom < instance.top, 'Narrow settings groups should stack');
+      }
       await screenshot(`settings-${width}-${theme}.png`);
     }
   }

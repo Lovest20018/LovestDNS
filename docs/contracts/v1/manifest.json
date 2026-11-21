@@ -3,14 +3,14 @@
   "artifacts": {
     "openapi.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "c50f14717b62aeb41b7ab7d7e2f2f28fe4607e9f8175426e59528674e6e217cf"
+      "sha256": "14cb41a819754a769382b30761c2a58e7b493fd4e4e927f98356ee6ee63ca178"
     },
     "samples.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "97f95dc07e7ebf5408640ebe983ec82093a9a2d1b429c32865213025981558b6"
+      "sha256": "22264b454d54f9d41bf99f3a3118156d917fb56f2022fbff0032c80f34710cdb"
     }
   },
-  "candidate_version": "0.2.2-console.3",
+  "candidate_version": "0.2.2-console.4",
   "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
   "format_version": 1,
   "provenance": "All responses from actual Flask handlers with synthetic I/O and clocks; no live core/network acceptance evidence",
@@ -45,7 +45,7 @@
       "integrated/backend/history.py": "068715c1e54af2ec880712da543bd7a7c1e88f5567c213f0b2fd6007dea28713",
       "integrated/backend/installation.py": "64190ebaa3b32c2dfb6f5aa67a8a35303e77be1547114d8a6a866cfc44fd6a84",
       "integrated/backend/runtime_client.py": "f97b233696bcfb36eba5249d6557a57e0f3b8ef589dd064417a9b01f6dcd9408",
-      "integrated/backend/server.py": "7f2c2660120e8585f69b9126ea193210527f4d6ed54bc01996754f9c72b51d11",
+      "integrated/backend/server.py": "8252c13ad747e69a39c4a703ceff8bca0a57805bd3413c9d5dc6267d0b94937b",
       "integrated/backend/software_update.py": "b52458da2c3da101c1f9def879a71a2aaf24134511fecaf5b1ffdc6f190b42bb",
       "integrated/frontend/package-lock.json": "a9cc6c4341237b1ddb91874a72cf08878df13787d20fc3cbc19b1bfc56a915a7",
       "integrated/frontend/package.json": "465e17dc4fde55be78c58247330b5bd39920eef42123a3917c564b41b2a08d38",
@@ -59,7 +59,7 @@
       "integrated/frontend/src/SuiteProvider.tsx": "aaf97f74d06d174fe9f3747406af54a3568467383838fdc28784519faf6e2aee",
       "integrated/frontend/src/UpdateNetworkProvider.tsx": "fd542c81bf24f2218103a2ce0a8461b4de80c093555aca3772408b823dba6422",
       "integrated/frontend/src/api.ts": "f6619e843068fc70a9d5adc4db4668a33cc1a276b00dd5cde506202007a077c7",
-      "integrated/frontend/src/components/BlockedQueries.css": "425fc3874daff756b6c53b621e36a8e81539a5323d5bb365f5ca10a7499b8d58",
+      "integrated/frontend/src/components/BlockedQueries.css": "dd84e706796b4b51f97a067fec85182ca151af5b96b9feadd77b242097b26115",
       "integrated/frontend/src/components/BlockedQueries.tsx": "600488803238edc06ec31969e78941cf8df95d0dc1591d599080b4b7cf5d0a59",
       "integrated/frontend/src/components/BrowserLogin.tsx": "4abb8d0f99fe52a1949869c4a4c0b5a90e873ef24974424adc47cca99f40c19a",
       "integrated/frontend/src/components/ConfigFeedback.tsx": "c1d234c20c26338e362541c422a411d585cd85b7cff1d828748457362623c9b7",
@@ -71,7 +71,7 @@
       "integrated/frontend/src/components/GatewaySettings.tsx": "743ce90fbe6717191d497978e00dde34bb7b56d0516bd00dcfb43cd3903fcbeb",
       "integrated/frontend/src/components/GatewaySummaryView.tsx": "f67050a88751b5269fc56d071d8bb9204a6d64058cf23ca617440201a7e2eecf",
       "integrated/frontend/src/components/PageBoundary.tsx": "fcbdd3b956107d6885f8f7b9746964d4209452c540dfd3eee291b0c075315e11",
-      "integrated/frontend/src/components/QueryAnalytics.css": "c32a67fe6f2221de5b8ce91884e204e3c220519034b70f1626f69e9cfaabf5ff",
+      "integrated/frontend/src/components/QueryAnalytics.css": "82f2db62d458ccc95fd0b5a83104918ee8f2d012d07c00ee0bd92abc3090a707",
       "integrated/frontend/src/components/QueryAnalytics.tsx": "cd0d7d2bed9b1f2f0fe14926faf9b49c836b2e80fc9ec327e054a6d2990ec550",
       "integrated/frontend/src/components/RecentQueries.css": "efec16d6a2562a5444ddff4b9f60fcac1e5737c5c60b26f6a6f9def25461e977",
       "integrated/frontend/src/components/RecentQueries.tsx": "b077b62f4a62f364f5aeee6e248afcc909b9f6f8faba30b3567a89dfa92f7ba2",
@@ -112,7 +112,7 @@
       "integrated/frontend/src/pages/SuiteFiltering.css": "b50510760322976223983a3f7d7061b371ddaee75b5a47ed1f801b7cb4041a79",
       "integrated/frontend/src/pages/SuiteFiltering.tsx": "64ab1ec84047f6b8ea8584850963d5a78b012223d3a991e51f722dfbfc16da82",
       "integrated/frontend/src/pages/SuiteGateway.tsx": "747a3f7fe627ae012593f36d9d2be458d7f78078546e66a905991477a8b3bd55",
-      "integrated/frontend/src/pages/SuitePage.css": "003946391603eab2f3e6d75a758bbb03041c58437287c942e8d59232249456d5",
+      "integrated/frontend/src/pages/SuitePage.css": "3ad194791cbc48ad6fef054a7dc11ff2869d21fda8c39c4cf791abb0ddd4a269",
       "integrated/frontend/src/pages/SuiteSystem.tsx": "b0f26a624cd7fb84a9c14f7bc441f392f7a37c5fcd79566bf54d37355a50999a",
       "integrated/frontend/src/pages/TtlRulesPage.tsx": "41d1ca4fde1a1ccd27c76de8e4cb45d044dfeab4f9dfea272abb116a90a71a4c",
       "integrated/frontend/src/queryEvidence.ts": "3a3484bca4d8e4261d0ef5f367df271196ae97abf1e1e62c2d57650fbcaded0e",
@@ -124,7 +124,7 @@
       "integrated/frontend/src/settingsIdentity.ts": "f8695c187e3a97b439af3aac6fc80960fb7ffd27526bba77753c006729d00179",
       "integrated/frontend/src/sourceDevices.ts": "a90e628349a34797cb60105c96f85d2e3a2e01b8f14740281e5007c503e3153b",
       "integrated/frontend/src/store.ts": "95c2afc37a320f34ec1e61f73e5b19750bed0114c3fff304fc9d807e08bdf85c",
-      "integrated/frontend/src/suite.css": "b89ebe7e882796e93d3761548323f58bf35ea1fa8f80ba01b1e02125180c98d9",
+      "integrated/frontend/src/suite.css": "25232fe71d98e779b5a8167e1e90b4c2bfe9d3eba687df0aa9ac6871ad57b851",
       "integrated/frontend/src/suiteApi.ts": "b7d64808ba6421f14c2684369baff87f4621192be585e6c0c438e429958d0b8b",
       "integrated/frontend/src/suiteContext.ts": "43bf2f01c0a91cc18f84e67b7fcb9ccc1584111d6b694fd5dc4f1a60ba88da1d",
       "integrated/frontend/src/trend.ts": "3fb2348f810d328964af135082e70fb8472b23ae2c0f15bfebbcb60787f2a69e",
@@ -290,7 +290,7 @@
       "scripts/test-cachedb-history-replay.py": "e22a2616a5e2456482df726d1c8e3e70bd17c9481529e199e3b435e71a385e4b",
       "scripts/test-cachedb-timeout.py": "f9ab7151a1fe186605e13df88c28f52437bccacbbf9cddc523b75de9ccd93c49",
       "scripts/test-cachedb-upgrade-rewarm.py": "918c6b24f70ad3c38361118b50ff351e9da3aefbfaa466e0d2a3bf069cc44cce",
-      "scripts/test-console-navigation.mjs": "f0069f0afc405ec195de239d6d704912eaa22e29281091a51fe368dc6b2cde63",
+      "scripts/test-console-navigation.mjs": "f8a762e59ae16964a3ced0ce0121f71efe1a6dd3d9bca18e3cd92bda2b79fc8b",
       "scripts/test-control-capacity.py": "b65529ea83823923dc46859e0f5293cb7a4def6d8ff991b55df770065f16f229",
       "scripts/test-dns-filter.py": "29f992a2fda7a6eca499a69d9adf050328384ad212cdd8b0f33e9df6d8968fc9",
       "scripts/test-dnscrypt-compatibility.py": "dc93ec3bd4615050e7184debbf8c9c10517ed71a12ad9983d78f18b043b929bd",
@@ -406,7 +406,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "2b7b9a830f2ec30318f9fbf00677d3c075226a4b49896bd1f59db14b942d73e9"
+    "sha256": "9ac41d0e4e1afce5deaabff61767abdfee926ba037b3505dae0ac858df08ce8b"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

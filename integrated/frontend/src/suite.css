@@ -29,6 +29,10 @@
   --suite-cjk: "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC";
   --suite-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", var(--suite-cjk), sans-serif;
   --suite-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", var(--suite-cjk), monospace;
+  --suite-body-size: 14px;
+  --suite-detail-size: 13px;
+  --suite-label-size: 12px;
+  --suite-section-title-size: 17px;
 }
 
 :root[data-theme='dark'] {
@@ -62,6 +66,7 @@ body { min-width: 0; }
   background: var(--suite-bg);
   color: var(--suite-ink);
   font-family: var(--suite-sans);
+  font-size: var(--suite-body-size);
   --bg-primary: var(--suite-bg);
   --bg-secondary: var(--suite-panel-soft);
   --bg-card: var(--suite-panel);
@@ -84,6 +89,9 @@ body { min-width: 0; }
   --border-focus: var(--suite-accent);
 }
 :where(.suite-app) :where(button, input, select, textarea) { font-family: inherit; }
+:where(.suite-app button, .suite-app textarea) { font-size: var(--suite-detail-size); }
+:where(.suite-app input, .suite-app select) { font-size: var(--suite-body-size); }
+:where(.suite-app small) { font-size: var(--suite-label-size); }
 :where(.suite-app) :where(code, kbd, samp, pre),
 .suite-app :is(.textarea-code, .code-content, .domain-entry-index) { font-family: var(--suite-mono); }
 .suite-sidebar {
@@ -267,12 +275,13 @@ body { min-width: 0; }
   box-shadow: 0 0 0 3px var(--suite-accent-ring);
 }
 .suite-app :focus-visible { outline: 2px solid var(--suite-accent); outline-offset: 3px; }
-.suite-app .card-title { color: var(--suite-ink); }
+.suite-app .card-title,.suite-section > header h2 { color: var(--suite-ink); font-size: var(--suite-section-title-size); line-height: 1.45; font-weight: 650; }
 .suite-app .info-table th { background: var(--suite-panel-soft); color: var(--suite-muted); font-weight: 600; }
 .suite-app .info-table td { color: var(--suite-ink); }
 .suite-app .tab-bar { background: var(--suite-panel-soft); border-radius: 10px; }
 .suite-app .tab-item { border-radius: 7px; color: var(--suite-muted); transition: none; }
-.suite-app .suite-note { color: var(--suite-muted); font-size: 12px; line-height: 1.7; margin: 8px 0; }
+.suite-app :is(.suite-note,.suite-muted) { color: var(--suite-muted); font-size: var(--suite-detail-size); line-height: 1.6; }
+.suite-app .suite-note { margin: 8px 0; }
 .suite-app .suite-counters { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin: 15px 0; }
 .suite-app .suite-counters dt { font-size: 12px; color: var(--suite-muted); }
 .suite-app .suite-counters dd { margin-top: 5px; font-size: 20px; }
@@ -365,7 +374,7 @@ body { min-width: 0; }
 }
 .suite-empty-icon { color: var(--suite-accent); }
 .suite-empty strong { margin-top: 11px; font-size: 14px; }
-.suite-empty p { max-width: 420px; margin-top: 6px; color: var(--suite-muted); font-size: 12px; line-height: 1.6; }
+.suite-empty p { max-width: 420px; margin-top: 6px; color: var(--suite-muted); font-size: var(--suite-detail-size); line-height: 1.6; }
 .suite-notice {
   padding: 12px 14px;
   display: flex;
@@ -375,7 +384,7 @@ body { min-width: 0; }
   border: 1px solid var(--suite-line);
   background: var(--suite-panel-soft);
   color: var(--suite-muted);
-  font-size: 12px;
+  font-size: var(--suite-detail-size);
   line-height: 1.6;
 }
 .suite-notice.is-warning {
@@ -387,8 +396,7 @@ body { min-width: 0; }
   color: var(--suite-red);
   background: color-mix(in srgb,var(--suite-red) 7%,var(--suite-panel));
 }
-.suite-section > header h2 { color: var(--suite-ink); font-size: 1.04rem; line-height: 1.45; font-weight: 650; }
-.suite-section > header p { margin-top: 3px; color: var(--suite-muted); font-size: .82rem; line-height: 1.55; }
+.suite-section > header p { margin-top: 3px; color: var(--suite-muted); font-size: var(--suite-detail-size); line-height: 1.55; }
 .suite-notice > svg { flex: none; }
 .suite-notice > div { min-width: 0; overflow-wrap: anywhere; }
 
@@ -482,24 +490,35 @@ body { min-width: 0; }
 .suite-editor-help .info-table,.suite-table-scroll { display: block; max-width: 100%; overflow-x: auto; }
 .suite-file-tabs .tab-item { min-height: 44px; }
 .suite-query-endpoint { grid-template-columns: minmax(0,2fr) minmax(80px,1fr) minmax(90px,1fr); }
-.suite-settings-nav { display: flex; flex-wrap: wrap; gap: 12px 24px; border-bottom: 1px solid var(--suite-line); margin-bottom: 16px; }
-.suite-settings-nav section { min-width: 0; }
-.suite-settings-nav section > strong { display: block; padding-inline: 8px; color: var(--suite-muted); font-size: 12px; }
-.suite-settings-nav section > div { display: flex; flex-wrap: wrap; }
+.suite-settings-nav { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.suite-settings-nav section {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 9px;
+  border: 1px solid var(--suite-line);
+  border-radius: 10px;
+  background: var(--suite-panel);
+}
+.suite-settings-nav section > strong { padding-inline: 8px; color: var(--suite-muted); font-size: var(--suite-detail-size); line-height: 1.45; }
+.suite-settings-nav section > div { display: flex; flex-wrap: wrap; gap: 4px; }
 .suite-settings-nav a {
   display: flex;
   align-items: center;
-  padding: 10px 8px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-radius: 7px;
   color: var(--suite-muted);
-  border-bottom: 2px solid transparent;
-  font-size: 14px;
+  font-size: var(--suite-body-size);
+  line-height: 1.45;
   text-decoration: none;
+  overflow-wrap: anywhere;
 }
-.suite-settings-nav a:hover,.suite-settings-nav a:focus-visible,.suite-settings-nav a[aria-current=page] {
-  color: var(--suite-accent);
-  background: var(--suite-panel-soft);
-}
-.suite-settings-nav a[aria-current=page] { border-color: currentColor; font-weight: 650; }
+.suite-settings-nav a:hover { color: var(--suite-ink); background: var(--suite-panel-soft); }
+.suite-settings-nav a[aria-current=page] { color: var(--suite-accent); background: var(--suite-accent-soft); font-weight: 650; }
 
 /* Login */
 .suite-login {
@@ -546,7 +565,7 @@ body { min-width: 0; }
   border-radius: 8px;
   background: var(--suite-panel);
   color: var(--suite-ink);
-  font: inherit;
+  font-size: var(--suite-body-size);
 }
 .suite-login-card input:focus { outline: 2px solid var(--suite-accent-ring); outline-offset: 1px; border-color: var(--suite-accent); }
 .suite-password-input { display: flex; position: relative; }
@@ -805,7 +824,7 @@ body { min-width: 0; }
   .suite-list-tabs { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .suite-file-tabs .tab-item { display: flex; justify-content: flex-start; text-align: left; padding: 10px 12px; }
   .suite-editor-help .info-table td,.suite-editor-help .info-table th { white-space: normal; overflow-wrap: anywhere; }
-  .suite-editor-toolbar small,.suite-config-stage p,.suite-config-version,.suite-config-version small,.suite-note { font-size: 13px; }
+  .suite-editor-toolbar small,.suite-config-stage p,.suite-config-version,.suite-config-version small { font-size: var(--suite-detail-size); }
   .suite-content .btn,.suite-content .suite-icon-button,.suite-content .tab-item,.domain-remove-btn { min-height: 44px; }
   .suite-content .form-row { display: flex; flex-direction: column; gap: 12px; }
   .suite-content .form-row > .form-group { width: 100%; }
@@ -821,8 +840,18 @@ body { min-width: 0; }
   .suite-segment button { min-width: 44px; min-height: 44px; }
   .suite-query-endpoint { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .suite-page-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
-  .suite-settings-nav { display: grid; gap: 8px; }
-  .suite-settings-nav section > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .suite-settings-nav {
+    display: grid;
+    gap: 4px;
+    margin-bottom: 12px;
+    padding: 4px;
+    border: 1px solid var(--suite-line);
+    border-radius: 10px;
+    background: var(--suite-panel);
+  }
+  .suite-settings-nav section { gap: 0; padding: 0; border: 0; border-radius: 0; background: none; }
+  .suite-settings-nav section + section { padding-top: 4px; border-top: 1px solid var(--suite-line); }
+  .suite-settings-nav section > div { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 4px; }
   .suite-settings-nav a { min-height: 44px; box-sizing: border-box; }
   .suite-toolbar { flex-wrap: wrap; gap: 10px; }
   .suite-target-row { grid-template-columns: repeat(2,minmax(0,1fr)); }

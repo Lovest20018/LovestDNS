@@ -48,7 +48,7 @@
 }
 .query-analytics-bucket { flex: 1; min-width: 0; display: flex; position: relative; align-items: end; justify-content: center; }
 .query-analytics-bucket:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--suite-teal) 10%, transparent); }
-.query-analytics-bucket small { position: absolute; left: 0; top: calc(100% + 4px); color: var(--suite-muted); font-size: 11px; }
+.query-analytics-bucket small { position: absolute; left: 0; top: calc(100% + 4px); color: var(--suite-muted); }
 .query-analytics-bar { width: 82%; max-width: 38px; border-radius: 3px 3px 0 0; }
 .query-analytics-bucket.complete .query-analytics-bar, .query-analytics-key i.complete { background: var(--suite-teal); }
 .query-analytics-bucket.partial .query-analytics-bar, .query-analytics-key i.partial {
