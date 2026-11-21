@@ -1,4 +1,4 @@
-"""Refresh app/UI in a verified native package, preserving its component bytes."""
+"""Refresh app/UI in a verified native package, preserving inherited component bytes."""
 import argparse
 import hashlib
 import json
@@ -102,9 +102,15 @@ def refresh(base, expected, frontend, output, *, release=False, mosdns_filter=No
         bundle = runpy.run_path(str(ROOT / 'packaging/components/bundle.py'))
         if components['lock_sha256'] != bundle['lock_digest'](lock):
             raise ValueError('Base component lock mismatch')
+        excluded = {'components/mosdns-filter', 'components/mosdns-filter.json'}
+        if release:
+            # The original upstream binary is shadowed by the reviewed component.
+            candidate_entry = {'binaries': {'dnscrypt-proxy': 'dnscrypt-proxy'}, 'runtime': {}}
+            bundle['omit_superseded_native_dnscrypt'](package, candidate_entry)
+            excluded.add('libexec/dnscrypt-proxy')
         inherited = {name: checksum for name, checksum in old['files'].items()
                      if name.startswith(('core/', 'lib/', 'libexec/', 'components/', 'wheels/'))
-                     and name not in ('components/mosdns-filter', 'components/mosdns-filter.json')}
+                     and name not in excluded}
         filter_builder = runpy.run_path(str(ROOT / 'packaging/components/mosdns_filter.py'))
         filter_meta = filter_builder['install'](mosdns_filter, package / 'components/mosdns-filter',
                                                 package / 'components/mosdns-filter.json')

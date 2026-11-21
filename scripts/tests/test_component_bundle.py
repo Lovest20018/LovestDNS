@@ -51,12 +51,42 @@ def test_single_component_install_preserves_frozen_launcher_and_runtime(tmp_path
     (target / 'core/mosdns').write_text('frozen launcher')
     (target / 'lib').mkdir()
     (target / 'lib/original-loader').write_text('frozen runtime')
+    (target / 'libexec').mkdir()
+    (target / 'libexec/dnscrypt-proxy').write_text('upstream DNSCrypt')
     result = bundle['install'](source, target, lock, ['redis'])
     assert result['selected'] == ['redis']
     assert (target / 'core/mosdns').read_text() == 'frozen launcher'
     assert (target / 'lib/original-loader').read_text() == 'frozen runtime'
+    assert (target / 'libexec/dnscrypt-proxy').read_text() == 'upstream DNSCrypt'
     assert not (target / 'components/unbound').exists()
     assert '$base/components/redis/bin/redis-server' in (target / 'core/redis-server').read_text()
+
+
+def test_selected_native_dnscrypt_omits_only_the_shadowed_upstream_binary(tmp_path):
+    source, lock = fixture(tmp_path)
+    target = tmp_path / 'package'
+    (target / 'libexec').mkdir(parents=True)
+    upstream = target / 'libexec/dnscrypt-proxy'
+    upstream.write_text('upstream DNSCrypt')
+    result = bundle['install'](source, target, lock, ['dnscrypt'])
+    assert result['selected'] == ['dnscrypt']
+    assert not upstream.exists()
+    assert 'components/dnscrypt/bin/dnscrypt-proxy' in (target / 'core/dnscrypt-proxy').read_text()
+    assert (target / 'components/dnscrypt/bin/dnscrypt-proxy').read_text() == 'immutable executable'
+
+
+def test_native_dnscrypt_omission_preserves_the_upstream_binary_if_the_launcher_differs(tmp_path):
+    (tmp_path / 'core').mkdir()
+    (tmp_path / 'components/dnscrypt').mkdir(parents=True)
+    (tmp_path / 'libexec').mkdir()
+    (tmp_path / 'core/dnscrypt-proxy').write_text('upstream launcher')
+    (tmp_path / 'components/dnscrypt/dnscrypt-proxy').write_text('reviewed DNSCrypt')
+    upstream = tmp_path / 'libexec/dnscrypt-proxy'
+    upstream.write_text('upstream DNSCrypt')
+    entry = {'binaries': {'dnscrypt-proxy': 'dnscrypt-proxy'}, 'runtime': {}}
+    with pytest.raises(ValueError, match='launcher'):
+        bundle['omit_superseded_native_dnscrypt'](tmp_path, entry)
+    assert upstream.read_text() == 'upstream DNSCrypt'
 
 
 @pytest.mark.parametrize('path', ['../escape', '/absolute', 'bin/../escape', 'bin//file', 'bin/evil"name', 'bin/evil$name'])

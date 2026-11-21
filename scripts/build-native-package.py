@@ -101,7 +101,7 @@ def main():
                 copy(source, libs / name)
         finally:
             run(['docker', 'rm', '-v', container], stdout=subprocess.DEVNULL)
-        # The original binaries remain unchanged; record their exact bytes.
+        # Record the original inputs before selecting the shipped components.
         origin = {str(p.relative_to(package)): hashlib.sha256(p.read_bytes()).hexdigest()
                   for d in (core, libs, binaries) for p in d.rglob('*') if p.is_file()}
         component_lock = json.loads((ROOT / 'packaging/components.lock.json').read_text())

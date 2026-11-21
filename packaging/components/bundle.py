@@ -80,6 +80,17 @@ def wrapper(component, binary, entry, *, container=False):
     return prefix + 'exec ' + program + ' "$@"\n'
 
 
+def omit_superseded_native_dnscrypt(target, entry):
+    target = Path(target)
+    binary = 'dnscrypt-proxy'
+    executable = target / 'components/dnscrypt' / relative(entry['binaries'][binary])
+    launcher = target / 'core' / binary
+    if (not executable.is_file() or not launcher.is_file()
+            or launcher.read_text(encoding='utf-8') != wrapper('dnscrypt', binary, entry)):
+        raise ValueError('Native DNSCrypt launcher must use the selected component before omitting the upstream binary')
+    (target / 'libexec' / binary).unlink(missing_ok=True)
+
+
 def install(source, target, lock, selected=None, *, container=False):
     manifest = verify(source, lock)
     selected = sorted(NAMES if selected is None else selected)
@@ -110,6 +121,8 @@ def install(source, target, lock, selected=None, *, container=False):
                     other.unlink()
                 shutil.copyfile(path, other)
                 other.chmod(0o755)
+    if not container and 'dnscrypt' in selected:
+        omit_superseded_native_dnscrypt(target, manifest['components']['dnscrypt'])
     payload.mkdir(parents=True, exist_ok=True)
     (payload / 'manifest.json').write_text(json.dumps({**manifest, 'selected': selected}, sort_keys=True, indent=2) + '\n')
     return {'selected': selected, 'lock_sha256': manifest['lock_sha256'],

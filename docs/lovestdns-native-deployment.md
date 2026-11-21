@@ -52,7 +52,7 @@ python3 -m venv .build/native-tools
 
 需要将已验收的 DNSCrypt `combined` 源码候选加入独立试用包时，在上述原生打包命令中显式增加 `--dnscrypt-source-candidate /path/to/normal/combined`。该目录必须包含正常静态 amd64 二进制与对应 `source-manifest.json`。打包器核对源码锁、三个补丁、工具链声明和二进制摘要，拒绝诊断构建及其他变体；保留输入组件清单，另写实际载荷清单和补丁来源。该参数不更改默认组件来源，新包保留候选、未批准发布及性能未验收标记。
 
-已有核验过的新组件原生包时，也可用 `scripts/refresh-native-package.py --base <原包> --base-sha256 <可信摘要> --frontend .build/integrated-web/dist --mosdns-filter .build/mosdns-filter --output <新包>` 更新应用与界面。脚本要求当前源码干净且已提交，前端为同提交的 `npm ci` 构建；上游锁、模板适配脚本、组件锁和 Python 依赖改变时拒绝刷新。过滤扩展从已核对的本次构建复制，基础核心、私有库、其他组件与 wheels 保持原字节，Linux 执行权限从原归档保留；新包分别记录继承来源与当前源码，不声称重新编译了组件。正式发行时可显式增加 `--release`，仅接受不带开发后缀的 `主.次.修订` 版本，并记录功能发行批准；性能验收标记仍为 false，不由该开关推导性能结论。默认省略该参数保持候选标记。
+已有核验过的新组件原生包时，也可用 `scripts/refresh-native-package.py --base <原包> --base-sha256 <可信摘要> --frontend .build/integrated-web/dist --mosdns-filter .build/mosdns-filter --output <新包>` 更新应用与界面。脚本要求当前源码干净且已提交，前端为同提交的 `npm ci` 构建。上游锁、模板适配脚本、组件锁和 Python 依赖改变时拒绝刷新。过滤扩展从已核对的本次构建复制，继承文件保留原字节和 Linux 权限。正式发行时可增加 `--release`，仅接受不带开发后缀的 `主.次.修订` 版本。打包器核对 DNSCrypt 启动入口指向已验证的组件后，只分发该入口实际使用的二进制。功能发行批准和性能验收分别记录。默认省略 `--release` 保持候选标记。
 
 ## 首次安装
 
