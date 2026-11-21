@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { SuiteContext, SuiteConfigContext } from './suiteContext';
+import type { ProbeObservation, ProbeResult } from './suiteContext';
 import { setDraftInstance } from './fileDrafts';
 import { suiteFetch, errorText } from './suiteApi';
 import type { Capabilities, RuntimeSnapshot } from './suiteApi';
@@ -9,6 +10,9 @@ import type { TrendSample } from './trend';
 import { useStore } from './store';
 import type { SystemStatus } from './api';
 import { runtimeLifetimeMs } from './runtimeFreshness';
+import { processFingerprint } from './queryEvidence';
+
+const PROBE_FRESH_MS = 5 * 60_000;
 
 export default function SuiteProvider({ children }: { children: ReactNode }) {
   const [runningEnv, setRunningEnv] = useState<Record<string, string> | null>(null);
@@ -23,6 +27,10 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
   const [runtimeError, setRuntimeError] = useState('');
   const [paused, setPaused] = useState(false);
   const [runtimeStale, setRuntimeStale] = useState(false);
+  const [probe, setProbe] = useState<ProbeObservation | null>(null);
+  const [probeChecking, setProbeChecking] = useState(false);
+  const [probeError, setProbeError] = useState('');
+  const probeRequest = useRef<AbortController | null>(null);
   const capabilitiesCache = useRef<Capabilities | null>(null);
   const capabilitiesAt = useRef(0);
   const statusAt = useRef(0);
@@ -37,7 +45,50 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
     if (clock) setSamples((old) => appendTrend(old, null, clock.serverAt + (performance.now() - clock.receivedAt) / 1000));
   }, []);
 
-  useEffect(() => () => { generation.current++; request.current?.abort(); request.current = null; inFlight.current = false; refreshQueued.current = null; }, []);
+  useEffect(() => () => {
+    generation.current++;
+    request.current?.abort();
+    request.current = null;
+    inFlight.current = false;
+    refreshQueued.current = null;
+    probeRequest.current?.abort();
+    probeRequest.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!probe || probe.expired) return;
+    const timer = window.setTimeout(() => {
+      setProbe(current => current === probe ? { ...probe, expired: true } : current);
+    }, PROBE_FRESH_MS);
+    return () => window.clearTimeout(timer);
+  }, [probe]);
+
+  const runProbe = async () => {
+    if (!caps?.permissions.diagnose || error || probeRequest.current) return;
+    const abort = new AbortController();
+    const process = processFingerprint(runtime);
+    probeRequest.current = abort;
+    setProbeChecking(true);
+    setProbeError('');
+    try {
+      const params = new URLSearchParams({ server: caps.dns_defaults.server, port: String(caps.dns_defaults.port) });
+      const result = await suiteFetch<ProbeResult>(`/api/v1/health-check?${params}`, { signal: abort.signal });
+      const samples = Object.values(result.tests ?? {});
+      if (typeof result.pass !== 'boolean' || typeof result.server !== 'string' || !Number.isInteger(result.port)
+        || samples.length === 0 || samples.some(sample => typeof sample?.domain !== 'string'
+          || typeof sample.resolved !== 'boolean' || !sample.result || typeof sample.result !== 'object')) {
+        throw new Error('服务没有返回有效的域名测试结果');
+      }
+      if (!abort.signal.aborted) setProbe({ result, process });
+    } catch (e) {
+      if (!abort.signal.aborted) setProbeError(errorText(e));
+    } finally {
+      if (probeRequest.current === abort) {
+        probeRequest.current = null;
+        setProbeChecking(false);
+      }
+    }
+  };
 
   const read = useCallback(async (force = false) => {
     if (inFlight.current) return;
@@ -57,6 +108,17 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
           if (current !== generation.current) return;
           if (capabilitiesCache.current && capabilitiesCache.current.instance_id !== capabilities.instance_id) {
             setRuntime(null); setSamples([]); setRunningEnv(null); statusAt.current = 0; useStore.getState().resetAll();
+          }
+          if (capabilitiesCache.current && (
+            capabilitiesCache.current.instance_id !== capabilities.instance_id
+            || capabilitiesCache.current.access_role !== capabilities.access_role
+            || (capabilitiesCache.current.permissions.diagnose && !capabilities.permissions.diagnose)
+          )) {
+            probeRequest.current?.abort();
+            probeRequest.current = null;
+            setProbe(null);
+            setProbeChecking(false);
+            setProbeError('');
           }
           if (!capabilities.permissions.configure) { setRunningEnv(null); useStore.getState().setEnvValues({}); useStore.getState().setEnvLoaded(false); useStore.getState().setFilesExist({}); }
           setDraftInstance(capabilities.instance_id);
@@ -146,5 +208,10 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
   }, [runtime, runtimeDeadline, appendGap, paused]);
 
   const config = useMemo(() => ({ caps, runningEnv, statusError, refresh, error }), [caps, runningEnv, statusError, refresh, error]);
-  return <SuiteConfigContext.Provider value={config}><SuiteContext.Provider value={{ runningEnv, statusError, refreshing, caps, runtime, samples, loading, error, runtimeError, runtimeStale, paused, refresh, setPaused }}>{children}</SuiteContext.Provider></SuiteConfigContext.Provider>;
+  return <SuiteConfigContext.Provider value={config}>
+    <SuiteContext.Provider value={{ runningEnv, statusError, refreshing, caps, runtime, samples, loading, error,
+      runtimeError, runtimeStale, paused, probe, probeChecking, probeError, runProbe, refresh, setPaused }}>
+      {children}
+    </SuiteContext.Provider>
+  </SuiteConfigContext.Provider>;
 }

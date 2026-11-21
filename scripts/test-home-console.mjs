@@ -58,6 +58,16 @@ try{
  await input('input[name=password]','synthetic-browser-password');await e("document.querySelector('.suite-login-submit').click()");
  await wait("document.querySelectorAll('.suite-nav a').length===5 && !!document.querySelector('.suite-home')");
  await wait("document.querySelector('.suite-home-address')?.textContent.includes('15453')");
+ await e("window.__originalCopy = document.execCommand; document.execCommand = function(command) { window.__copiedAddress = document.activeElement.value; return command === 'copy'; }");
+ try {
+  await e("document.querySelector('[aria-label=复制监听地址]').focus(); document.querySelector('[aria-label=复制监听地址]').click()");
+  await wait("document.querySelector('[aria-label=复制监听地址]').textContent.includes('已复制')");
+  assert.equal(await e('window.__copiedAddress'), '[::]:15453');
+  assert(await e("document.activeElement.matches('[aria-label=复制监听地址]')"));
+  await wait("document.querySelector('[aria-label=复制监听地址]').textContent.trim()==='复制'");
+ } finally {
+  await e("document.execCommand = window.__originalCopy; delete window.__originalCopy; delete window.__copiedAddress");
+ }
  assert.equal(await e("[...document.querySelectorAll('button')].filter(b=>b.getAttribute('aria-label')==='刷新状态').length"),1);
  assert(await e("(()=>{const box=document.querySelector('.suite-instance'),status=box.querySelector('.suite-status'),name=box.querySelector('strong');return status.getBoundingClientRect().right<=box.getBoundingClientRect().right-8 && name.scrollWidth>name.clientWidth && name.title.includes('用于验证长实例名称布局')})()"),'long instance name must truncate without pushing status out');
  await shot('home-desktop');
@@ -70,6 +80,10 @@ try{
  assert(!await e("document.querySelector('.suite-runtime-status a[href=\"#/config?tab=apply\"]')!==null"));
  await e("location.hash='#/'"); await wait("!!document.querySelector('.suite-home')");
  await click('测试本机解析');
+ await wait("document.querySelector('.suite-probe-region').textContent.includes('正在向本机 DNS 查询')");
+ await e("location.hash='#/system?tab=status'");
+ await wait("!!document.querySelector('.suite-runtime-status')");
+ await e("history.back()");
  await wait("document.querySelector('.suite-probe-result')?.textContent.includes('本机解析测试通过')");
  assert(await e("document.querySelector('.suite-probe-result').textContent.includes('2 / 2 个域名取得 A 记录')"));
  await e("document.querySelector('a[href=\"#/diagnostics?tab=query&help=device\"]').click()");
@@ -115,7 +129,7 @@ try{
  await e("[...document.querySelectorAll('button')].find(b=>b.textContent==='查看重启范围').scrollIntoView({block:'center'})");
  await click('查看重启范围');await click('确认重启 DNS');
  await wait("document.querySelector('.suite-action-status')?.textContent.includes('正在提交')");
- assert(await e("(()=>{const status=document.querySelector('.suite-action-status').getBoundingClientRect();return status.top>=76 && status.bottom<innerHeight;})()"),'mobile feedback should appear where the action was triggered');
+ assert(await e("(()=>{const status=document.querySelector('.suite-action-status').getBoundingClientRect();return status.top>=document.querySelector('.suite-topbar').getBoundingClientRect().bottom && status.bottom<innerHeight;})()"),'mobile feedback should appear where the action was triggered');
  await wait("document.querySelector('.suite-action-status')?.textContent.includes('正在重启 DNS')");
  await e("window.dispatchEvent(new Event('lovestdns-config-changed'))");
  await sleep(350);
@@ -210,7 +224,13 @@ try{
  await wait("['确认重启 DNS','预览并校验当前配置'].every(label=>[...document.querySelectorAll('button')].some(b=>b.textContent===label&&!b.disabled))");
  await control({probe_failure:true},'/fixture/home-control');
  await e("location.hash='#/'");
- await wait("[...document.querySelectorAll('.suite-home > .suite-notice')].some(n=>n.textContent.includes('重启 DNS · 失败'))");
+ await wait("document.querySelector('.suite-home-alerts-more > summary')?.textContent.includes('另有 1 项')");
+ assert(await e("!document.querySelector('.suite-home-alerts-more').open"));
+ assert.equal(await e("document.querySelectorAll('.suite-home-alerts > .suite-notice').length"), 1);
+ await e("document.querySelector('.suite-home-alerts-more > summary').click()");
+ assert(await e("document.querySelector('.suite-home-alerts').innerText.includes('重启 DNS · 失败')"));
+ await shot('home-alerts-expanded');
+ await e("document.querySelector('.suite-home-alerts-more > summary').click()");
  await e("window.__realNow = Date.now; Date.now = () => window.__realNow() - 3600000");
  try {
   await click('测试本机解析');
@@ -219,6 +239,10 @@ try{
   assert(await e("document.querySelector('.suite-probe-result').textContent.includes('1 / 2 个域名取得 A 记录')"));
   assert(await e("document.querySelector('.suite-probe-result li:last-child').textContent.includes('www.google.com') && document.querySelector('.suite-probe-result li:last-child').textContent.includes('SERVFAIL')"));
   await shot('home-probe-failure');
+  await e("document.querySelector('.suite-probe-result li:last-child a').click()");
+  await wait("document.querySelector('[aria-label=查询域名]')?.value==='www.google.com'");
+  await e("history.back()");
+  await wait("document.querySelector('.suite-probe-result.is-failed')?.textContent.includes('SERVFAIL')");
  } finally {
   await e("Date.now = window.__realNow; delete window.__realNow");
   await control({probe_failure:false},'/fixture/home-control');
@@ -296,7 +320,7 @@ try{
   await send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false});
   for(const route of ['/', '/config', '/advanced?file=custom_env.ini','/diagnostics','/diagnostics?tab=device','/system?tab=tasks','/settings']){
    await e(`location.hash=${JSON.stringify('#'+route)}`);await sleep(350);
-   assert(await e('document.documentElement.scrollWidth<=innerWidth+1'),'page overflow '+width+' '+route);
+   assert(await e('document.documentElement.scrollWidth <= document.documentElement.clientWidth'),'page overflow '+width+' '+route);
    assert(await e("document.querySelector('.suite-account>summary').getBoundingClientRect().height<=44"),'account label wraps');
    assert(await e("document.querySelector('.suite-breadcrumb strong').getBoundingClientRect().height<30"),'breadcrumb wraps');
    if(width===390 && route==='/')await shot('home-mobile');
@@ -310,8 +334,8 @@ try{
  await e("location.hash='#/'");await sleep(200);await e("document.documentElement.dataset.theme='dark'");await shot('home-mobile-dark');
  assert.deepEqual(errors,[]);
  const checks=[
-  'five_navigation_entries','single_home_refresh','listener_summary','long_instance_name_keeps_status_inside_sidebar',
-  'unknown_record_no_restart_prompt','mixed_config_summary','dns_probe_progress_and_partial_failure','restart_marks_probe_historical','device_check',
+  'five_navigation_entries','single_home_refresh','listener_summary','http_listener_copy','long_instance_name_keeps_status_inside_sidebar',
+  'unknown_record_no_restart_prompt','mixed_config_summary','dns_probe_state_after_navigation','failed_probe_diagnostic_link','alert_disclosure','restart_marks_probe_historical','device_check',
   'ttl_navigation','config_status_opens_apply_controls','legacy_apply_deep_link','missing_template_starts_clean','draft_blocks_restart',
   'http_maintenance_submission','lost_response_and_reload_no_replay','expected_restart_progress','real_manager_failure',
   'failed_restart_reports_rollback_and_opens_logs','rejected_retry_rechecks_and_unblocks','save_apply_task_query',

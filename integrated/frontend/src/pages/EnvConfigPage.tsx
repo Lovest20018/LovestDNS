@@ -1,16 +1,25 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Save, Settings2 } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 import { useFileEditor } from '../useFileEditor';
 import { ENV_VARS, GROUP_LABELS } from '../types';
 import { useSuiteConfig } from '../suiteContext';
 import { errorText } from '../suiteApi';
 import { envOverrides, editOverride } from '../envEditor';
 import { useUnsavedChanges } from '../unsaved';
-import ConfigFeedback, { ConfigNextStep } from '../components/ConfigFeedback';
+import EditorToolbar from '../components/EditorToolbar';
 import { Notice, Section } from '../components/SuiteUI';
 
+function showSetting(target: HTMLElement, behavior: ScrollBehavior = 'auto') {
+  const group = target.closest<HTMLElement>('.suite-settings-group');
+  const toolbar = target.closest('.suite-page')?.querySelector('.suite-file-toolbar');
+  const margin = Number.parseFloat(getComputedStyle(group ?? target).scrollMarginTop) || 0;
+  const offset = margin + (toolbar?.getBoundingClientRect().height ?? 0);
+  (target.matches(':disabled') ? group : target)?.focus({ preventScroll: true });
+  window.scrollBy({ top: target.getBoundingClientRect().top - offset, behavior });
+}
+
 export default function EnvConfigPage() {
-  const { caps, runningEnv, statusError, error: connectionError } = useSuiteConfig();
+  const { caps, runningEnv, statusError } = useSuiteConfig();
   const running = runningEnv ?? {};
   const [search, setSearch] = useState('');
   useEffect(() => {
@@ -22,8 +31,7 @@ export default function EnvConfigPage() {
       const setting = params.get('setting');
       requestAnimationFrame(() => {
         const target = (setting ? document.getElementById(`setting-${setting}`) : null) ?? document.getElementById(`settings-${group}`);
-        target?.focus({ preventScroll: true });
-        target?.scrollIntoView({ block: 'start' });
+        if (target) showSetting(target);
       });
     };
     sync();
@@ -57,13 +65,14 @@ export default function EnvConfigPage() {
     <Notice>启用“覆盖”时使用此处设置，关闭后使用服务启动设置。高级配置文件共用此处的草稿。<a href="#/advanced?file=custom_env.ini">编辑源文件</a></Notice>
     {caps?.features.dns_filter && (values.CNAUTO ?? running.CNAUTO) === 'no'
       && <Notice tone="warning">纯递归模式生效后会停用 DNS 过滤。订阅与规则可在恢复 MosDNS 分流时继续使用。</Notice>}
-    <div className="suite-editor-toolbar suite-editor-toolbar-feedback"><span>{dirty ? '有未保存修改' : loaded ? '配置已读取' : '等待读取配置'}</span><div><button className="btn btn-secondary" aria-label="重新读取配置" title="重新读取配置" disabled={busy} onClick={() => void load()}><RefreshCw size={15} />重新读取</button><button className="btn btn-primary" disabled={busy || !loaded || !dirty || !!connectionError} onClick={() => void save()}><Save size={15} />{busy ? '处理中…' : '保存配置'}</button></div>
-      {caps?.permissions.maintain && <a href="#/system?tab=history&file=custom_env.ini">查看此文件历史</a>}
-      <ConfigNextStep message={error || editor.result?.msg} failed={!!error || editor.result?.success === false} />
-    </div>
+    <EditorToolbar file="custom_env.ini" dirty={dirty} busy={busy} loaded={loaded} readError={editor.error}
+      message={error || editor.result?.msg} failed={!!error || editor.result?.success === false}
+      result={editor.result?.result} change={editor.result?.change} onSave={() => void save()} onReload={() => void load()} />
     {editor.error && <Notice tone="error">{editor.error}</Notice>}
-    <ConfigFeedback file="custom_env.ini" saved={editor.result?.success === true} dirty={dirty} result={editor.result?.result} change={editor.result?.change} />
-    <div className="suite-settings-find"><label htmlFor="settings-search">查找设置<input id="settings-search" className="form-input" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索名称、变量或说明" /></label>{search && <button className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>清除搜索</button>}<nav aria-label="设置分组">{Object.entries(GROUP_LABELS).map(([group, info]) => <a key={group} href={`#settings-${group}`} onClick={(e) => { e.preventDefault(); setSearch(''); setTimeout(() => document.getElementById(`settings-${group}`)?.scrollIntoView({ behavior: 'smooth' }), 0); }}>{info.label}</a>)}</nav></div>
+    <div className="suite-settings-find"><label htmlFor="settings-search">查找设置<input id="settings-search" className="form-input" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索名称、变量或说明" /></label>{search && <button className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>清除搜索</button>}<nav aria-label="设置分组">{Object.entries(GROUP_LABELS).map(([group, info]) => <a key={group} href={`#settings-${group}`} onClick={(e) => { e.preventDefault(); setSearch(''); setTimeout(() => {
+      const target = document.getElementById(`settings-${group}`);
+      if (target) showSetting(target, 'smooth');
+    }, 0); }}>{info.label}</a>)}</nav></div>
     {statusError && <Notice tone="warning">运行值读取失败，当前不展示旧值：{statusError}</Notice>}
     {!variables.some((v) => `${v.label} ${v.key} ${v.description}`.toLowerCase().includes(search.trim().toLowerCase())) && <Notice>没有匹配设置。<button className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>显示全部设置</button></Notice>}
     {Object.entries(GROUP_LABELS).filter(([group]) => variables.some((v) => v.group === group && `${v.label} ${v.key} ${v.description}`.toLowerCase().includes(search.trim().toLowerCase()))).map(([group, info]) => <div id={`settings-${group}`} tabIndex={-1} key={group} className="suite-settings-group"><Section title={info.label} icon={Settings2}>

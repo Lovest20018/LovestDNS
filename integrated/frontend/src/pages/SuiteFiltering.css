@@ -12,8 +12,6 @@
 .dns-filter-status .suite-notice { margin-top: 8px; }
 .dns-filter-review > p { margin: 0 0 8px; color: var(--suite-muted); font-size: 13px; overflow-wrap: anywhere; }
 .dns-filter-page a { overflow-wrap: anywhere; }
-.dns-source-type { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13px; }
-.dns-source-type select { width: auto; }
 .dns-filter-rules:not([hidden]) {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; align-items: start;
 }
@@ -39,12 +37,18 @@
 .dns-filter-help p, .dns-source-tools details > p { margin: 8px 0; line-height: 1.6; }
 .dns-filter-editor-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px solid var(--suite-line); }
 .dns-filter-editor-footer span, .dns-source-host, .dns-filter-preview > small { color: var(--suite-muted); font-size: 12px; }
+.dns-filter-rule-stats { display:grid; flex-basis:100%; gap:5px; min-width:0; }
+.dns-filter-rule-stats label { display:grid; gap:5px; color:var(--suite-muted); font-size:12px; }
+.dns-filter-rule-stats progress { width:100%; height:8px; accent-color:var(--suite-accent-solid); }
+.dns-filter-rule-stats[data-over-limit=true] { color:var(--suite-red); }
+.dns-filter-rule-stats[data-over-limit=true] progress { accent-color:var(--suite-red); }
 .dns-filter-inline { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
 .dns-filter-inline label:has(input[type=checkbox]) { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; }
 .dns-filter-add > button { justify-self: start; }
 .dns-filter-new:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .dns-filter-new[hidden] { display: none; }
 .dns-filter-new label:has(input[type=url]) { grid-column: 1 / -1; grid-row: 2; }
+.dns-filter-new > .suite-note { grid-column:1 / -1; margin:0; }
 .dns-filter-new .btn { justify-self: start; }
 .dns-filter-subscription, .dns-filter-preview { display: grid; gap: 8px; padding: 14px; margin-bottom: 12px; border-radius: 9px; background: var(--suite-panel-soft); min-width: 0; }
 .dns-filter-preview { background: color-mix(in srgb, var(--suite-amber) 7%, var(--suite-panel)); border: 1px solid color-mix(in srgb, var(--suite-amber) 32%, var(--suite-line)); }
@@ -67,9 +71,12 @@
 .dns-filter-preview > p, .dns-filter-preview > label { font-size: 13px; line-height: 1.6; margin: 0; overflow-wrap: anywhere; }
 .dns-filter-preview > button { justify-self: start; }
 .dns-filter-allow { margin: 10px 0 0; padding: 0; list-style: none; }
-.dns-filter-allow li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 0; border-top: 1px solid var(--suite-line); overflow-wrap: anywhere; }
-.dns-filter-allow li span { color: var(--suite-muted); font-size: 12px; }
-.dns-filter-allow li button { margin-left: auto; }
+.dns-filter-allow li, .dns-filter-allow-search { display:flex; flex-wrap:wrap; gap:8px 14px; }
+.dns-filter-allow li { align-items:center; justify-content:space-between; padding:10px 0; border-top:1px solid var(--suite-line); overflow-wrap:anywhere; }
+.dns-filter-allow li > div:first-child { min-width:0; }
+.dns-filter-allow li small { display:block; margin-top:4px; color:var(--suite-muted); font-size:12px; }
+.dns-filter-allow-search { align-items:end; margin-top:12px; }
+.dns-filter-allow-search label { display:grid; gap:5px; flex:1 1 12rem; max-width:22rem; min-width:0; font-size:13px; }
 .dns-filter-domain-tool { padding: 14px 18px; background: var(--suite-panel); border: 1px solid var(--suite-line); border-radius: 10px; }
 .dns-filter-domain-tool summary { font-weight: 600; }
 .dns-filter-check { margin-top: 12px; }
@@ -80,6 +87,8 @@
 @media (max-width: 700px) {
   .dns-filter-statusbar { gap: 8px 12px; }
   .dns-filter-page .blocked-query-summary:has([aria-expanded=true]) { padding-inline: 8px; }
+  .dns-filter-page summary, .dns-filter-switch, .dns-filter-preview > label { min-height:44px; align-content:center; }
+  .dns-filter-allow .btn, .dns-filter-allow-search .btn { min-width:44px; }
 }
 @media (max-width: 360px) {
   .dns-filter-new:not([hidden]) { grid-template-columns: minmax(0, 1fr); }

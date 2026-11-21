@@ -2,11 +2,23 @@ import { createContext, useContext } from 'react';
 import type { Capabilities, RuntimeSnapshot } from './suiteApi';
 import type { TrendSample } from './trend';
 
+export type ProbeSample = {
+  domain: string;
+  resolved: boolean;
+  result: { responded?: boolean; status?: string; rcode?: string; elapsed_ms?: number; checked_at?: string };
+};
+export type ProbeResult = { pass: boolean; tests: Record<string, ProbeSample>; server: string; port: number };
+export type ProbeObservation = { result: ProbeResult; process: string | null; expired?: boolean };
+
 export interface SuiteState {
   caps: Capabilities | null; runtime: RuntimeSnapshot | null; samples: TrendSample[];
   runningEnv: Record<string, string> | null; statusError: string; refreshing: boolean;
   loading: boolean; error: string; runtimeError: string; paused: boolean;
   runtimeStale: boolean;
+  probe: ProbeObservation | null;
+  probeChecking: boolean;
+  probeError: string;
+  runProbe: () => Promise<void>;
   refresh: () => Promise<void>; setPaused: (paused: boolean) => void;
 }
 export const SuiteContext = createContext<SuiteState | null>(null);

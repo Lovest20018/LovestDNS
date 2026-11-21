@@ -7,7 +7,8 @@ import { Empty, Notice, Section } from './SuiteUI';
 import './SourceDevices.css';
 
 export function SourceAddress({ ip, name }: { ip: string; name?: string }) {
-  return <span className="source-address">{name && <span>{name}<span aria-hidden="true"> · </span></span>}<code>{ip}</code></span>;
+  return <span className="source-address">{name && <span className="source-address-name">{name}
+    <span className="source-address-separator" aria-hidden="true"> · </span></span>}<code>{ip}</code></span>;
 }
 
 export function SourceDeviceEditor({ address, name = '', onClose }: { address?: string; name?: string; onClose?: () => void }) {

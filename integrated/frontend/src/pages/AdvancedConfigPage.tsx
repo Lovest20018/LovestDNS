@@ -1,7 +1,6 @@
 import { parseCustomEnvDocument, serializeCustomEnvDocument, validateCustomEnvRows } from '../customEnvEditor';
 import type { CustomEnvRow } from '../customEnvEditor';
 import EditorToolbar from '../components/EditorToolbar';
-import { useSuiteConfig } from '../suiteContext';
 import { useFileEditor } from '../useFileEditor';
 import { useUnsavedChanges } from '../unsaved';
 import { useSyncExternalStore, useState } from 'react';
@@ -92,7 +91,6 @@ function parseCustomModYaml(content: string): CustomModParseResult {
 }
 
 export default function AdvancedConfigPage() {
-  const { error: connectionError } = useSuiteConfig();
   const { showToast, ToastComponent } = useToast();
   const activeSubTab = useSyncExternalStore(subscribeRoute, activeFile);
   const envEditor = useFileEditor('custom_env.ini', '', activeSubTab === 'custom_env');
@@ -208,7 +206,7 @@ export default function AdvancedConfigPage() {
         {tabDirty.unbound_custom && <span className="suite-draft-dot"> · 未保存</span>}</button>
       </div>
 
-      <EditorToolbar file={getActiveOutput().filename} dirty={tabDirty[activeSubTab]} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} change={saveResult && 'change' in saveResult ? saveResult.change : undefined} onSave={() => void handleSave()} />
+      <EditorToolbar file={getActiveOutput().filename} dirty={tabDirty[activeSubTab]} busy={saving} loaded={activeEditor.loaded} readError={activeEditor.error} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} change={saveResult && 'change' in saveResult ? saveResult.change : undefined} onSave={() => void handleSave()} />
       {activeEditor.error && <p className="suite-editor-result is-error" role="alert">{activeEditor.error}</p>}
 
       {loading && (

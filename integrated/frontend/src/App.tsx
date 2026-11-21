@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity, Boxes, ChevronRight, FileCog, HeartPulse, KeyRound,
-  LogOut, Moon, Network, Pause, Play, ScrollText, Shield, Sun, X,
+  LogOut, Monitor, Moon, Network, Pause, Play, ScrollText, Shield, Sun, X,
 } from 'lucide-react';
 import { useFilterView } from './filterContext';
 import { FilterProvider } from './FilterProvider';
@@ -109,6 +109,11 @@ function replaceHash(hash: string) {
 }
 
 type Theme = 'light' | 'dark' | 'system';
+const THEMES = {
+  system: { icon: Monitor, label: '跟随系统', next: 'light' },
+  light: { icon: Sun, label: '明亮', next: 'dark' },
+  dark: { icon: Moon, label: '深色', next: 'system' },
+} as const;
 
 function Console(props: Parameters<typeof Shell>[0]) {
   const { caps } = useSuite();
@@ -126,8 +131,29 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
   const { page, tab, canonical } = routeFromHash(hash);
   const title = sectionTitle(page, tab);
   const primaryPage = navPage(page);
+  const { icon: ThemeIcon, label: themeLabel, next: nextTheme } = THEMES[theme];
   const heading = useRef<HTMLHeadingElement>(null);
   const focusHeading = useRef(false);
+  const account = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const menu = account.current;
+    if (!menu) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (menu.open && !event.composedPath().includes(menu)) menu.open = false;
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !menu.open) return;
+      event.preventDefault();
+      menu.querySelector('summary')?.focus();
+      menu.open = false;
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, []);
   useEffect(() => {
     if (!hash) replaceHash('#/');
     if (canonical) {
@@ -169,6 +195,7 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
     const sync = (event: HashChangeEvent) => {
       setHash(location.hash);
       setMobileOpen(false);
+      if (account.current) account.current.open = false;
       const section = (url: string) => {
         const { page, tab } = routeFromHash(url.slice(url.indexOf('#')));
         return `${page}:${tab}`;
@@ -193,7 +220,39 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
       <div className="suite-sidebar-footer"><span>本地配置与诊断</span><small>{caps?.deployment === 'native' ? '原生服务' : caps ? '容器服务' : 'LovestDNS'} · {caps?.version?.replace('0.1.0-dev.lovestdns-native.', '') ?? '准备中'}</small></div>
     </aside>
     <main className="suite-main" inert={mobileOpen}>
-      <header className="suite-topbar"><button ref={menuButton} aria-controls="suite-navigation" aria-expanded={mobileOpen} className="suite-mobile-menu" onClick={() => setMobileOpen(true)} aria-label="打开导航"><Boxes size={19} /></button><div className="suite-breadcrumb">{title !== TITLES[primaryPage] && <><span>{TITLES[primaryPage]}</span><ChevronRight size={14} /></>}<strong>{title}</strong></div><div className="suite-top-actions"><button className="suite-icon-button" onClick={() => setTheme(theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system')} aria-label={`主题：${theme === 'system' ? '系统' : theme === 'light' ? '明亮' : '深色'}，点击切换`} title={`主题：${theme === 'system' ? '系统' : theme === 'light' ? '明亮' : '深色'}`}>{theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}</button><div className="suite-instance-refresh" role="group" aria-label="实例状态刷新"><button className="suite-refresh" onClick={() => void refresh()} disabled={refreshing} aria-busy={refreshing} aria-label="刷新状态"><Activity size={16} className={refreshing ? 'spin' : ''} /><span>状态刷新</span></button><button className="suite-refresh suite-refresh-toggle" onClick={() => setPaused(!paused)} aria-label={paused ? '恢复自动刷新' : '暂停自动刷新'} title={paused ? '恢复自动刷新' : '暂停自动刷新'}>{paused ? <Play size={16} /> : <Pause size={16} />}</button></div><details className="suite-account"><summary><KeyRound size={16} />账户</summary><div className="suite-account-menu"><button className="btn btn-secondary btn-sm" onClick={onPassword}><KeyRound size={15} />修改管理员密码</button><button className="btn btn-secondary btn-sm" onClick={onLogout}><LogOut size={15} />退出登录</button></div></details></div></header>
+      <header className="suite-topbar">
+        <button ref={menuButton} aria-controls="suite-navigation" aria-expanded={mobileOpen} className="suite-mobile-menu"
+          onClick={() => { if (account.current) account.current.open = false; setMobileOpen(true); }} aria-label="打开导航">
+          <Boxes size={19} />
+        </button>
+        <div className="suite-breadcrumb">
+          {title !== TITLES[primaryPage] && <><span>{TITLES[primaryPage]}</span><ChevronRight size={14} /></>}
+          <strong>{title}</strong>
+        </div>
+        <div className="suite-top-actions">
+          <button className="suite-icon-button" onClick={() => setTheme(nextTheme)}
+            aria-label={`主题：${themeLabel}，点击切换`} title={`主题：${themeLabel}`}>
+            <ThemeIcon size={17} aria-hidden="true" />
+          </button>
+          <div className="suite-instance-refresh" role="group" aria-label="实例状态刷新">
+            <button className="suite-refresh" onClick={() => void refresh()} disabled={refreshing} aria-busy={refreshing}
+              aria-label="刷新状态" title="刷新状态">
+              <Activity size={16} className={refreshing ? 'spin' : ''} /><span>状态刷新</span>
+            </button>
+            <button className="suite-refresh suite-refresh-toggle" onClick={() => setPaused(!paused)}
+              aria-label={paused ? '恢复自动刷新' : '暂停自动刷新'} title={paused ? '恢复自动刷新' : '暂停自动刷新'}>
+              {paused ? <Play size={16} /> : <Pause size={16} />}
+            </button>
+          </div>
+          <details className="suite-account" ref={account}>
+            <summary><KeyRound size={16} />账户</summary>
+            <div className="suite-account-menu">
+              <button className="btn btn-secondary btn-sm" onClick={onPassword}><KeyRound size={15} />修改管理员密码</button>
+              <button className="btn btn-secondary btn-sm" onClick={onLogout}><LogOut size={15} />退出登录</button>
+            </div>
+          </details>
+        </div>
+      </header>
       <section className="suite-content"><div className="suite-page-heading"><h1 ref={heading} tabIndex={-1}>{title}</h1></div>
         {(error || actionError) && <div className="suite-global-error"><HeartPulse size={16} /><div><strong>{error ? '连接暂时中断，草稿已保留' : '操作未完成'}</strong><p>{error || actionError}</p></div><button className="btn btn-secondary btn-sm" onClick={() => void refresh()}>重试</button></div>}
         {runtimeError && !error && !active && page !== 'dashboard' && <div className="suite-global-warning"><Activity size={16} /><span>运行状态读取暂不可用。{runtimeError}</span></div>}

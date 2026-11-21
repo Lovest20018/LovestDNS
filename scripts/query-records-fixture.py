@@ -106,6 +106,8 @@ def records(payload):
         # The same domain appears on both sides of the blocked-list page boundary.
         rows[28]['domain'] = rows[32]['domain']
         rows[28]['filter'] = rows[32]['filter']
+        rows[124]['domain'] = f'124.{"a" * 60}.{"b" * 60}.{"c" * 60}.example.test.'
+        rows[124]['filter']['rule'] = '||' + rows[124]['domain'].removesuffix('.') + '^'
         recorder.store.append(rows[:128]); recorder.store.append(rows[128:])
         now = int(time.time())
         recorder.store.record_coverage(now - 600, now)
@@ -133,6 +135,14 @@ def query_control():
         recorder.request({'operation': 'clear'})
     if body.get('seed_records'):
         records({'operation': 'configure', 'enabled': True})
+    if body.get('seed_allow'):
+        for number in range(1, 7):
+            filter_state['allow'][f'allow-{number}.example.test'] = None
+    if 'filter_changed' in body:
+        filter_state['revision'] = 'b' * 64 if body['filter_changed'] else filter_revision
+    if 'filter_available' in body:
+        available = bool(body['filter_available'])
+        filter_state.update(available=available, mode='mosdns' if available else 'recursive')
     return jsonify({'ok': True})
 
 

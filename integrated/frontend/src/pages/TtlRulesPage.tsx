@@ -9,7 +9,7 @@ import { useToast } from '../hooks';
 import { Plus, X, Clock, RefreshCw } from 'lucide-react';
 
 export default function TtlRulesPage() {
-  const { error: connectionError, runningEnv } = useSuiteConfig();
+  const { runningEnv } = useSuiteConfig();
   const { showToast, ToastComponent } = useToast();
   const rulesTtl = parseInt(runningEnv?.RULES_TTL || '0');
   const rulesEnabled = rulesTtl > 0;
@@ -78,7 +78,7 @@ export default function TtlRulesPage() {
         </div>
       )}
 
-      <EditorToolbar file="force_ttl_rules.txt" dirty={dirty} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} change={saveResult?.change} onSave={() => void editor.save()} />
+      <EditorToolbar file="force_ttl_rules.txt" dirty={dirty} busy={saving} loaded={editor.loaded} readError={editor.error} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} change={saveResult?.change} onSave={() => void editor.save()} />
       {editor.error && <p className="suite-editor-result is-error" role="alert">{editor.error}</p>}
 
       <div className="card">

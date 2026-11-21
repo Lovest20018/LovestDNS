@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ListFilter, Plus, RefreshCw, Shield } from 'lucide-react';
 import { checkFilter, filterLabels, filterPreviewHref } from '../filterApi';
 import type { FilterAction, FilterCheck, FilterSource, FilterSourceType, FilterState } from '../filterApi';
@@ -10,6 +10,7 @@ import './SuitePage.css';
 import './SuiteFiltering.css';
 
 const intervals = [[0, '仅手动'], [21600, '每 6 小时'], [86400, '每天'], [604800, '每周']] as const;
+const LOCAL_RULES_BYTES = 16 * 1024;
 const reasons: Record<string, string> = {
   pattern: '复杂匹配表达式', cosmetic: '元素隐藏规则', modifier: '扩展修饰符',
   hosts_rewrite: '指定 IP 的重写', invalid_domain: '域名格式无效', line_too_long: '规则行超长',
@@ -47,8 +48,17 @@ export default function SuiteFiltering() {
   };
   const draft = state?.draft;
   const showPreview = !!draft && tab !== 'records';
-  const canEdit = !!state?.available && !busy && task?.phase !== 'uncertain';
+  const actionStatus = useId();
+  const blockedReason = task?.phase === 'uncertain' ? '上一次过滤任务结果待核对，请核对后恢复操作。'
+    : busy ? '当前有过滤任务执行中，完成后可继续操作。'
+      : !state?.available ? '当前 DNS 入口不支持过滤或连接暂不可用。' : '';
+  const disabledBy = blockedReason ? actionStatus : undefined;
   const live = !readError && !!state?.available && state.live_enabled && state.live_revision === state.revision;
+  const sources = state?.sources ?? [];
+  const allowCount = sources.filter(source => source.type === 'allow').length;
+  const sourceOptions = [
+    ['all', '全部', sources.length], ['block', '拦截', sources.length - allowCount], ['allow', '白名单', allowCount],
+  ] as const;
 
   return <div className="suite-page dns-filter-page">
     <nav className="suite-page-tabs" aria-label="广告过滤分区">
@@ -61,7 +71,7 @@ export default function SuiteFiltering() {
       {task.message}{task.id && <small> · 任务 <code>{task.id}</code></small>}
       {task.phase === 'uncertain' && <>
         <button onClick={() => void refresh()}>重新读取</button>
-        <button disabled={busy || !!readError} onClick={acknowledgeTask}>已核对最近任务，恢复操作</button>
+        <button disabled={busy || !!readError} onClick={() => { acknowledgeTask(); setError(''); }}>已核对最近任务，恢复操作</button>
       </>}
     </Notice></div>}
     {busy && !task && <p aria-live="polite" className="suite-note">正在处理过滤任务…</p>}
@@ -80,34 +90,36 @@ export default function SuiteFiltering() {
         </div>
         {draft && showPreview && <div className="dns-filter-review">
           <p>订阅待复核 · <a href={filterPreviewHref(draft, tab)}>查看{draft.name}的预览</a></p>
-          <Preview key={draft.id} draft={draft} focus={preview === draft.id} disabled={!canEdit} apply={perform} />
+          <Preview key={draft.id} draft={draft} focus={preview === draft.id} disabledBy={disabledBy} apply={perform} />
         </div>}
         {preview && (!draft || preview !== draft.id) && <Notice tone="warning">该订阅预览已失效或已处理。</Notice>}
         {tab === 'records' && task?.phase === 'uncertain' && <FilterJobs state={state} expanded />}
         {tab === 'rules' && <div className="dns-filter-rules">
         <Section title="过滤设置" icon={Shield}>
-          <FilterEditor state={state} busy={!canEdit} apply={perform} />
+          <FilterEditor state={state} blockedReason={blockedReason} statusId={actionStatus} apply={perform} />
         </Section>
         <Section title="过滤订阅" icon={ListFilter}>
-          <label className="dns-source-type">订阅类型<select className="form-select" value={sourceType}
-            onChange={event => setSourceType(event.target.value as FilterSourceType | 'all')}>
-            <option value="all">全部类型</option><option value="block">拦截订阅</option><option value="allow">白名单订阅</option>
-          </select></label>
-          {state.sources.filter(item => sourceType === 'all' || (item.type ?? 'block') === sourceType)
+          <div className="suite-segment" role="group" aria-label="筛选订阅类型">
+            {sourceOptions.map(([type, label, count]) => <button key={type} type="button" aria-pressed={sourceType === type}
+              onClick={() => setSourceType(type)}>{label} ({count})</button>)}
+          </div>
+          {sources.filter(item => sourceType === 'all' || (item.type ?? 'block') === sourceType)
             .map(item => <Subscription key={item.id + item.interval + item.enabled}
-              source={item} live={live} disabled={!canEdit} apply={perform} />)}
-          <NewSubscription initiallyOpen={!state.sources.length && !draft} disabled={!canEdit} apply={perform} />
+              source={item} live={live} disabledBy={disabledBy} apply={perform} />)}
+          {sourceType !== 'all' && !sourceOptions.find(([type]) => type === sourceType)?.[2]
+            && <p className="suite-note">暂无这类订阅。</p>}
+          <NewSubscription initiallyOpen={!sources.length && !draft} disabledBy={disabledBy} apply={perform} />
           <FilterJobs state={state} expanded={task?.phase === 'uncertain'} />
         </Section>
         </div>}
         {tab === 'allow' && <>
           <Section title="精确放行" icon={Shield}>
-            <ManualAllow state={state} disabled={!canEdit} apply={perform} />
+            <ManualAllow state={state} blockedReason={blockedReason} statusId={actionStatus} apply={perform} />
           </Section>
           <Section title="白名单订阅" icon={ListFilter}>
-            {state.sources.filter(item => item.type === 'allow').map(item => <Subscription
-              key={item.id + item.interval + item.enabled} source={item} live={live} disabled={!canEdit} apply={perform} />)}
-            <NewSubscription type="allow" initiallyOpen={false} disabled={!canEdit} apply={perform} />
+            {sources.filter(item => item.type === 'allow').map(item => <Subscription
+              key={item.id + item.interval + item.enabled} source={item} live={live} disabledBy={disabledBy} apply={perform} />)}
+            <NewSubscription type="allow" initiallyOpen={false} disabledBy={disabledBy} apply={perform} />
             <FilterJobs state={state} expanded={task?.phase === 'uncertain'} />
           </Section>
         </>}
@@ -130,14 +142,20 @@ function FilterJobs({ state, expanded }: { state: FilterState; expanded: boolean
   </details>;
 }
 
-function ManualAllow({ state, disabled, apply }: { state: FilterState; disabled: boolean; apply: Apply }) {
+function ManualAllow({ state, blockedReason, statusId, apply }: {
+  state: FilterState; blockedReason: string; statusId: string; apply: Apply;
+}) {
   const [domain, setDomain] = useState('');
   const [mode, setMode] = useState<'temporary' | 'permanent'>('temporary');
+  const [search, setSearch] = useState('');
+  const disabled = !!blockedReason;
+  const entries = Object.entries(state.allow).sort(([a], [b]) => a.localeCompare(b));
+  const visible = entries.filter(([name]) => name.toLowerCase().includes(search.trim().toLowerCase()));
   return <>
     <p className="suite-note">精确匹配此域名，作用于整个实例。如需覆盖子域名，可在<a href="#/filter?tab=rules">本地规则</a>中添加域名例外。</p>
     <form className="dns-filter-inline" onSubmit={async event => {
       event.preventDefault();
-      if (await apply({ action: 'allow', domain: domain.trim(), mode })) setDomain('');
+      if (!disabled && domain.trim() && await apply({ action: 'allow', domain: domain.trim(), mode })) setDomain('');
     }}>
       <label>放行域名<input className="form-input" value={domain} maxLength={254} placeholder="example.test"
         onChange={event => setDomain(event.target.value)} disabled={disabled} required /></label>
@@ -145,28 +163,50 @@ function ManualAllow({ state, disabled, apply }: { state: FilterState; disabled:
         onChange={event => setMode(event.target.value as typeof mode)}>
         <option value="temporary">10 分钟</option><option value="permanent">永久</option>
       </select></label>
-      <button className="btn btn-primary" disabled={disabled || !domain.trim()}>添加放行</button>
+      <button className="btn btn-primary" disabled={disabled || !domain.trim()} aria-describedby={statusId}>添加放行</button>
     </form>
-    {Object.entries(state.allow).length ? <ul className="dns-filter-allow">{Object.entries(state.allow).sort().map(([name, until]) =>
-      <li key={name}><code>{name}</code><span>{until === null ? '永久' : '到期 ' + when(until)}</span>
-        <button className="btn btn-secondary btn-sm" disabled={disabled}
-          onClick={() => void apply({ action: 'allow', domain: name, mode: 'remove' })}>移除</button></li>)}</ul>
-      : <p className="suite-note">暂无精确放行</p>}
+    <p className="suite-note" id={statusId} role="status">{blockedReason || (!domain.trim() ? '输入域名后可添加放行。' : '')}</p>
+    {(entries.length > 5 || search) && <div className="dns-filter-allow-search">
+      <label>搜索放行域名<input className="form-input" type="search" value={search}
+        onChange={event => setSearch(event.target.value)} /></label>
+      {search && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>清除搜索</button>}
+    </div>}
+    {visible.length ? <ul className="dns-filter-allow">{visible.map(([name, until]) =>
+      <li key={name}>
+        <div><code>{name}</code><small>{until === null ? '永久' : '到期 ' + when(until)}</small></div>
+        <div className="suite-button-row">
+          {until !== null && <button type="button" className="btn btn-secondary btn-sm" disabled={disabled}
+            aria-describedby={disabled ? statusId : undefined}
+            aria-label={`将 ${name} 转为永久`}
+            onClick={() => void apply({ action: 'allow', domain: name, mode: 'permanent' })}>转为永久</button>}
+          <button type="button" className="btn btn-secondary btn-sm" disabled={disabled} aria-describedby={disabled ? statusId : undefined}
+            onClick={() => void apply({ action: 'allow', domain: name, mode: 'remove' })}>移除</button>
+        </div>
+      </li>)}</ul>
+      : <p className="suite-note">{entries.length ? '没有匹配的放行域名。' : '暂无精确放行'}</p>}
   </>;
 }
 
-function FilterEditor({ state, busy, apply }: { state: FilterState; busy: boolean; apply: Apply }) {
+function FilterEditor({ state, blockedReason, statusId, apply }: {
+  state: FilterState; blockedReason: string; statusId: string; apply: Apply;
+}) {
   const { draft, setDraft } = useFilterView();
   const { enabled, local, revision } = draft ?? { enabled: state.enabled, local: state.local_rules, revision: state.revision };
   const conflict = revision !== state.revision;
+  const ruleLines = local.split('\n').filter(line => line.trim() && !/^\s*[#!]/.test(line)).length;
+  const characters = Array.from(local).length;
+  const bytes = new TextEncoder().encode(local).length;
+  const tooLarge = bytes > LOCAL_RULES_BYTES;
+  const reason = blockedReason || (conflict ? '请先核对活动版本，再应用草稿。' : tooLarge ? '本地规则已超出容量，请删减后应用。'
+    : !draft ? '无待应用修改' : '');
   function edit(nextEnabled: boolean, nextLocal: string) {
     setDraft(nextEnabled === state.enabled && nextLocal === state.local_rules ? null
       : { enabled: nextEnabled, local: nextLocal, revision });
   }
-  return <form className="dns-filter-editor" onSubmit={e => { e.preventDefault(); if (draft && !conflict) void apply({ action: 'configure', enabled, local_rules: local }); }}>
-    <label className="dns-filter-switch">启用 DNS 去广告<input type="checkbox" checked={enabled} disabled={!state.available || busy} onChange={e => edit(e.target.checked, local)} /></label>
-    <label>本地规则<textarea className="form-input" value={local} rows={5} maxLength={16 * 1024}
-      spellCheck={false} disabled={!state.available || busy} onChange={e => edit(enabled, e.target.value)}
+  return <form className="dns-filter-editor" onSubmit={e => { e.preventDefault(); if (!reason) void apply({ action: 'configure', enabled, local_rules: local }); }}>
+    <label className="dns-filter-switch">启用 DNS 去广告<input type="checkbox" checked={enabled} disabled={!!blockedReason} onChange={e => edit(e.target.checked, local)} /></label>
+    <label>本地规则<textarea className="form-input" value={local} rows={5} maxLength={LOCAL_RULES_BYTES}
+      spellCheck={false} disabled={!!blockedReason} onChange={e => edit(enabled, e.target.value)}
       placeholder={'ads.example.test\n||tracker.example.test^\n@@||safe.tracker.example.test^'} /></label>
     <details className="dns-filter-help"><summary>支持的规则语法</summary><p className="suite-note">支持精确域名、域名及子域、两端带星号的固定域名片段、域名例外和阻断 hosts 行。命中时返回 REFUSED。</p></details>
     {conflict && draft && <Notice tone="warning">编辑期间活动配置已变化。当前保存的开关为{state.enabled ? '开启' : '关闭'}。
@@ -174,8 +214,14 @@ function FilterEditor({ state, busy, apply }: { state: FilterState; busy: boolea
       <button type="button" onClick={() => setDraft({ ...draft, revision: state.revision })}>已核对，保留草稿</button>
       <button type="button" onClick={() => setDraft(null)}>使用当前配置</button></Notice>}
     <div className="dns-filter-editor-footer">
-      <span>{draft ? '有未应用的修改' : '无待应用修改'}</span>
-      <button className="btn btn-primary btn-sm" disabled={!draft || conflict || busy || !state.available}>应用过滤设置</button>
+      <div className="dns-filter-rule-stats" data-over-limit={tooLarge}>
+        <span>规则行 {ruleLines.toLocaleString()} 条 · {characters.toLocaleString()} 字符</span>
+        <label>UTF-8 容量 {bytes.toLocaleString()} / {LOCAL_RULES_BYTES.toLocaleString()} 字节
+          <progress value={Math.min(bytes, LOCAL_RULES_BYTES)} max={LOCAL_RULES_BYTES} />
+        </label>
+      </div>
+      <span id={statusId} role="status">{reason || '有未应用的修改'}</span>
+      <button className="btn btn-primary btn-sm" disabled={!!reason} aria-describedby={statusId}>应用过滤设置</button>
     </div>
   </form>;
 }
@@ -233,11 +279,16 @@ function Interval({ value, disabled, onChange }: { value: number; disabled: bool
   </select></label>;
 }
 
-function NewSubscription({ type, initiallyOpen, disabled, apply }: { type?: FilterSourceType; initiallyOpen: boolean; disabled: boolean; apply: Apply }) {
+function NewSubscription({ type, initiallyOpen, disabledBy, apply }: {
+  type?: FilterSourceType; initiallyOpen: boolean; disabledBy?: string; apply: Apply;
+}) {
   const { subscriptionDraft, setSubscriptionDraft } = useFilterView();
   const draft = subscriptionDraft ?? { name: '', url: '', interval: 86400, type: type ?? 'block' };
   const { name, url, interval } = draft;
   const [open, setOpen] = useState(initiallyOpen || !!subscriptionDraft && (!type || draft.type === type));
+  const status = useId();
+  const disabled = !!disabledBy;
+  const incomplete = !name.trim() || !url.trim();
   return <div className="dns-filter-add"><button className="btn btn-secondary btn-sm" type="button" aria-expanded={open}
     onClick={() => {
       if (!open && type) setSubscriptionDraft({ ...draft, type });
@@ -245,7 +296,7 @@ function NewSubscription({ type, initiallyOpen, disabled, apply }: { type?: Filt
     }}><Plus size={14} />{open ? '收起添加表单' : type === 'allow' ? '添加白名单订阅' : '添加订阅'}</button>
     <form hidden={!open} className="dns-filter-inline dns-filter-new" onSubmit={async e => {
     e.preventDefault();
-    if (await apply({ action: 'preview', name: name.trim(), url: url.trim(), interval, type: draft.type })) setOpen(false);
+    if (!disabled && !incomplete && await apply({ action: 'preview', name: name.trim(), url: url.trim(), interval, type: draft.type })) setOpen(false);
   }}>
     <label>订阅类型<select className="form-select" value={draft.type} disabled={disabled}
       onChange={e => setSubscriptionDraft({ ...draft, type: e.target.value as FilterSourceType })}>
@@ -254,21 +305,26 @@ function NewSubscription({ type, initiallyOpen, disabled, apply }: { type?: Filt
     <label>订阅名称<input className="form-input" value={name} placeholder="我的 DNS 列表" maxLength={64} onChange={e => setSubscriptionDraft({ ...draft, name: e.target.value })} disabled={disabled} required /></label>
     <label>订阅地址<input className="form-input" type="url" value={url} placeholder="https://…" maxLength={2048} autoComplete="off" onChange={e => setSubscriptionDraft({ ...draft, url: e.target.value })} disabled={disabled} required /></label>
     <Interval value={interval} disabled={disabled} onChange={interval => setSubscriptionDraft({ ...draft, interval })} />
-    <button className="btn btn-secondary" disabled={disabled || !name.trim() || !url.trim()}>获取预览</button>
-    {subscriptionDraft && <button type="button" className="btn btn-secondary" disabled={disabled} onClick={() => {
+    {incomplete && !disabled && <p className="suite-note" id={status}>输入订阅名称和 HTTPS 地址后可获取预览。</p>}
+    <button className="btn btn-secondary" disabled={disabled || incomplete} aria-describedby={disabledBy ?? (incomplete ? status : undefined)}>获取预览</button>
+    {subscriptionDraft && <button type="button" className="btn btn-secondary" disabled={disabled} aria-describedby={disabledBy} onClick={() => {
       setSubscriptionDraft(null);
       setOpen(false);
     }}>清空草稿</button>}
   </form></div>;
 }
 
-function Preview({ draft, focus, disabled, apply }: { draft: NonNullable<FilterState['draft']>; focus: boolean; disabled: boolean; apply: Apply }) {
+function Preview({ draft, focus, disabledBy, apply }: {
+  draft: NonNullable<FilterState['draft']>; focus: boolean; disabledBy?: string; apply: Apply;
+}) {
   const [ack, setAck] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { if (focus) heading.current?.focus(); }, [focus]);
   const counts = draft.parse;
   const partial = !!(counts.invalid || counts.unsupported);
   const blocked = !!counts.protected || !counts.valid;
+  const status = useId();
+  const needsAck = partial && !ack;
   return <div className="dns-filter-preview">
     <div className="dns-source-heading"><h3 ref={heading} tabIndex={-1}>{draft.name}</h3><strong className="dns-review-label">待复核</strong></div>
     <small>{draft.type === 'allow' ? '白名单订阅' : '拦截订阅'} · {draft.host}</small>
@@ -278,17 +334,24 @@ function Preview({ draft, focus, disabled, apply }: { draft: NonNullable<FilterS
       <ul>{counts.issues.map(issue => <li key={issue.line}>第 {issue.line} 行 · {reasons[issue.reason] ?? issue.reason}
         <code>{issue.rule}{issue.truncated ? '…' : ''}</code></li>)}</ul>
     </details>}
-    {blocked && <Notice tone="warning">该版本无法启用。请检查例外语义和有效规则数量。</Notice>}
+    {blocked && <div id={status}><Notice tone="warning">该版本无法启用。请检查例外语义和有效规则数量。</Notice></div>}
     {partial && !blocked && <label><input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} /> 接受部分导入有效规则</label>}
-    <button className="btn btn-primary" disabled={disabled || blocked || (partial && !ack)}
+    {needsAck && !blocked && !disabledBy && <p id={status} className="suite-note">确认部分导入后可应用订阅。</p>}
+    <button className="btn btn-primary" disabled={!!disabledBy || blocked || needsAck}
+      aria-describedby={disabledBy ?? (blocked || needsAck ? status : undefined)}
       onClick={() => void apply({ action: 'apply_preview', preview: draft.id, partial: ack })}>应用订阅</button>
   </div>;
 }
 
-function Subscription({ source, live, disabled, apply }: { source: FilterSource; live: boolean; disabled: boolean; apply: Apply }) {
+function Subscription({ source, live, disabledBy, apply }: {
+  source: FilterSource; live: boolean; disabledBy?: string; apply: Apply;
+}) {
   const [interval, setInterval] = useState(source.interval);
   const [enabled, setEnabled] = useState(source.enabled);
   const [confirm, setConfirm] = useState(false);
+  const status = useId();
+  const disabled = !!disabledBy;
+  const unchanged = enabled === source.enabled && interval === source.interval;
   const save = (remove: boolean) => void apply({ action: 'subscription', id: source.id, enabled, interval, remove });
   return <div className="dns-filter-subscription">
     <div className="dns-source-heading"><h3>{source.name}</h3>
@@ -302,14 +365,15 @@ function Subscription({ source, live, disabled, apply }: { source: FilterSource;
     <div className="dns-filter-inline dns-source-settings">
       <label><input type="checkbox" checked={enabled} disabled={disabled} onChange={e => setEnabled(e.target.checked)} /> 已启用</label>
       <Interval value={interval} disabled={disabled} onChange={setInterval} />
-      <button className="btn btn-secondary btn-sm" disabled={disabled || enabled === source.enabled && interval === source.interval}
+      <button className="btn btn-secondary btn-sm" disabled={disabled || unchanged} aria-describedby={disabledBy ?? (unchanged ? status : undefined)}
         onClick={() => save(false)}>保存订阅设置</button>
-      <button className="btn btn-secondary btn-sm" disabled={disabled} onClick={() => setConfirm(!confirm)}>移除</button>
+      <button className="btn btn-secondary btn-sm" disabled={disabled} aria-describedby={disabledBy} onClick={() => setConfirm(!confirm)}>移除</button>
     </div>
+    {unchanged && !disabled && <p className="suite-note" id={status}>订阅设置暂无修改。</p>}
     {confirm && <Notice tone="warning">移除此订阅会重新计算域名规则。
-      <button className="btn btn-secondary btn-sm" disabled={disabled} onClick={() => save(true)}>确认移除</button>
+      <button className="btn btn-secondary btn-sm" disabled={disabled} aria-describedby={disabledBy} onClick={() => save(true)}>确认移除</button>
     </Notice>}</details>
-    <button className="btn btn-secondary btn-sm" disabled={disabled}
+    <button className="btn btn-secondary btn-sm" disabled={disabled} aria-describedby={disabledBy}
       onClick={() => void apply({ action: 'refresh', id: source.id })}><RefreshCw size={13} />刷新订阅</button></div>
   </div>;
 }

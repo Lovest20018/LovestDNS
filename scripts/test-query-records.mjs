@@ -38,7 +38,12 @@ try {
   evaluate = async expression => { const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw Error(r.exceptionDetails.text); return r.result.value; };
   const wait = async expression => { for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await sleep(100); } throw Error('Timed out: ' + expression); };
   const click = (label, within = '') => evaluate(`(()=>{const b=[...document.querySelectorAll(${JSON.stringify((within ? within + ' ' : '') + 'button')})].find(b=>b.getClientRects().length&&b.textContent.trim()===${JSON.stringify(label)});if(!b)throw Error('Button missing: '+${JSON.stringify(label)});b.click();})()`);
-  const input = (selector, value) => evaluate(`(()=>{const n=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(n.tagName==='SELECT'?HTMLSelectElement.prototype:HTMLInputElement.prototype,'value').set.call(n,${JSON.stringify(value)});n.dispatchEvent(new Event(n.tagName==='SELECT'?'change':'input',{bubbles:true}));})()`);
+  const input = (selector, value) => evaluate(`(() => {
+    const input = document.querySelector(${JSON.stringify(selector)});
+    const prototype = { SELECT: HTMLSelectElement, TEXTAREA: HTMLTextAreaElement, INPUT: HTMLInputElement }[input.tagName].prototype;
+    Object.getOwnPropertyDescriptor(prototype, 'value').set.call(input, ${JSON.stringify(value)});
+    input.dispatchEvent(new Event(input.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
+  })()`);
   const control = async body => { const r = await fetch(base + '/fixture/query-control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); assert(r.ok); };
   const shot = async name => { await sleep(200); const r = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }); await fs.writeFile(path.join(out, name + '.png'), Buffer.from(r.data, 'base64')); };
   await send('Page.enable'); await send('Runtime.enable');
@@ -155,7 +160,7 @@ try {
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 1000, deviceScaleFactor: 1, mobile: false });
   await evaluate("document.querySelector('.query-analytics-actions').closest('section').scrollIntoView({block:'start'}); window.scrollBy(0,-90)");
   await shot('analytics-mobile');
-  assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'));
+  assert(await evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'));
   await send('Emulation.setDeviceMetricsOverride', { width: 1360, height: 1050, deviceScaleFactor: 1, mobile: false });
   await evaluate("[...document.querySelectorAll('.query-analytics-bucket')].find(node=>Number(node.firstElementChild.dataset.count)>0).click()");
   await wait("location.hash.includes('snapshot=130') && !!document.querySelector('.query-record-table tbody tr')");
@@ -193,10 +198,18 @@ try {
   assert.equal(await evaluate("document.querySelectorAll('.query-record-table tbody tr').length"), 50);
   await control({ malformed: false }); await click('刷新记录');
   await wait("!document.querySelector('.suite-notice.is-error')");
+  const longDomainButton = '[data-query-focus="record:synthetic-browser:124"]';
+  const longDevice = '家庭网络固定地址设备'.repeat(6);
+  await evaluate(`document.querySelector('.query-record-desktop '+${JSON.stringify(longDomainButton)}).click()`);
+  await click('添加备注');
+  await input('.query-record-desktop .source-device-editor input', longDevice);
+  await click('保存备注');
+  await wait(`document.querySelector('.query-record-desktop .query-detail-device')?.textContent.includes(${JSON.stringify(longDevice)})`);
+  await evaluate(`document.querySelector('.query-record-desktop '+${JSON.stringify(longDomainButton)}).click()`);
   for (const width of [390, 320]) {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false });
     await sleep(200);
-    assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'), 'page overflow at ' + width);
+    assert(await evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), 'page overflow at ' + width);
     assert(await evaluate("getComputedStyle(document.querySelector('.query-record-desktop')).display==='none' && getComputedStyle(document.querySelector('.query-record-cards')).display!=='none'"), 'mobile uses readable record cards');
     assert(await evaluate("getComputedStyle(document.querySelector('.query-record-filters')).display==='none'"), 'mobile filters start collapsed');
     await evaluate("document.querySelector('.query-filter-mobile button').click()");
@@ -206,6 +219,19 @@ try {
     await shot('recent-mobile-' + width);
     await evaluate("document.documentElement.dataset.theme='dark'"); await shot('recent-mobile-' + width + '-dark');
     await evaluate("document.documentElement.dataset.theme='light'");
+    const longRow = '.query-record-card:has(' + longDomainButton + ')';
+    assert(await evaluate(`(() => {
+      const row = document.querySelector(${JSON.stringify(longRow)});
+      const domain = row.querySelector('button.query-record-expand');
+      const name = row.querySelector('.source-address-name');
+      const ip = row.querySelector('.source-address code');
+      const bounds = row.getBoundingClientRect();
+      return domain.textContent.length > 190 && domain.offsetHeight >= 44 && domain.scrollWidth <= domain.clientWidth
+        && name.getBoundingClientRect().right <= bounds.right && name.getBoundingClientRect().bottom <= ip.getBoundingClientRect().top
+        && getComputedStyle(domain).fontFamily.includes('monospace');
+    })()`), 'long domain or device name does not fit at ' + width);
+    await evaluate(`document.querySelector(${JSON.stringify(longRow)}).scrollIntoView({block:'center'})`);
+    await shot('long-query-name-' + width);
     await evaluate("document.querySelector('.query-record-card .query-record-expand').click()");
     await wait("!!document.querySelector('.query-record-card .query-record-detail')");
     await shot('recent-mobile-' + width + '-response');
@@ -231,6 +257,27 @@ try {
   await wait("document.querySelector('.dns-filter-allow')?.textContent.includes('128.synthetic-query.example.test')");
   await evaluate("document.querySelector('a[href=\"#/filter?tab=rules\"]').click()");
   await wait("document.querySelector('.dns-filter-new')?.offsetWidth>0");
+  const localRules = 'ads.example.test\n   # 中文注释\n\n! comment\n||tracker.example.test^';
+  await input('.dns-filter-editor textarea', localRules);
+  await wait("document.querySelector('.dns-filter-rule-stats')?.textContent.includes('规则行 2 条')");
+  assert.equal(await evaluate("document.querySelector('.dns-filter-rule-stats progress').value"), Buffer.byteLength(localRules));
+  const applyReason = fragment => `(() => {
+    const button = document.querySelector('.dns-filter-editor-footer button');
+    return !!button?.disabled && document.getElementById(button.getAttribute('aria-describedby'))?.textContent.includes(${JSON.stringify(fragment)});
+  })()`;
+  await control({ filter_changed: true });
+  await click('刷新过滤状态');
+  await wait(applyReason('核对活动版本'));
+  await control({ filter_changed: false, filter_available: false });
+  await click('刷新过滤状态');
+  await wait(applyReason('当前 DNS 入口'));
+  await control({ filter_available: true });
+  await click('刷新过滤状态');
+  await wait("document.querySelector('.dns-filter-editor textarea')?.disabled===false");
+  await input('.dns-filter-editor textarea', '# ' + '注'.repeat(5500));
+  await wait("document.querySelector('.dns-filter-rule-stats[data-over-limit=true]') && document.querySelector('.dns-filter-editor-footer button').disabled");
+  await input('.dns-filter-editor textarea', '');
+  await wait("document.querySelector('.dns-filter-editor-footer')?.textContent.includes('无待应用修改')");
   await input('.dns-filter-new input[type="url"]', 'https://example.test/rules?access=fixture-secret');
   await input('.dns-filter-new input:not([type="url"])', '合成订阅兼容测试');
   await input('.dns-filter-new select[aria-label="刷新周期"], .dns-filter-new label:has(option[value="604800"]) select', '604800');
@@ -244,6 +291,7 @@ try {
   await control({ filter_delay: true });
   await click('获取预览');
   await wait("document.body.textContent.includes('正在处理过滤任务')");
+  await wait(applyReason('过滤任务执行中'));
   await evaluate("location.hash='#/system'");
   await wait("!document.querySelector('.dns-filter-page')");
   await sleep(2400);
@@ -273,12 +321,29 @@ try {
   await click('添加放行');
   await wait("document.body.textContent.includes('提交结果待核对')");
   assert(await evaluate("[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='添加放行').disabled"));
+  assert(await evaluate(`(() => {
+    const button = document.querySelector('.dns-filter-inline [aria-describedby]');
+    return document.getElementById(button.getAttribute('aria-describedby')).textContent.includes('结果待核对');
+  })()`));
   await wait("document.querySelector('.dns-filter-allow')?.textContent.includes('uncertain.example.test')");
   assert(await evaluate("document.querySelector('.dns-filter-jobs').open"));
   assert(await evaluate("[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='添加放行').disabled"));
   await click('已核对最近任务，恢复操作');
   await wait("!document.body.textContent.includes('提交结果待核对')");
   await control({ filter_uncertain: false, filter_delay: false });
+  assert.equal(await evaluate("document.querySelector('.dns-filter-allow-search')"), null);
+  await control({ seed_allow: true });
+  await click('刷新过滤状态');
+  await wait("!!document.querySelector('.dns-filter-allow-search input')");
+  await input('.dns-filter-allow-search input', 'UNSEEN');
+  await wait('document.querySelectorAll(".dns-filter-allow li").length===1');
+  assert.equal(await evaluate("document.querySelector('.dns-filter-allow li code').textContent"), manualDomain);
+  await click('转为永久', '.dns-filter-allow');
+  await wait("document.querySelector('.dns-filter-allow li small')?.textContent==='永久' && !document.querySelector('.dns-filter-allow li [aria-label$=转为永久]')");
+  await input('.dns-filter-allow-search input', 'missing.example.test');
+  await wait("document.body.textContent.includes('没有匹配的放行域名')");
+  await click('清除搜索', '.dns-filter-allow-search');
+  await wait('document.querySelectorAll(".dns-filter-allow li").length>5');
   await click('添加白名单订阅');
   assert.equal(await evaluate("document.querySelector('.dns-filter-new select').value"), 'allow');
   await input('.dns-filter-new input[type="url"]', 'https://example.test/allow');
@@ -289,7 +354,7 @@ try {
   for (const width of [390, 320]) {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false });
     await evaluate("document.querySelector('.dns-filter-allow').scrollIntoView({block:'center'})");
-    assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'), 'allow list overflows at ' + width);
+    assert(await evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), 'allow list overflows at ' + width);
     await shot('filter-allow-mobile-' + width);
   }
   await evaluate("location.hash='#/'");
@@ -300,7 +365,7 @@ try {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false });
     await evaluate(`location.hash=${JSON.stringify(previewLink)}`);
     await wait("document.activeElement?.textContent==='白名单订阅合成夹具'");
-    assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+1'), 'subscription preview overflows at ' + width);
+    assert(await evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), 'subscription preview overflows at ' + width);
     await shot('filter-preview-mobile-' + width);
     await evaluate("document.documentElement.dataset.theme='dark'"); await shot('filter-preview-mobile-' + width + '-dark');
     await evaluate("document.documentElement.dataset.theme='light';location.hash='#/'");
@@ -311,6 +376,13 @@ try {
   await evaluate("document.querySelector('.dns-filter-preview input[type=checkbox]').click()");
   await click('应用订阅');
   await wait("document.querySelector('.dns-filter-subscription:nth-of-type(n)') && [...document.querySelectorAll('.dns-filter-subscription')].some(row=>row.textContent.includes('白名单订阅合成夹具'))");
+  await click('白名单 (1)', '.suite-segment');
+  await wait("document.querySelector('.suite-segment [aria-pressed=true]')?.textContent==='白名单 (1)' && document.querySelectorAll('.dns-filter-subscription').length===1");
+  assert(await evaluate("document.querySelector('.dns-filter-subscription').textContent.includes('白名单订阅合成夹具')"));
+  await click('拦截 (1)', '.suite-segment');
+  await wait("document.querySelector('.dns-filter-subscription')?.textContent.includes('合成订阅兼容测试')");
+  await click('全部 (2)', '.suite-segment');
+  await wait("document.querySelectorAll('.dns-filter-subscription').length===2");
   await send('Emulation.setDeviceMetricsOverride', { width: 1360, height: 1050, deviceScaleFactor: 1, mobile: false });
   await control({ seed_records: true });
   await evaluate("location.hash='#/'");
@@ -343,6 +415,20 @@ try {
   await click('返回最近拦截');
   await wait("!document.querySelector('.blocked-query-pages') && document.querySelectorAll('.dns-filter-page .blocked-query-summary').length===5");
   assert.equal(await evaluate("document.activeElement?.textContent"), '全部拦截记录');
+  for (const width of [390, 320]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false });
+    await evaluate("document.documentElement.dataset.theme='dark'");
+    assert(await evaluate(`(() => {
+      const row = document.querySelector('.blocked-query-summary:has([data-query-focus="block:synthetic-browser:124"])');
+      const button = row.querySelector('.query-record-expand');
+      const name = row.querySelector('.source-address-name');
+      const ip = row.querySelector('.source-address code');
+      return document.documentElement.scrollWidth <= document.documentElement.clientWidth && button.offsetHeight >= 44
+        && button.scrollWidth <= button.clientWidth && name.getBoundingClientRect().bottom <= ip.getBoundingClientRect().top;
+    })()`), 'blocked domain or source name overflows at ' + width);
+    await evaluate("document.querySelector('.blocked-query-summary').scrollIntoView({block:'center'})");
+    await shot('blocked-long-name-' + width + '-dark');
+  }
   assert.deepEqual(errors, []);
   await fs.writeFile(path.join(out, 'result.json'), JSON.stringify({
     passed: true,
@@ -357,7 +443,9 @@ try {
       'malformed_response_rejected', 'clear_confirmation_cancel_and_apply', 'light_dark_mobile_cards_and_filter_panel',
       'filter_primary_navigation', 'home_and_filter_record_details', 'filter_tabs',
       'current_rule_check_and_partial_subscription_import', 'subscription_draft_and_task_resume',
-      'manual_allow_failure_and_unconfirmed_submit', 'allow_subscription_scopes_and_preview_focus', 'no_runtime_exceptions',
+      'manual_allow_failure_and_unconfirmed_submit', 'allow_subscription_scopes_and_preview_focus',
+      'rule_lines_and_utf8_limit', 'counted_subscription_filters', 'search_and_promote_temporary_allow', 'no_runtime_exceptions',
+      'long_domain_and_stacked_source_name', 'filter_disabled_action_reasons',
     ],
   }, null, 2));
   console.log('PASS: query recorder UI, filters, pagination, errors, clear, 1360/390/320 layouts. Output: ' + out);

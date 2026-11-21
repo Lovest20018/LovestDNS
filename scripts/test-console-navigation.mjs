@@ -50,7 +50,7 @@ try {
   const go = async (hash, title) => { await evaluate(`location.hash=${JSON.stringify(hash)}`); await wait(`document.querySelector('.suite-page-heading h1')?.textContent===${JSON.stringify(title)}`); await wait("!document.querySelector('.suite-content')?.textContent.includes('正在加载页面…')"); await sleep(120); };
   const control = (body) => fetch(origin + '/fixture/navigation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   screenshot = async (name) => { const result = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }); await fs.writeFile(path.join(output, name), Buffer.from(result.data, 'base64')); };
-  const assertFits = async (label) => assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+2'), label + ' overflows horizontally');
+  const assertFits = async (label) => assert(await evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), label + ' overflows horizontally');
   await send('Page.enable'); await send('Runtime.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 960, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: origin });
@@ -79,6 +79,8 @@ try {
   await click('可视化编辑');
   await nav('自定义转发', '.suite-local-links');
   await wait("document.activeElement.id==='settings-custom_forward'");
+  assert(await evaluate("document.activeElement.getBoundingClientRect().top >= document.querySelector('.suite-file-toolbar').getBoundingClientRect().bottom"),
+    'A setting reached from the list editor must be visible below the sticky toolbar');
   await back('#/lists?file=force_forward_list.txt');
   await wait("[...document.querySelectorAll('button')].some(button=>button.textContent==='可视化编辑' && button.classList.contains('active'))");
   await wait("[...document.querySelectorAll('input')].some(input=>input.value==='unsaved-navigation.example')");

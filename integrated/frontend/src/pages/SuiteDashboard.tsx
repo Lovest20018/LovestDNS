@@ -1,26 +1,24 @@
-import { Activity, ArrowUpRight, Network, Radio, Shield } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Activity, ArrowUpRight, Copy, Network, Radio, Shield } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useSuite } from '../suiteContext';
+import type { ProbeSample } from '../suiteContext';
 import { filterStatus, useFilterView } from '../filterContext';
 import { filterPreviewHref } from '../filterApi';
 import { useGateway } from '../gatewayContext';
-import { errorText, suiteFetch, when } from '../suiteApi';
+import { when } from '../suiteApi';
 import { Notice, Offline } from '../components/SuiteUI';
 import { componentSummary, CORE } from '../runtimePresentation';
 import { dnsAddress, entryListeners } from '../dnsListeners';
 import { processFingerprint } from '../queryEvidence';
+import { copyTextFromPage } from '../copyText';
 import QueryAnalytics from '../components/QueryAnalytics';
 import { isActiveTask, taskLabel, TASK_NAMES, useMaintenance } from '../maintenanceContext';
 import './SuitePage.css';
 import './HomeWorkflow.css';
 
-const PROBE_FRESH_MS = 5 * 60_000;
-type ProbeSample = {
-  domain: string; resolved: boolean;
-  result: { responded?: boolean; status?: string; rcode?: string; elapsed_ms?: number; checked_at?: string };
-};
-type ProbeResult = { pass: boolean; tests: Record<string, ProbeSample>; server: string; port: number };
-type ProbeObservation = { result: ProbeResult; process: string | null; expired?: boolean };
+const severity = { error: 0, warning: 1, info: 2 } as const;
+type HomeAlert = { id: string; tone: keyof typeof severity; content: ReactNode };
 
 function probeResultText(sample: ProbeSample) {
   const { responded, status, rcode } = sample.result;
@@ -33,25 +31,34 @@ function probeResultText(sample: ProbeSample) {
   return '未收到有效 DNS 应答';
 }
 
+function DnsEntryAddress({ addresses }: { addresses: string[] }) {
+  const [feedback, setFeedback] = useState<'copied' | 'failed' | null>(null);
+  useEffect(() => {
+    if (feedback !== 'copied') return;
+    const timer = window.setTimeout(() => setFeedback(null), 2000);
+    return () => window.clearTimeout(timer);
+  }, [feedback]);
+  if (!addresses.length) return <strong className="suite-home-address">监听待确认</strong>;
+  return <div className="suite-home-address-row">
+    <strong className="suite-home-address">{addresses.join(' · ')}</strong>
+    <button type="button" className="btn btn-secondary btn-sm" aria-label="复制监听地址"
+      onClick={async () => setFeedback(await copyTextFromPage(addresses.join('\n')) ? 'copied' : 'failed')}>
+      <Copy size={14} aria-hidden="true" /><span aria-live="polite">{feedback === 'copied' ? '已复制' : '复制'}</span>
+    </button>
+    {feedback === 'failed' && <p role="status">自动复制失败，可选中监听地址手动复制。</p>}
+  </div>;
+}
+
 export default function SuiteDashboard() {
-  const { caps, runtime, paused, runtimeStale, runtimeError, error } = useSuite();
+  const { caps, runtime, paused, runtimeStale, runtimeError, error,
+    probe: check, probeChecking: checking, probeError: checkError, runProbe } = useSuite();
   const filter = useFilterView();
   const { config: gateway } = useGateway();
   const { tasks, submission, readError } = useMaintenance();
-  const [checking, setChecking] = useState(false);
-  const [check, setCheck] = useState<ProbeObservation | null>(null);
-  const [checkError, setCheckError] = useState('');
   const result = check?.result;
   const probeSamples = Object.values(result?.tests ?? {});
   const probeTimes = probeSamples.map(sample => Date.parse(sample.result.checked_at ?? '') / 1000).filter(Number.isFinite);
   const probeTime = probeTimes.length ? Math.max(...probeTimes) : undefined;
-  const controller = useRef<AbortController | null>(null);
-  useEffect(() => () => controller.current?.abort(), []);
-  useEffect(() => {
-    if (!check || check.expired) return;
-    const timer = setTimeout(() => setCheck(current => current === check ? { ...check, expired: true } : current), PROBE_FRESH_MS);
-    return () => clearTimeout(timer);
-  }, [check]);
   const active = tasks.find(isActiveTask);
   const latest = active ?? tasks[0];
   const shownSubmission = !active && submission && (submission.phase !== 'failed' || !latest) ? submission : null;
@@ -63,25 +70,6 @@ export default function SuiteDashboard() {
   const probeHistorical = !!check && (check.expired || checking || !!checkError || !!activeConfig
     || !!readError || !!error || paused || runtimeStale || check.process !== currentProcess
     || (latestConfigUpdate > 0 && (probeTimes.length !== probeSamples.length || Math.min(...probeTimes) <= latestConfigUpdate)));
-  const checkDns = async () => {
-    if (!caps || controller.current || activeConfig) return;
-    const abort = new AbortController();
-    controller.current = abort;
-    setChecking(true); setCheckError('');
-    try {
-      const params = new URLSearchParams({ server: caps.dns_defaults.server, port: String(caps.dns_defaults.port) });
-      const result = await suiteFetch<ProbeResult>(`/api/v1/health-check?${params}`, { signal: abort.signal });
-      const samples = Object.values(result.tests ?? {});
-      if (typeof result.pass !== 'boolean' || samples.length === 0 || samples.some(sample => typeof sample?.domain !== 'string'
-        || typeof sample.resolved !== 'boolean' || !sample.result || typeof sample.result !== 'object')) throw new Error('服务没有返回有效的域名测试结果');
-      if (!abort.signal.aborted) setCheck({ result, process: currentProcess });
-    } catch (error) {
-      if (!abort.signal.aborted) setCheckError(errorText(error));
-    } finally {
-      if (controller.current === abort) controller.current = null;
-      if (!abort.signal.aborted) setChecking(false);
-    }
-  };
   if (!caps) return <Offline />;
   const components = runtime?.components ?? {};
   const auxiliary = Object.keys(components).filter((name) => !CORE.includes(name));
@@ -90,6 +78,26 @@ export default function SuiteDashboard() {
   const addresses = [...new Set(endpoints.map((endpoint) => dnsAddress(endpoint.address, endpoint.port)))];
   const historical = paused || runtimeStale;
   const process = error ? '面板连接中断' : historical ? '显示历史快照' : runtime?.core_healthy ? 'DNS 进程运行中' : runtime ? 'DNS 进程需检查' : '等待运行状态';
+  const alerts: HomeAlert[] = [];
+  if (!activeConfig && (runtime?.error || runtimeError)) {
+    alerts.push({ id: 'core', tone: 'error', content: runtime?.error || runtimeError });
+  }
+  else if (!activeConfig && runtime && !runtime.core_healthy) alerts.push({
+    id: 'core', tone: 'warning', content: <>核心组件需检查。{caps.permissions.maintain && <a href="#/system?tab=logs&component=bootstrap">查看启动日志</a>}</>,
+  });
+  if (problems.length) alerts.push({
+    id: 'auxiliary', tone: 'warning', content: <>辅助服务需检查。{problems.map((name, i) => <span key={name}>
+      {i > 0 && '、'}{caps.permissions.maintain ? <a href={`#/system?tab=logs&component=${encodeURIComponent(name)}`}>{name}</a> : name}
+    </span>)}</>,
+  });
+  if (shownSubmission) {
+    const phase = shownSubmission.phase;
+    alerts.push({ id: 'submission', tone: phase === 'failed' ? 'error' : phase === 'uncertain' ? 'warning' : 'info',
+      content: <a href="#/system?tab=tasks">{TASK_NAMES[shownSubmission.action]} · {phase === 'sending' ? '正在提交' : phase === 'failed' ? '提交失败' : '正在核对受理记录'}</a> });
+  } else if (latest?.state === 'failed') alerts.push({
+    id: 'task', tone: 'warning', content: <a href="#/system?tab=tasks">{taskLabel(latest)} · 查看任务详情</a>,
+  });
+  const [firstAlert, ...otherAlerts] = alerts.sort((a, b) => severity[a.tone] - severity[b.tone]);
   return <div className="suite-page suite-home">
     <section className="card suite-home-health" data-healthy={!!runtime?.core_healthy && !activeConfig && !historical && !error} aria-label="DNS 状态与待处理操作">
       <div className="suite-home-health-main">
@@ -97,9 +105,9 @@ export default function SuiteDashboard() {
         <div role="status">
           <h2><Activity size={21} aria-hidden="true" />{activeConfig ? `${error || readError ? '上次看到 · ' : ''}${taskLabel(activeConfig)}` : process}</h2>
           <p>{activeConfig ? `任务更新于 ${when(activeConfig.updated)}`
-            : runtime ? `进程状态采样于 ${when(runtime.sampled_at)}` : runtimeError || '正在连接 DNS 实例'}</p>
+            : runtime ? `进程状态采样于 ${when(runtime.sampled_at)}` : runtimeError ? '运行状态暂不可用' : '正在连接 DNS 实例'}</p>
         </div>
-        <div className="suite-home-actions">{activeConfig ? <a className="btn btn-primary" href="#/system?tab=tasks">查看任务进度</a> : caps.permissions.diagnose && <button className="btn btn-primary" disabled={checking || !!error} onClick={() => void checkDns()}>
+        <div className="suite-home-actions">{activeConfig ? <a className="btn btn-primary" href="#/system?tab=tasks">查看任务进度</a> : caps.permissions.diagnose && <button className="btn btn-primary" disabled={checking || !!error} onClick={() => void runProbe()}>
           {checking ? '正在测试解析…' : '测试本机解析'}</button>}
           <a href="#/diagnostics?tab=query&help=device">检查设备接入<ArrowUpRight size={13} /></a>
           <a href="#/system?tab=status">查看运行状态<ArrowUpRight size={13} /></a></div>
@@ -115,6 +123,9 @@ export default function SuiteDashboard() {
             <small>{dnsAddress(result.server, result.port)} · {probeSamples.filter(sample => sample.resolved).length} / {probeSamples.length} 个域名取得 A 记录</small>
             <ul>{probeSamples.map(sample => <li key={sample.domain}>
               <code>{sample.domain}</code><span>{probeResultText(sample)}{typeof sample.result.elapsed_ms === 'number' ? ` · ${sample.result.elapsed_ms} ms` : ''}</span>
+              {!sample.resolved && caps.permissions.diagnose && <a href={`#/diagnostics?tab=query&domain=${encodeURIComponent(sample.domain)}`}>
+                主动查询<ArrowUpRight size={13} aria-hidden="true" />
+              </a>}
             </li>)}</ul>
             <small>从本机服务发起 · {probeTime !== undefined ? when(probeTime) : '查询时间未返回'}</small>
           </div>}
@@ -122,17 +133,20 @@ export default function SuiteDashboard() {
       </div>
       <div className="suite-home-followup suite-home-entry">
         <div><h3><Radio size={16} />{caps.deployment === 'container' ? '容器内 DNS 入口' : 'DNS 监听入口'}</h3>
-          <strong className="suite-home-address">{addresses.join(' · ') || '监听待确认'}</strong>
+          <DnsEntryAddress key={addresses.join('|')} addresses={addresses} />
           {historical && <small>上次采样</small>}</div>
         {caps.features.dns_filter && caps.permissions.configure && <div><h3><Shield size={16} />广告过滤</h3>
           <a href="#/filter">{(filter.error || paused ? '上次读取 · ' : '') + filterStatus(filter.state)}</a>
           {filter.state?.draft && <p><a href={filterPreviewHref(filter.state.draft)}>订阅待复核 · {filter.state.draft.name}</a></p>}</div>}
       </div>
     </section>
-    {!activeConfig && (runtime?.error ? <Notice tone="error">{runtime.error}</Notice> : runtime && !runtime.core_healthy ? <Notice tone="warning">核心组件需检查。{caps.permissions.maintain && <a href="#/system?tab=logs&component=bootstrap">查看启动日志</a>}</Notice> : null)}
-    {!!problems.length && <Notice tone="warning">辅助服务需检查。{problems.map((name, i) => <span key={name}>{i > 0 && '、'}{caps.permissions.maintain ? <a href={`#/system?tab=logs&component=${encodeURIComponent(name)}`}>{name}</a> : name}</span>)}</Notice>}
-    {shownSubmission && <Notice><a href="#/system?tab=tasks">{TASK_NAMES[shownSubmission.action]} · {shownSubmission.phase === 'sending' ? '正在提交' : shownSubmission.phase === 'failed' ? '提交失败' : '正在核对受理记录'}</a></Notice>}
-    {!shownSubmission && latest?.state === 'failed' && <Notice tone="warning"><a href="#/system?tab=tasks">{taskLabel(latest)} · 查看任务详情</a></Notice>}
+    {firstAlert && <div className="suite-home-alerts">
+      <Notice tone={firstAlert.tone}>{firstAlert.content}</Notice>
+      {otherAlerts.length > 0 && <details className="suite-home-alerts-more">
+        <summary>另有 {otherAlerts.length} 项待处理提醒</summary>
+        <div>{otherAlerts.map(alert => <Notice key={alert.id} tone={alert.tone}>{alert.content}</Notice>)}</div>
+      </details>}
+    </div>}
     {caps.features.query_recording && caps.permissions.configure
       && <QueryAnalytics key={caps.instance_id} instance={caps.instance_id} paused={paused} />}
     {gateway?.enabled && <a className="suite-gateway-link" href="#/diagnostics?tab=gateway"><strong>{gateway.name ?? 'LovestGateway'}</strong><span>查看网关观测 →</span></a>}

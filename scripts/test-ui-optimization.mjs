@@ -46,12 +46,88 @@ try {
   const control = (body) => fetch(origin + '/fixture/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const read = (file) => evaluate(`fetch('/api/v1/file/'+${JSON.stringify(file)}).then(r=>r.json()).then(v=>v.data.content)`);
   screenshot = async (name) => { const result = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }); await fs.writeFile(path.join(output, name), Buffer.from(result.data, 'base64')); };
-  const assertFits = async (label) => assert(await evaluate('document.documentElement.scrollWidth<=innerWidth+2'), label + ' overflows horizontally');
+  const assertFits = async (label) => assert(await evaluate('document.documentElement.scrollWidth<=document.documentElement.clientWidth'), label + ' overflows horizontally');
   await send('Page.enable'); await send('Runtime.enable');
   await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 960, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: origin });
   const login = async () => { await wait("document.querySelector('input[name=password]')"); await change('input[name=password]', 'synthetic-browser-password'); await evaluate("document.querySelector('.suite-login-submit').click()"); await wait("document.querySelector('.suite-page-heading')"); };
   await login();
+  await wait("document.querySelector('.suite-home-health')");
+  await send('Page.bringToFront');
+  const themeButton = '.suite-top-actions [aria-label^="主题"]';
+  const accountSummary = '.suite-account > summary';
+  const toggleTheme = () => evaluate(`document.querySelector(${JSON.stringify(themeButton)}).click()`);
+  const openAccount = () => evaluate(`document.querySelector(${JSON.stringify(accountSummary)}).click()`);
+  const key = async name => {
+    const keyCode = { Tab: 9, Escape: 27 }[name];
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: name, code: name, windowsVirtualKeyCode: keyCode });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: name, code: name, windowsVirtualKeyCode: keyCode });
+  };
+  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
+  await wait("document.querySelector('button[aria-label^=主题] svg.lucide-monitor') && document.documentElement.dataset.theme==='dark'");
+  assert.deepEqual(await evaluate("['.suite-topbar','.suite-brand'].map(selector=>document.querySelector(selector).getBoundingClientRect().height)"), [58, 58]);
+  await openAccount();
+  await wait("document.querySelector('.suite-account').open");
+  await evaluate("document.querySelector('.suite-account > summary').focus()");
+  await key('Tab');
+  await wait("document.activeElement.textContent.includes('修改管理员密码')");
+  await key('Escape');
+  await wait("!document.querySelector('.suite-account').open && document.activeElement.matches('.suite-account > summary')");
+  await openAccount();
+  await evaluate("document.querySelector('.suite-page-heading h1').dispatchEvent(new PointerEvent('pointerdown', { bubbles:true }))");
+  await wait("!document.querySelector('.suite-account').open");
+  await openAccount();
+  await go('#/lists', '域名分流');
+  await wait("!document.querySelector('.suite-account').open && document.querySelector('textarea')?.value.includes('domain:example.com')");
+  const baseline = await evaluate("document.querySelector('textarea').value");
+  await change('textarea', baseline + '\n');
+  await wait("!document.querySelector('.suite-file-toolbar .btn-primary')?.disabled");
+
+  // Use the rendered theme colors, compositing translucent fills over their parent.
+  const contrast = () => evaluate(`(() => {
+    const channel = value => { const s = value / 255; return s <= .04045 ? s / 12.92 : ((s + .055) / 1.055) ** 2.4; };
+    const luminance = color => color.slice(0, 3).reduce((sum, c, i) => sum + channel(c) * [.2126, .7152, .0722][i], 0);
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext('2d');
+    function rgba(color) {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = color;
+      context.fillRect(0, 0, 1, 1);
+      return Array.from(context.getImageData(0, 0, 1, 1).data);
+    }
+    function background(element) {
+      if (!element) return [255, 255, 255];
+      const [r, g, b, opacity] = rgba(getComputedStyle(element).backgroundColor);
+      if (opacity === 255) return [r, g, b];
+      const alpha = opacity / 255;
+      return background(element.parentElement).map((under, i) => [r, g, b][i] * alpha + under * (1 - alpha));
+    }
+    return ['.suite-file-toolbar .btn-primary', '.suite-file-tabs .tab-item.active', '.suite-file-tabs .tab-item:not(.active)',
+      '.suite-editor-actions .btn-secondary', '.suite-nav a.is-active', '.suite-brand span',
+      '.suite-sidebar-footer small', '.suite-page-heading h1', '.suite-file-toolbar small'].map(selector => {
+      const element = document.querySelector(selector);
+      const colors = [luminance(rgba(getComputedStyle(element).color)), luminance(background(element))].sort((a,b)=>a-b);
+      return [selector, (colors[1] + .05) / (colors[0] + .05)];
+    });
+  })()`);
+  const contrastResults = {};
+  for (const [theme, icon] of [['light', 'sun'], ['dark', 'moon']]) {
+    await toggleTheme();
+    await wait(`document.documentElement.dataset.theme===${JSON.stringify(theme)} && !!document.querySelector('button[aria-label^=主题] svg.lucide-${icon}')`);
+    contrastResults[theme] = Object.fromEntries(await contrast());
+    for (const [selector, ratio] of Object.entries(contrastResults[theme])) {
+      assert(ratio >= 4.5, `${theme} ${selector} contrast is ${ratio}`);
+    }
+    await screenshot('shell-' + theme + '.png');
+  }
+  await toggleTheme();
+  await wait("document.querySelector('button[aria-label^=主题] svg.lucide-monitor') && document.documentElement.dataset.theme==='dark'");
+  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] });
+  await wait("document.documentElement.dataset.theme==='light'");
+  await change('textarea', baseline);
+  await fs.writeFile(path.join(output, 'shell-contrast.json'), JSON.stringify(contrastResults, null, 2));
+
   await go('#/system?tab=status', '运行状态');
   await wait("document.querySelectorAll('.suite-home-component').length===8");
   assert(await evaluate("!document.querySelector('.suite-home-auxiliary').open"));
@@ -146,15 +222,40 @@ try {
   assert(await evaluate("document.querySelector('.suite-report-summary')!==null"));
   await wait("document.querySelector('.suite-report-heading')?.textContent.includes('本次')||![...document.querySelectorAll('button')].some(x=>x.textContent.includes('查询中'))");
 
-  await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 860, deviceScaleFactor: 1, mobile: false });
-  for (const [hash, title] of [['#/ttl', 'TTL 规则'], ['#/lists', '域名分流'], ['#/advanced', '高级配置文件'], ['#/', '概览']]) {
-    await go(hash, title); await assertFits(title);
-    if (hash === '#/ttl') { await wait("document.querySelector('textarea')"); assert(await evaluate("document.querySelector('textarea').getBoundingClientRect().top<800"), 'TTL editor is too far down'); }
-    await screenshot(hash === '#/' ? 'dashboard-mobile.png' : title + '-mobile.png');
+  for (const width of [390, 320]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height: 860, deviceScaleFactor: 1, mobile: false });
+    await evaluate("document.querySelector('.suite-mobile-menu').click()");
+    await wait("document.querySelector('.suite-sidebar').contains(document.activeElement)");
+    await key('Escape');
+    await wait("!document.querySelector('.suite-sidebar.is-open') && document.activeElement.matches('.suite-mobile-menu')");
+    for (const [hash, title] of [['#/ttl', 'TTL 规则'], ['#/lists', '域名分流'], ['#/advanced', '高级配置文件'], ['#/env', '运行参数'], ['#/', '概览']]) {
+      await go(hash, title);
+      await assertFits(title + ' at ' + width);
+      if (hash === '#/ttl') {
+        await wait("document.querySelector('textarea')");
+        assert(await evaluate("document.querySelector('textarea').getBoundingClientRect().top<800"), 'TTL editor is too far down');
+      }
+      if (hash !== '#/') {
+        await wait("document.querySelector('.suite-file-toolbar button')");
+        assert(await evaluate(`[...document.querySelectorAll('.suite-file-toolbar-actions :is(button, a)')].every(control => {
+          const rect = control.getBoundingClientRect();
+          return rect.height >= 44 && rect.width >= 44 && rect.right <= document.documentElement.clientWidth
+            && Number.parseFloat(getComputedStyle(control).fontSize) >= 13;
+        })`), 'Editor toolbar controls must fit, retain their text and meet the touch target at ' + width);
+      }
+      if (hash === '#/env') {
+        assert(await evaluate("document.querySelector('[aria-label=重新读取配置]').textContent.trim()==='重新读取'"));
+        await screenshot('settings-toolbar-' + width + '-light.png');
+        await evaluate("document.documentElement.dataset.theme='dark'");
+        await assertFits('dark settings toolbar at ' + width);
+        await screenshot('settings-toolbar-' + width + '-dark.png');
+        await evaluate("document.documentElement.dataset.theme='light'");
+      }
+      await screenshot(title + '-' + width + '-mobile.png');
+    }
   }
-  await evaluate("document.querySelector('[aria-label^=主题]').click()"); await assertFits('dark dashboard');
   assert.equal(errors.length, 0, JSON.stringify(errors));
-  console.log('PASS: pause semantics, editor round trips, retained/shared/auth-recovered drafts, revision save/conflict, out-of-order save responses, YAML comment preservation, same-page/history log navigation, retained diagnostic results, mobile/dark layouts, no runtime exceptions.');
+  console.log('PASS: theme and account menu, text contrast, editor and history round trips, draft and conflict handling, mobile toolbars at 390/320px, no runtime exceptions.');
   console.log('Screenshots: ' + output);
 } catch (error) {
   if (evaluate) console.error(await evaluate('document.body.innerText').catch(() => fixtureLog));

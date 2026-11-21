@@ -1,7 +1,7 @@
 import { parseListContent, serializeListContent } from '../domainEditor';
 import type { DomainEntry } from '../domainEditor';
 import EditorToolbar from '../components/EditorToolbar';
-import { useSuite, useSuiteConfig } from '../suiteContext';
+import { useSuite } from '../suiteContext';
 import { useUnsavedChanges } from '../unsaved';
 import { draftEpoch } from '../fileDrafts';
 import { useFileEditor } from '../useFileEditor';
@@ -90,7 +90,6 @@ export default function DomainListPage() {
 }
 
 function DomainFileEditor({ activeTab, scope }: { activeTab: string; scope: string }) {
-  const { error: connectionError } = useSuiteConfig();
   const { showToast, ToastComponent } = useToast();
   const [editMode, setEditMode] = useState<'visual' | 'text'>(() => scope === preferenceScope ? listPreferences.get(activeTab) ?? 'text' : 'text');
   const activeList = ALL_LISTS.find((l) => l.key === activeTab)!;
@@ -206,7 +205,7 @@ function DomainFileEditor({ activeTab, scope }: { activeTab: string; scope: stri
         {isTrackerList && <a href="#/settings?tab=runtime&group=cn_routing&setting=CN_TRACKER">Tracker 运行开关</a>}
         <a href="#/ttl">编辑 TTL 规则</a>
       </div>
-      <EditorToolbar file={activeList.filename} dirty={hasUnsavedChanges} busy={saving} blocked={loading || loadFailed || !!connectionError} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} change={saveResult?.change} onSave={() => void editor.save()} />
+      <EditorToolbar file={activeList.filename} dirty={hasUnsavedChanges} busy={saving} loaded={editor.loaded} readError={editor.error} message={saveResult?.msg} failed={saveResult?.success === false} result={saveResult?.result} change={saveResult?.change} onSave={() => void editor.save()} />
       {editor.error && <p className="suite-editor-result is-error" role="alert">{editor.error}</p>}
 
       <div className="card">
