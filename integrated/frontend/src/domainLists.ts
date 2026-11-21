@@ -27,5 +27,5 @@ export function domainListForFile(file: string | null) {
 }
 
 export function domainListLabel(list: DomainList) {
-  return list.title.replace('强制 ', '').replace('域名列表', '');
+  return list.title.replace('强制 ', '').replace('域名列表', '').trim();
 }

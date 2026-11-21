@@ -92,7 +92,7 @@
       "integrated/frontend/src/diagnosticRoute.ts": "48fe5d6c529fb3bb9a9b79ca5d8c8a0a69d7aa8963415d458c551447d1699874",
       "integrated/frontend/src/dnsListeners.ts": "146cbed173c3772238b97c52d2e8da5e896ec5e68882cf411fe191b845e2cc76",
       "integrated/frontend/src/domainEditor.ts": "2120e5fa7c9761d7c21b15c57206659273aee83a17796fc18e3a9928fa7fa3cf",
-      "integrated/frontend/src/domainLists.ts": "11368dd4583e77049307505d96cd7cfa7cb2e25edfcf546944f778e7250781d3",
+      "integrated/frontend/src/domainLists.ts": "323b8d7bc98a5d536d1ce90a46234f11e232c1120ac7c9a425ad7cd950341a42",
       "integrated/frontend/src/envEditor.ts": "2b7381d358695c76e7ad87d48580757a0a5434fe24ea7a8d9e48a344e0ddbb8d",
       "integrated/frontend/src/fileDrafts.ts": "17d16cc4ebfaa8e0329e76ae0212dabe9e4b36ac085897e61b647c5619c4ebec",
       "integrated/frontend/src/filterApi.ts": "a3afa32ff1e5c7606ba474b73c74aa003743dbb79722b79ddbf756d2eaf6e692",
@@ -407,7 +407,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "447a22e1635f7ecc50f4da82536c74dbe8e70a035fb6b82bc4e47e863e279c75"
+    "sha256": "e28ed35cc0878fb0331e12cdd2fb6e67b4fd820bca497604d279c33cba919975"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",
