@@ -1,6 +1,6 @@
 # LovestDNS 控制台 UI 精细化优化方案
 
-适用范围为原生版与集成容器共用的 `integrated/frontend` 控制台。基线见 [控制台体验方案](console-ux-plan.md) 和 [导航与功能归属方案](console-navigation-ui-plan.md)。在保留六栏导航、旧 hash 链接、深链参数和现有权限模型的前提下，减少重复样式和首屏占用，缩短常见运维操作，改善手机和键盘交互。
+适用范围为原生版与集成容器共用的 `integrated/frontend` 控制台。基线见 [控制台体验方案](console-ux-plan.md) 和 [导航与功能归属方案](console-navigation-ui-plan.md)。在保留六栏导航、旧 hash 链接、深链参数和现有权限模型的前提下，减少重复样式和首屏占用，缩短常见运维操作，改善手机和键盘交互。实际交付见 [v0.2.2 发行说明](../../releases/v0.2.2.md)。
 
 ## 分期与验收
 

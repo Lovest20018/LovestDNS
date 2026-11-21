@@ -3,14 +3,14 @@
   "artifacts": {
     "openapi.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "fa2d37d600cdeb3e86401e3235787af6b2dfff1a9c916c765cba97d0971f1654"
+      "sha256": "6fb4416b59b37f394c17030538ddb96debf2e2bc421476e2bc50d01352ee160d"
     },
     "samples.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "51ca2f37d6daef222f354377ac5fbf6d531110cef344c24526144fc005a526c6"
+      "sha256": "098ee6fd5681c96b1dfe4292885acec26dbefe1f94e9a7bf34c13a7c4fd44c31"
     }
   },
-  "candidate_version": "0.2.2-console.7",
+  "candidate_version": "0.2.2",
   "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
   "format_version": 1,
   "provenance": "All responses from actual Flask handlers with synthetic I/O and clocks; no live core/network acceptance evidence",
@@ -33,7 +33,7 @@
       "docker-compose-web.yaml": "0409bc4340124407c7a72fdb01a352f8ef74347e5470af9ae1d21e020d5d7214",
       "docker-compose.integrated.yaml": "b40f095e7fe8119b627abd161e1b4d62a8649a27e854978c67ec7813d8e845fb",
       "docker-compose.sidecar.yaml": "2e9bd7a32e43599b9aedbc8bae3ef9e7cd2b93379d642446016940903fc45609",
-      "docs/lovestdns-native-deployment.md": "8e8ec3b535bc41474ceff221f0e3d5050408ff80e30fa7c4a66d47b8fccb6db5",
+      "docs/lovestdns-native-deployment.md": "d55de570e318ae6321ade7dea230a2411424c626f44ce739f309100f3f7f8c14",
       "install.py": "cac725471631269ac2160d242caedfa1876efb454da203dacf05873447417002",
       "integrated/README.md": "28b36dd1c4c147f68150091cbf3dd9bc3ee2280f78b24216df403b9e75b3e831",
       "integrated/backend/api_schema.py": "dae00dbbe885289a8bbc724ea305de8d0c2a7a1b0830611124d9c1dbb5be03d6",
@@ -45,7 +45,7 @@
       "integrated/backend/history.py": "068715c1e54af2ec880712da543bd7a7c1e88f5567c213f0b2fd6007dea28713",
       "integrated/backend/installation.py": "64190ebaa3b32c2dfb6f5aa67a8a35303e77be1547114d8a6a866cfc44fd6a84",
       "integrated/backend/runtime_client.py": "f97b233696bcfb36eba5249d6557a57e0f3b8ef589dd064417a9b01f6dcd9408",
-      "integrated/backend/server.py": "24ec47baf0b5dc3c7a13688d3f0074871332b24c9ba24a92e96450d3652199ef",
+      "integrated/backend/server.py": "f3a33a645caf166694c46975c503ed41fa87cc355031df76662ebbde106be28b",
       "integrated/backend/software_update.py": "b52458da2c3da101c1f9def879a71a2aaf24134511fecaf5b1ffdc6f190b42bb",
       "integrated/frontend/package-lock.json": "a9cc6c4341237b1ddb91874a72cf08878df13787d20fc3cbc19b1bfc56a915a7",
       "integrated/frontend/package.json": "465e17dc4fde55be78c58247330b5bd39920eef42123a3917c564b41b2a08d38",
@@ -407,7 +407,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "79f62fa50aafb463681db44fd596974d8da34ef9082c20bdef7c5493265b024a"
+    "sha256": "cd857323a0d5baab3ed4c592b67fbe296266d97359b6462ccd15eada6da55ec4"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

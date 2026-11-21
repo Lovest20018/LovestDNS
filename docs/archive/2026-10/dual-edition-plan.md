@@ -2,13 +2,13 @@
 
 日期：2026-10-24。状态：首批集成版基础实现已落地，尚未发布；本页其余功能仍按阶段实施。
 
-2026-11-06 更新：本页保留早期规划，不作为当前交付进度。当前只开发 LovestDNS 集成版，支持 Debian 原生与 Docker；优化及隔离验收见 [实施记录](archive/2026-11/optimization-implementation-2026-11-06.md)，当前 `.opt5` 未发布候选见 [源码与版本收口](archive/2026-11/source-version-closure-2026-11-06.md)。
+2026-11-06 更新：本页保留早期规划，不作为当前交付进度。当前只开发 LovestDNS 集成版，支持 Debian 原生与 Docker；优化及隔离验收见 [实施记录](../2026-11/optimization-implementation-2026-11-06.md)，当前 `.opt5` 未发布候选见 [源码与版本收口](../2026-11/source-version-closure-2026-11-06.md)。
 
-2026-10-25 范围收敛：本项目作为 DNS 专用管理面板和 API 服务维护。本页中 ROS 接入、整网设备清单、跨设备故障关联、长期趋势与统一告警等扩展设想不作为当前交付范围。已实现的 v1 API、DNS 配置历史/恢复、链路对照及待完成的容器验收见 [集成版说明](../integrated/README.md) 和 [API 契约](integration-api.md)。
+2026-10-25 范围收敛：本项目作为 DNS 专用管理面板和 API 服务维护。本页中 ROS 接入、整网设备清单、跨设备故障关联、长期趋势与统一告警等扩展设想不作为当前交付范围。已实现的 v1 API、DNS 配置历史/恢复、链路对照及待完成的容器验收见 [集成版说明](../../../integrated/README.md) 和 [API 契约](../../integration-api.md)。
 
-实施范围调整：独立 WebUI 固定为 `standalone-20261024` 源码检查点并暂停开发，当前只开发集成版。首批实现、构建方式、验证结果及尚未开放的能力见 [集成版开发说明](../integrated/README.md)。
+实施范围调整：独立 WebUI 固定为 `standalone-20261024` 源码检查点并暂停开发，当前只开发集成版。首批实现、构建方式、验证结果及尚未开放的能力见 [集成版开发说明](../../../integrated/README.md)。
 
-修订：已完成 PaoPaoDNS 及其定制 MosDNS 的源码审阅，具体证据、可做功能和限制见 [源码增强分析](paopaodns-source-enhancement-review.md)。双版本调整为“兼容上游的独立配置工具”与“允许适度修改核心的集成增强版”，功能不必相同。
+修订：已完成 PaoPaoDNS 及其定制 MosDNS 的源码审阅，具体证据、可做功能和限制见 [源码增强分析](../../paopaodns-source-enhancement-review.md)。双版本调整为“兼容上游的独立配置工具”与“允许适度修改核心的集成增强版”，功能不必相同。
 
 ## 1. 建议与版本定位
 
@@ -202,4 +202,4 @@ Redis 的 `redis-expire-records: no` 不代表可以忽略 DNS TTL；缓存数�
 
 已检查当前工作区的 README、两份 Compose、WebUI Dockerfile、镜像发布工作流、后端接口、DNS 诊断文档、现有高级配置表单和宿主机快照脚本。工作区现有实现修改保持原样，本轮只更新方案与核查记录。
 
-最初访问失败后，本轮已通过 GitHub 源码归档成功核查 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS/tree/a8da2e62a73026c9594b7edc36447538e51000ee) 与 [定制 MosDNS](https://github.com/kkkgo/mosdns/tree/7a92c687171e118414a5cc9e77f0d0da8f2a9d76)，提交及校验结果见 [来源记录](research/upstream-source-review.json)。源码层面的功能与限制已有证据；发布镜像内实际组件对应关系、运行兼容性、性能和分发依赖仍需在实施阶段验证。
+最初访问失败后，本轮已通过 GitHub 源码归档成功核查 [PaoPaoDNS](https://github.com/kkkgo/PaoPaoDNS/tree/a8da2e62a73026c9594b7edc36447538e51000ee) 与 [定制 MosDNS](https://github.com/kkkgo/mosdns/tree/7a92c687171e118414a5cc9e77f0d0da8f2a9d76)，提交及校验结果见 [来源记录](../../research/upstream-source-review.json)。源码层面的功能与限制已有证据；发布镜像内实际组件对应关系、运行兼容性、性能和分发依赖仍需在实施阶段验证。

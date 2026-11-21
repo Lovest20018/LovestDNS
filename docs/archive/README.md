@@ -10,6 +10,8 @@
 
 ## 开发与接口
 
+- [控制台体验与验收方案](2026-11/console-ux-plan.md)、[导航与功能归属方案](2026-11/console-navigation-ui-plan.md)、[界面优化方案](2026-11/lovestdns-ui-optimization-plan.md)：记录控制台改版方案及验收要求。[v0.2.2 发行说明](../releases/v0.2.2.md)汇总实际交付。
+- [早期双版本规划](2026-10/dual-edition-plan.md)：记录独立 WebUI 冻结前后的产品范围。
 - [query1.5 软件更新专用代理](2026-11/native-query15-release-2026-11-14.md)：原生版直连/HTTP CONNECT/SOCKS5、独立凭据与真实下载安装验收。
 - [软件更新专用代理与正式版收尾](2026-11/stable-release-readiness-2026-11-14.md)：当前源码的更新网络设置、验证边界，以及中断恢复、备份、更新通道和最终候选验收条件。
 - [query1.4 原生规则更新修复](2026-11/native-query14-release-2026-11-14.md)：持久化规则资产、下载回退、完整校验、失败恢复与退避重试。
