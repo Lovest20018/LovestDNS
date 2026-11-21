@@ -3,14 +3,14 @@
   "artifacts": {
     "openapi.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "e3052dd0a15ade5cd47f2765ed4a19d9db00ec978a597098611bdce9cf99f869"
+      "sha256": "f687c5044cdea8dec93e361e932f7fb5727e07898a81220e1e9e6fae49858aa8"
     },
     "samples.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "c8a92288f5c236d216e8ed4e6166c9a9078358b3d80d87a009bb2d8068c258f8"
+      "sha256": "1e58b4ef12412dbb93c8e5ddc42dac47b3a9fd8ae8be4b8a90907137df71c6b7"
     }
   },
-  "candidate_version": "0.2.2-console.5",
+  "candidate_version": "0.2.2-console.6",
   "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
   "format_version": 1,
   "provenance": "All responses from actual Flask handlers with synthetic I/O and clocks; no live core/network acceptance evidence",
@@ -45,7 +45,7 @@
       "integrated/backend/history.py": "068715c1e54af2ec880712da543bd7a7c1e88f5567c213f0b2fd6007dea28713",
       "integrated/backend/installation.py": "64190ebaa3b32c2dfb6f5aa67a8a35303e77be1547114d8a6a866cfc44fd6a84",
       "integrated/backend/runtime_client.py": "f97b233696bcfb36eba5249d6557a57e0f3b8ef589dd064417a9b01f6dcd9408",
-      "integrated/backend/server.py": "8135fd2de2eac7a10c8e19708d31cbc6f04143b25f4fb810f62b88a39e23ab09",
+      "integrated/backend/server.py": "13f8b97c405dfb03ad39408714fc9e0d872e19a51ab86e93ce46c69024357439",
       "integrated/backend/software_update.py": "b52458da2c3da101c1f9def879a71a2aaf24134511fecaf5b1ffdc6f190b42bb",
       "integrated/frontend/package-lock.json": "a9cc6c4341237b1ddb91874a72cf08878df13787d20fc3cbc19b1bfc56a915a7",
       "integrated/frontend/package.json": "465e17dc4fde55be78c58247330b5bd39920eef42123a3917c564b41b2a08d38",
@@ -124,7 +124,7 @@
       "integrated/frontend/src/settingsIdentity.ts": "f8695c187e3a97b439af3aac6fc80960fb7ffd27526bba77753c006729d00179",
       "integrated/frontend/src/sourceDevices.ts": "a90e628349a34797cb60105c96f85d2e3a2e01b8f14740281e5007c503e3153b",
       "integrated/frontend/src/store.ts": "95c2afc37a320f34ec1e61f73e5b19750bed0114c3fff304fc9d807e08bdf85c",
-      "integrated/frontend/src/suite.css": "99d7b32ac9feee40274cc260bff9b0f851b4752c1fa027ec94908d94696a2dae",
+      "integrated/frontend/src/suite.css": "f40350f67fc9013794bb4aed280600427f82e09e177b8e051ad068cae0c018b5",
       "integrated/frontend/src/suiteApi.ts": "b7d64808ba6421f14c2684369baff87f4621192be585e6c0c438e429958d0b8b",
       "integrated/frontend/src/suiteContext.ts": "43bf2f01c0a91cc18f84e67b7fcb9ccc1584111d6b694fd5dc4f1a60ba88da1d",
       "integrated/frontend/src/trend.ts": "3fb2348f810d328964af135082e70fb8472b23ae2c0f15bfebbcb60787f2a69e",
@@ -290,7 +290,7 @@
       "scripts/test-cachedb-history-replay.py": "e22a2616a5e2456482df726d1c8e3e70bd17c9481529e199e3b435e71a385e4b",
       "scripts/test-cachedb-timeout.py": "f9ab7151a1fe186605e13df88c28f52437bccacbbf9cddc523b75de9ccd93c49",
       "scripts/test-cachedb-upgrade-rewarm.py": "918c6b24f70ad3c38361118b50ff351e9da3aefbfaa466e0d2a3bf069cc44cce",
-      "scripts/test-console-navigation.mjs": "bf5cd8a56af2cec7118c94037e2cdb2ba37a37f02bd29afee833766928268ed0",
+      "scripts/test-console-navigation.mjs": "6c7f576fbf7f130a61a0c660dd03be17a373117d5cc5c864e1f576b0522ea6e2",
       "scripts/test-control-capacity.py": "b65529ea83823923dc46859e0f5293cb7a4def6d8ff991b55df770065f16f229",
       "scripts/test-dns-filter.py": "29f992a2fda7a6eca499a69d9adf050328384ad212cdd8b0f33e9df6d8968fc9",
       "scripts/test-dnscrypt-compatibility.py": "dc93ec3bd4615050e7184debbf8c9c10517ed71a12ad9983d78f18b043b929bd",
@@ -406,7 +406,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "cd6bc47d0ff056f3c92dc93a6444e6c07b49c46b56c8b6e7f16bf2865ffa7899"
+    "sha256": "594593e7f80571f0e70b19798ab5ec046820b4d9faed3693019b010956cc2f0f"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

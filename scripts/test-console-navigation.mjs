@@ -62,6 +62,14 @@ try {
     await evaluate(`[...document.querySelectorAll(${JSON.stringify(scope + ' a')})].find(link => link.textContent.trim() === ${JSON.stringify(text)}).click()`);
   };
   const selected = async (scope, text) => wait(`document.querySelector(${JSON.stringify(scope + ' a[aria-current=page]')})?.textContent.trim() === ${JSON.stringify(text)}`);
+  const assertSidebarAlignment = async () => {
+    const positions = await evaluate(`Array.from(document.querySelectorAll('.suite-nav a'), (link) => {
+      const label = link.querySelector('span');
+      return { name: label.textContent, text: label.getBoundingClientRect().left, icon: link.querySelector('svg').getBoundingClientRect().left };
+    })`);
+    assert.equal(new Set(positions.map(item => item.text)).size, 1, `Sidebar labels should align: ${JSON.stringify(positions)}`);
+    assert.equal(new Set(positions.map(item => item.icon)).size, 1, 'Sidebar icons should align');
+  };
   const settingsNav = '[aria-label="系统设置分区"]';
   const gatewayToggle = '.suite-gateway-toggle input';
   const gatewayTab = `${settingsNav} a[href="#/settings?tab=gateway"]`;
@@ -91,6 +99,8 @@ try {
     ['概览', '域名分流', '查询与诊断', '广告过滤', '维护', '系统设置']);
   await nav('域名分流');
   await wait("document.querySelector('textarea')?.value.includes('domain:example.com')");
+  await assertSidebarAlignment();
+  await screenshot('sidebar-desktop.png');
   const editorFont = await evaluate("getComputedStyle(document.querySelector('.textarea-code')).fontFamily");
   await click('强制转发');
   await wait("location.hash.includes('force_forward_list.txt')");
@@ -295,7 +305,12 @@ try {
       await evaluate(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
       await go('#/system?tab=status', '运行状态');
       const sharedStyle = await activeTabStyle('[aria-label="维护分区"]');
-      if (width < 900) await evaluate("document.querySelector('[aria-label=打开导航]').click()");
+      if (width < 900) {
+        await evaluate("document.querySelector('[aria-label=打开导航]').click()");
+        await wait("document.querySelector('.suite-sidebar.is-open')?.getBoundingClientRect().left === 0");
+        await assertSidebarAlignment();
+        if (width === 390 && theme === 'dark') await screenshot('sidebar-mobile-dark.png');
+      }
       await nav('系统设置');
       await wait("document.querySelector('#settings-search')");
       if (width < 900) await wait("document.activeElement.matches('.suite-page-heading h1') && document.querySelector('.suite-sidebar').getBoundingClientRect().right <= 0");
@@ -338,7 +353,7 @@ try {
   await go('#/settings?tab=updates', '软件更新');
   await wait("document.body?.textContent.includes('通过宿主机更新容器')");
   assert.equal(errors.length, 0, JSON.stringify(errors));
-  console.log('PASS: shared tabs, permissions, aliases, editor and task returns, optional gateway settings, release channel, full-width pages, mobile and themes');
+  console.log('PASS: aligned sidebar, shared tabs, permissions, aliases, editor and task returns, optional gateway settings, release channel, full-width pages, mobile and themes');
   console.log('Screenshots: ' + output);
 } catch (error) {
   if (evaluate) console.error(await evaluate('location.hash + "\\n" + document.body.innerText').catch(() => fixtureLog));

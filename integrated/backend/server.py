@@ -23,7 +23,7 @@ from installation import read_object, recorded, installation_summary, provenance
 app = base.app
 if os.environ.get("SUITE_DIST_DIR"):
     app.static_folder = os.environ["SUITE_DIST_DIR"]
-VERSION = "0.2.2-console.5"
+VERSION = "0.2.2-console.6"
 STATE_DIR = Path(os.environ.get("SUITE_STATE_DIR", "/var/lib/paopaodns-suite"))
 RUN_DIR = Path(os.environ.get("SUITE_RUN_DIR", "/run/paopaodns-suite"))
 history = History(STATE_DIR)
