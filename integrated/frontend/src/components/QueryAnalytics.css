@@ -90,7 +90,7 @@
   background: color-mix(in srgb, var(--suite-teal) 7%, var(--suite-panel));
   z-index: -1;
 }
-.analytics-rank-link code { font: inherit; overflow-wrap: anywhere; }
+.analytics-rank-link code { overflow-wrap: anywhere; }
 .analytics-rank-link > span:last-child { color: var(--suite-link); font-weight: 650; font-variant-numeric: tabular-nums; }
 .analytics-log-link:focus-visible, .analytics-rank-link:focus-visible,
 .query-analytics-bucket:focus-visible { outline: 2px solid var(--suite-link); outline-offset: 2px; }

@@ -26,7 +26,7 @@
 .suite-home-followup > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; padding: 11px 0; }
 .suite-home-followup > div + div { border-top: 1px solid var(--suite-line); }
 .suite-home-followup h3 { margin: 0 auto 0 0; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--suite-muted); }
-.suite-home-entry .suite-home-address { font: 600 14px/1.5 var(--suite-mono); overflow-wrap: anywhere; user-select: all; }
+.suite-home-entry .suite-home-address { font-size: 14px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; user-select: all; }
 .suite-home-address-row { display:flex; flex:1 1 auto; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:6px 10px; min-width:0; }
 .suite-home-address-row p { flex-basis:100%; }
 .suite-home .suite-home-entry a { color: var(--suite-link); font-size: 14px; font-weight: 600; }

@@ -72,6 +72,7 @@ try {
     ['概览', '域名分流', '查询与诊断', '广告过滤', '维护', '系统设置']);
   await nav('域名分流');
   await wait("document.querySelector('textarea')?.value.includes('domain:example.com')");
+  const editorFont = await evaluate("getComputedStyle(document.querySelector('.textarea-code')).fontFamily");
   await click('强制转发');
   await wait("location.hash.includes('force_forward_list.txt')");
   await wait("document.querySelector('textarea') && !document.querySelector('textarea').disabled");
@@ -131,6 +132,22 @@ try {
   await go('#/settings?tab=gateway', '外部接入');
   await wait("document.activeElement.id==='gateway-integration'");
   await wait(`document.querySelector('[aria-label="网关 API 地址"]')?.value`);
+  const externalFonts = await evaluate(`(() => {
+    const style = (selector) => getComputedStyle(document.querySelector(selector));
+    const body = style('.suite-app').fontFamily;
+    const help = style('.suite-detail-help');
+    return {
+      consistent: ['.suite-api-setting button', '#gateway-integration input', '.suite-detail-list a', '.suite-detail-help']
+        .every((selector) => style(selector).fontFamily === body),
+      technical: style('.suite-detail-list code').fontFamily,
+      body,
+      helpWeight: help.fontWeight,
+    };
+  })()`);
+  assert(externalFonts.consistent, 'External integration controls and explanations should use the console UI font');
+  assert.equal(externalFonts.technical, editorFont, 'API addresses and configuration files should use the same code font');
+  assert.notEqual(externalFonts.technical, externalFonts.body);
+  assert.equal(externalFonts.helpWeight, '400');
   await click('测试连接');
   await wait("document.body?.textContent.includes('连接测试通过')");
   await nav('查看网关观测 →', '#gateway-integration');

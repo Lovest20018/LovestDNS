@@ -6,7 +6,7 @@
 }
 .dns-filter-statusbar > .suite-status { margin: 0; font-size: 13px; font-weight: 650; color: var(--suite-ink); }
 .dns-filter-statusbar small, .dns-filter-count { font-size: 12px; color: var(--suite-muted); }
-.dns-filter-statusbar code { font: 12px/1.5 ui-monospace, Consolas, monospace; }
+.dns-filter-statusbar code { font-size: 12px; line-height: 1.5; }
 .dns-filter-count strong { color: var(--suite-ink); font-size: 15px; font-variant-numeric: tabular-nums; }
 .dns-filter-statusbar > button { margin-inline-start: auto; }
 .dns-filter-status .suite-notice { margin-top: 8px; }
@@ -20,7 +20,7 @@
   display: grid; gap: 5px; min-width: 0; font-size: 13px; color: var(--suite-ink);
 }
 .dns-filter-editor textarea {
-  resize: vertical; font: 13px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; padding: 10px 12px; width: 100%;
+  resize: vertical; font: 13px/1.6 var(--suite-mono); padding: 10px 12px; width: 100%;
 }
 .dns-filter-switch {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;

@@ -40,7 +40,7 @@ function DnsEntryAddress({ addresses }: { addresses: string[] }) {
   }, [feedback]);
   if (!addresses.length) return <strong className="suite-home-address">监听待确认</strong>;
   return <div className="suite-home-address-row">
-    <strong className="suite-home-address">{addresses.join(' · ')}</strong>
+    <strong className="suite-home-address"><code>{addresses.join(' · ')}</code></strong>
     <button type="button" className="btn btn-secondary btn-sm" aria-label="复制监听地址"
       onClick={async () => setFeedback(await copyTextFromPage(addresses.join('\n')) ? 'copied' : 'failed')}>
       <Copy size={14} aria-hidden="true" /><span aria-live="polite">{feedback === 'copied' ? '已复制' : '复制'}</span>

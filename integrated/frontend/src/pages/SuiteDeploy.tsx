@@ -55,7 +55,7 @@ export default function SuiteDeploy() {
   const apiBase = `${window.location.origin}/api/v1/`;
   const installed = caps.installation;
   const provenance = caps.provenance;
-  const value = (text?: string | null) => <code>{text && text !== 'unknown' ? text : '未记录'}</code>;
+  const value = (text?: string | null) => text && text !== 'unknown' ? <code>{text}</code> : '未记录';
   const commands = native
     ? nativeMaintenanceCommands(installed)
     : 'export WEB_UI_TOKEN=$(openssl rand -hex 32)\nexport DNS_HOST_PORT=1053\nexport WEB_HOST_PORT=18080\ndocker compose -f docker-compose.integrated.yaml build\ndocker compose -f docker-compose.integrated.yaml up -d';
@@ -65,16 +65,16 @@ export default function SuiteDeploy() {
       <div className="suite-api-setting"><strong>外部 API：{apiEnabled === null ? apiError ? '读取失败' : '正在读取' : apiEnabled ? '已开启' : '已关闭'}</strong>
         <button className="btn btn-secondary" aria-pressed={apiEnabled ?? false} disabled={(apiEnabled === null && !apiError) || savingApi} onClick={() => void changeApi()}>{savingApi ? '正在保存…' : apiEnabled === null ? '重新读取' : apiEnabled ? '关闭外部 API' : '开启外部 API'}</button></div>
       {apiError && <Notice tone="error">{apiError}</Notice>}
-      <p className="suite-muted">默认关闭。关闭后拒绝外部 Token 调用，网页管理和 DNS 解析照常使用。设置立即生效并保留，服务重启后无需重新设置。</p>
-      <dl className="suite-kpi-list">
+      <p className="suite-note">默认关闭。关闭后拒绝外部 Token 调用，网页管理和 DNS 解析照常使用。设置立即生效并保留，服务重启后无需重新设置。</p>
+      <dl className="suite-kpi-list suite-detail-list">
         <div><dt>API 地址</dt><dd><code>{apiBase}</code></dd></div>
-        <div><dt>接口文档</dt><dd><a href="/api/v1/openapi.json" target="_blank" rel="noreferrer">查看 OpenAPI 文档</a>（登录后可查看）</dd></div>
-        <div><dt>只读 Token</dt><dd><code>SUITE_READ_TOKEN</code>：读取状态、指标与执行诊断</dd></div>
-        <div><dt>管理 Token</dt><dd><code>WEB_UI_TOKEN</code>：修改配置、执行维护任务</dd></div>
+        <div><dt>接口文档</dt><dd><a href="/api/v1/openapi.json" target="_blank" rel="noreferrer">查看 OpenAPI 文档</a><span className="suite-detail-help">登录后可查看</span></dd></div>
+        <div><dt>只读 Token</dt><dd><code>SUITE_READ_TOKEN</code><span className="suite-detail-help">读取状态、指标与执行诊断</span></dd></div>
+        <div><dt>管理 Token</dt><dd><code>WEB_UI_TOKEN</code><span className="suite-detail-help">修改配置、执行维护任务</span></dd></div>
         <div><dt>配置位置</dt><dd>{native ? value(installed?.config_file) : '宿主机 Compose 使用的私有环境文件'}</dd></div>
         <div><dt>调用方式</dt><dd><code>Authorization: Bearer &lt;Token&gt;</code></dd></div>
       </dl>
-      <p className="suite-muted">Token 在主机配置，修改后重启服务加载。两个 Token 应分别设置；当前网页不显示或修改 Token。</p>
+      <p className="suite-note">Token 在主机配置，修改后重启服务加载。两个 Token 应分别设置；当前网页不显示或修改 Token。</p>
     </Section>
       <GatewaySettings />
     </Permission> : tab === 'updates' ? native ? <Permission allowed={caps.permissions.maintain} kind="maintain">
@@ -86,7 +86,7 @@ export default function SuiteDeploy() {
     <div className="suite-deploy-hero"><div><span className="suite-kicker">{native ? 'DEBIAN / SYSTEMD' : 'DOCKER / COMPOSE'}</span><h2>LovestDNS</h2><p>管理本机 DNS 解析、缓存与规则，查看服务状态并排查问题。</p></div><Server size={46} /></div>
     <Notice tone="info">{native ? <>监听端口变更由主机处理。<a href="#/settings?tab=service&section=commands">查看主机命令</a></> : '当前为 Docker 集成版。正式升级、端口切换和数据迁移由宿主机 Compose 执行。'}</Notice>
     <div className="suite-dashboard-grid suite-settings-grid">
-      <Section title="当前实例" subtitle="实例身份与原生安装信息" icon={Network}><dl className="suite-kpi-list suite-build-list">
+      <Section title="当前实例" subtitle="实例身份与原生安装信息" icon={Network}><dl className="suite-kpi-list suite-detail-list">
         <div><dt>实例名称</dt><dd>{caps.name || '未记录'}</dd></div><div><dt>持久实例 ID</dt><dd>{value(caps.instance_id)}</dd></div>
         <div><dt>LovestDNS 版本</dt><dd>{caps.version}</dd></div><div><dt>服务管理</dt><dd>{native ? 'systemd' : 'Docker Compose'}</dd></div><div><dt>DNS 配置端口</dt><dd>{caps.dns_defaults.port} / UDP + TCP</dd></div>
         {native ? <><div><dt>服务单元</dt><dd>{value(installed?.service_name)}</dd></div><div><dt>当前发布目录</dt><dd>{value(installed?.release_path)}</dd></div>
@@ -94,19 +94,19 @@ export default function SuiteDeploy() {
           : <><div><dt>数据卷</dt><dd><code>suite-dns-data → /data</code></dd></div><div><dt>状态卷</dt><dd><code>suite-state</code></dd></div></>}
       </dl></Section>
       </div>
-    <details className="suite-build-details"><summary>构建与安装详情</summary><Section title="应用与前端" subtitle="安装文件中记录的构建来源" icon={ShieldCheck}><dl className="suite-kpi-list suite-build-list">
+    <details className="suite-build-details"><summary>构建与安装详情</summary><Section title="应用与前端" subtitle="安装文件中记录的构建来源" icon={ShieldCheck}><dl className="suite-kpi-list suite-detail-list">
         <div><dt>LovestDNS 版本</dt><dd>{caps.version}</dd></div><div><dt>API 版本</dt><dd>v{caps.api_version}</dd></div>
         <div><dt>应用源码提交</dt><dd>{value(provenance?.application.source_commit)}</dd></div><div><dt>前端源码提交</dt><dd>{value(provenance?.frontend.source_commit)}</dd></div>
         <div><dt>前端依赖安装</dt><dd>{value(provenance?.frontend.dependency_mode)}{provenance?.frontend.working_tree_modified === true && ' · 构建时有未提交修改'}</dd></div>
         <div><dt>安装包 SHA-256</dt><dd>{value(installed?.receipt.status === 'recorded' ? installed.receipt.archive_sha256 : null)}</dd></div>
       </dl></Section>
     {installed?.receipt.status === 'mismatch' && <Notice tone="warning">安装收据与当前发布不一致，归档摘要暂不可确认。</Notice>}
-    <Section title="组件与基础包" subtitle="包内声明；当前页面未核对实际进程文件" icon={ShieldCheck}><dl className="suite-kpi-list suite-build-list">
+    <Section title="组件与基础包" subtitle="包内声明；当前页面未核对实际进程文件" icon={ShieldCheck}><dl className="suite-kpi-list suite-detail-list">
       <div><dt>上游核心来源</dt><dd>{value(caps.core.image)}</dd></div><div><dt>上游核心提交</dt><dd>{value(caps.core.source_commit)}</dd></div>
       <div><dt>继承基础包版本</dt><dd>{value(provenance?.base_package.version)}</dd></div><div><dt>基础包 SHA-256</dt><dd>{value(provenance?.base_package.archive_sha256)}</dd></div>
       <div><dt>独立组件版本声明</dt><dd>{caps.core.components ? Object.entries(caps.core.components.versions).map(([name, version]) => <span key={name}><code>{name}: {version}</code>{' '}</span>) : '未记录'}</dd></div>
       <div><dt>组件清单 SHA-256</dt><dd>{value(caps.core.components?.lock_sha256)}</dd></div>
-    </dl><details className="suite-debug"><summary>查看来源摘要与安装记录</summary><dl className="suite-kpi-list suite-build-list">
+    </dl><details className="suite-debug"><summary>查看来源摘要与安装记录</summary><dl className="suite-kpi-list suite-detail-list">
       <div><dt>应用源码摘要</dt><dd>{value(provenance?.application.source_sha256)}</dd></div><div><dt>前端源码摘要</dt><dd>{value(provenance?.frontend.source_sha256)}</dd></div>
       <div><dt>前端构建清单摘要</dt><dd>{value(provenance?.frontend.manifest_sha256)}</dd></div><div><dt>当前安装清单摘要</dt><dd>{value(installed?.receipt.manifest_sha256)}</dd></div>
       <div><dt>安装时间</dt><dd>{installed?.receipt.status === 'recorded' && installed.receipt.installed_at !== null ? new Date(installed.receipt.installed_at * 1000).toLocaleString() : '未记录'}</dd></div>
