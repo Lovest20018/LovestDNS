@@ -291,7 +291,7 @@
       "scripts/test-cachedb-history-replay.py": "e22a2616a5e2456482df726d1c8e3e70bd17c9481529e199e3b435e71a385e4b",
       "scripts/test-cachedb-timeout.py": "f9ab7151a1fe186605e13df88c28f52437bccacbbf9cddc523b75de9ccd93c49",
       "scripts/test-cachedb-upgrade-rewarm.py": "918c6b24f70ad3c38361118b50ff351e9da3aefbfaa466e0d2a3bf069cc44cce",
-      "scripts/test-console-navigation.mjs": "df7c15b49ec61b7a66dd6a91fa9de32125f122f9fac7f0799941475bdcccdf00",
+      "scripts/test-console-navigation.mjs": "df5c45bc17ced998ba20cb1f788717bcc48b4d6ef9501c9717fc1d1e4689f2a2",
       "scripts/test-control-capacity.py": "b65529ea83823923dc46859e0f5293cb7a4def6d8ff991b55df770065f16f229",
       "scripts/test-dns-filter.py": "29f992a2fda7a6eca499a69d9adf050328384ad212cdd8b0f33e9df6d8968fc9",
       "scripts/test-dnscrypt-compatibility.py": "dc93ec3bd4615050e7184debbf8c9c10517ed71a12ad9983d78f18b043b929bd",
@@ -407,7 +407,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "e28ed35cc0878fb0331e12cdd2fb6e67b4fd820bca497604d279c33cba919975"
+    "sha256": "79f62fa50aafb463681db44fd596974d8da34ef9082c20bdef7c5493265b024a"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

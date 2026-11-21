@@ -45,7 +45,7 @@ try {
   });
   evaluate = async (expression) => { const result = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text); return result.result.value; };
   const wait = async (expression) => { for (let i = 0; i < 120; i++) { if (await evaluate(`Boolean(${expression})`)) return; await sleep(100); } throw new Error('Timed out: ' + expression); };
-  const click = async (text, scope = 'body') => { for (let i = 0; i < 120; i++) { if (await evaluate(`(()=>{const button=[...document.querySelectorAll(${JSON.stringify(`${scope} button`)})].find(x=>x.textContent.trim()===${JSON.stringify(text)});if(!button||button.disabled)return false;button.click();return true;})()`)) return; await sleep(100); } throw new Error('Missing enabled button: ' + text); };
+  const click = async (text, scope = 'body') => { for (let i = 0; i < 120; i++) { if (await evaluate(`(()=>{const button=[...document.querySelectorAll(${JSON.stringify(`${scope} button`)})].find(x=>x.textContent.trim()===${JSON.stringify(text)});if(!button||button.matches(':disabled'))return false;button.click();return true;})()`)) return; await sleep(100); } throw new Error('Missing enabled button: ' + text); };
   const change = async (selector, value) => evaluate(`(()=>{const input=document.querySelector(${JSON.stringify(selector)});if(!input)throw Error('Missing input');Object.getOwnPropertyDescriptor(input.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(value)});input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
   const go = async (hash, title) => { await evaluate(`location.hash=${JSON.stringify(hash)}`); await wait(`document.querySelector('.suite-page-heading h1')?.textContent===${JSON.stringify(title)}`); await wait("!document.querySelector('.suite-content')?.textContent.includes('正在加载页面…')"); await sleep(120); };
   const control = (body) => fetch(origin + '/fixture/navigation', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -94,9 +94,10 @@ try {
     await wait(`location.hash === ${JSON.stringify(expected)}`);
   };
   const routingBreadcrumb = async (label) => {
-    await wait(`document.querySelector('.suite-breadcrumb strong')?.textContent === ${JSON.stringify(label)}`);
+    const expected = JSON.stringify(label);
+    await wait(`document.querySelector('.suite-breadcrumb strong')?.textContent === ${expected} &&
+      document.querySelector('.suite-list-tabs button[aria-pressed="true"]')?.textContent === ${expected}`);
     assert.equal(await evaluate("document.querySelector('.suite-breadcrumb > span')?.textContent"), '域名分流');
-    assert.equal(await evaluate(`document.querySelector('.suite-list-tabs button[aria-pressed="true"]')?.textContent`), label);
   };
 
   await wait("document.querySelectorAll('.suite-nav a').length===6");
@@ -122,10 +123,13 @@ try {
   await routingBreadcrumb('强制转发');
   await wait("[...document.querySelectorAll('button')].some(button=>button.textContent==='可视化编辑' && button.classList.contains('active'))");
   await wait("[...document.querySelectorAll('input')].some(input=>input.value==='unsaved-navigation.example')");
-  await nav('概览'); await nav('域名分流');
-  await wait("location.hash.includes('force_forward_list.txt')");
+  await nav('概览');
+  await wait("document.querySelector('.suite-page-heading h1')?.textContent === '概览'");
+  await nav('域名分流');
+  await wait("location.hash === '#/lists?file=force_forward_list.txt'");
   await routingBreadcrumb('强制转发');
   await click('强制递归', '.suite-list-tabs');
+  await wait("location.hash === '#/lists?file=force_recurse_list.txt'");
   await routingBreadcrumb('强制递归');
   await go('#/lists?file=custom_cn_mark.txt', '域名分流');
   await routingBreadcrumb('自定义 CN 域名标记');
