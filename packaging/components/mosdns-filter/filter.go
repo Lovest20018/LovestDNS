@@ -31,10 +31,11 @@ var (
 )
 
 type Rule struct {
-	ID     string `json:"id"`
-	Source string `json:"source"`
-	Rule   string `json:"rule"`
-	Until  int64  `json:"until,omitempty"`
+	ID       string `json:"id"`
+	Source   string `json:"source"`
+	SourceID string `json:"source_id,omitempty"`
+	Rule     string `json:"rule"`
+	Until    int64  `json:"until,omitempty"`
 }
 
 type policy struct {
@@ -42,12 +43,14 @@ type policy struct {
 		Text string `json:"text"`
 		Rule
 	} `json:"fragments"`
-	Format  int             `json:"version"`
-	Enabled bool            `json:"enabled"`
-	Exact   map[string]Rule `json:"exact"`
-	Suffix  map[string]Rule `json:"suffix"`
-	Except  map[string]Rule `json:"except"`
-	Allow   map[string]Rule `json:"allow"`
+	Format      int             `json:"version"`
+	Enabled     bool            `json:"enabled"`
+	Exact       map[string]Rule `json:"exact"`
+	Suffix      map[string]Rule `json:"suffix"`
+	Except      map[string]Rule `json:"except"`
+	Allow       map[string]Rule `json:"allow"`
+	AllowExact  map[string]Rule `json:"allow_exact"`
+	AllowSuffix map[string]Rule `json:"allow_suffix"`
 
 	revision string
 	probes   [2]string
@@ -79,6 +82,10 @@ func (p *policy) match(name string, now int64) decision {
 	}
 	d := decision{Action: "pass", Revision: p.revision}
 	if rule, ok := p.Allow[name]; ok && (rule.Until == 0 || rule.Until > now) {
+		d.Action, d.Rule = "allow", &rule
+	} else if rule, ok := p.AllowExact[name]; ok {
+		d.Action, d.Rule = "allow", &rule
+	} else if rule, ok := suffixMatch(p.AllowSuffix, name); ok {
 		d.Action, d.Rule = "allow", &rule
 	} else if rule, ok := suffixMatch(p.Except, name); ok {
 		d.Action, d.Rule = "allow", &rule
@@ -194,7 +201,8 @@ func (f *Filter) read(revision string) (*policy, error) {
 		return nil, errors.New("policy checksum mismatch")
 	}
 	p := &policy{revision: revision}
-	if err := json.Unmarshal(data, p); err != nil || (p.Format != 1 && p.Format != 2) || len(p.Fragments) > 128 {
+	if err := json.Unmarshal(data, p); err != nil || p.Format < 1 || p.Format > 3 || len(p.Fragments) > 128 ||
+		(p.Format < 3 && (len(p.AllowExact) != 0 || len(p.AllowSuffix) != 0)) {
 		return nil, errors.New("invalid policy format")
 	}
 	return p, nil

@@ -27,13 +27,14 @@ def normalized_domain(value):
     return value
 
 
-def parse(data, *, accept_fragments=True):
+def parse(data, *, accept_fragments=True, source_type='block'):
     if len(data.encode('utf-8')) > MAX_LIST_BYTES:
         raise ValueError('规则文本超过大小上限')
     result, seen, types = [], set(), set()
     fragments = 0
     counts = dict(valid=0, duplicates=0, ignored=0, unsupported=0, invalid=0, protected=0)
     issues = []
+    scopes = {}
 
     def issue(kind, reason, raw, line):
         counts[kind] += 1
@@ -58,7 +59,7 @@ def parse(data, *, accept_fragments=True):
         head, _, _ = line.partition('#')
         expression = head.rstrip()
         match = SUFFIX.fullmatch(line)
-        fragment = FRAGMENT.fullmatch(line) if accept_fragments else None
+        fragment = FRAGMENT.fullmatch(line) if accept_fragments and source_type == 'block' else None
         if not match and (line.startswith('@@') or re.search(r'\$[^\s]*\bbadfilter\b', expression, re.IGNORECASE)):
             issue('protected', 'exception_or_badfilter', line, number)
             continue
@@ -90,7 +91,7 @@ def parse(data, *, accept_fragments=True):
                 issue('unsupported', category, line, number)
                 continue
             elif len(tokens) > 1:
-                if tokens[0] not in BLOCK_HOSTS:
+                if source_type == 'allow' or tokens[0] not in BLOCK_HOSTS:
                     types.add('hosts_rewrite')
                     issue('unsupported', 'hosts_rewrite', line, number)
                     continue
@@ -101,6 +102,8 @@ def parse(data, *, accept_fragments=True):
             issue('protected' if line.startswith('@@') else 'invalid', 'invalid_domain', line, number)
             continue
         for domain in names:
+            if source_type == 'allow':
+                kind = 'allow_exact' if kind == 'exact' else 'allow_suffix'
             key = kind, domain
             if key in seen:
                 counts['duplicates'] += 1
@@ -111,10 +114,11 @@ def parse(data, *, accept_fragments=True):
                 if fragments > MAX_FRAGMENTS:
                     raise ValueError(f'一份规则最多支持 {MAX_FRAGMENTS} 条字面片段通配规则')
             result.append((kind, domain, line, number))
+            scopes[kind] = scopes.get(kind, 0) + 1
             counts['valid'] += 1
             if counts['valid'] > MAX_RULES:
                 raise ValueError('单份订阅的有效规则数超过上限')
-    return result, {**counts, 'types': sorted(types), 'issues': issues}
+    return result, {**counts, 'types': sorted(types), 'issues': issues, 'scopes': scopes}
 
 
 def encoded(value):
@@ -129,16 +133,19 @@ def compile_policy(model, get_list, now):
     result = {name: {} for name in ('exact', 'suffix', 'except', 'allow')}
     enabled = [item for item in model['sources'] if item['enabled']]
     fragments = {}
-    lists = [('local', '本地规则', model['local_rules'], True)]
-    lists.extend((item['id'], item['name'], get_list(item['content']), 'fragment' in item.get('accepted', ())) for item in enabled)
+    lists = [('local', '本地规则', model['local_rules'], True, 'block')]
+    lists.extend((item['id'], item['name'], get_list(item['content']), 'fragment' in item.get('accepted', ()),
+                  item.get('type', 'block')) for item in enabled)
     count = 0
-    for source_id, source, text, accept_fragments in lists:
-        terms, _ = parse(text, accept_fragments=accept_fragments)
+    for source_id, source, text, accept_fragments, source_type in lists:
+        terms, _ = parse(text, accept_fragments=accept_fragments, source_type=source_type)
         for kind, domain, raw, line in terms:
-            target = fragments if kind == 'fragment' else result[kind]
+            target = fragments if kind == 'fragment' else result.setdefault(kind, {})
             if domain not in target:
                 rule_id = digest(encoded((source_id, kind, domain, raw, line)))[:24]
                 target[domain] = {'id': rule_id, 'source': source, 'rule': raw}
+                if source_id != 'local':
+                    target[domain]['source_id'] = source_id
                 count += 1
                 if count > MAX_RULES:
                     raise ValueError('已启用的总规则数超过上限')
@@ -146,7 +153,8 @@ def compile_policy(model, get_list, now):
         raise ValueError(f'已启用的字面片段通配规则总数超过 {MAX_FRAGMENTS}')
     if fragments:
         result['fragments'] = [dict(text=text, **fragments[text]) for text in sorted(fragments, key=lambda s: (-len(s), s))]
-    result.update(version=2 if fragments else 1, enabled=model['enabled'])
+    version = 3 if 'allow_exact' in result or 'allow_suffix' in result else 2 if fragments else 1
+    result.update(version=version, enabled=model['enabled'])
     return encode_policy(result, model, now), count
 
 

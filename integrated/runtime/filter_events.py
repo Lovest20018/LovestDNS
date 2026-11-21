@@ -69,6 +69,10 @@ def decode(value):
             if not re.fullmatch('[a-f0-9]{24}', verdict['id']) or not 0 < len(verdict['source']) <= 64 or not 0 < len(verdict['rule']) <= 512:
                 raise ValueError('invalid_filter_rule')
             decision.update(id=verdict['id'], source=verdict['source'], rule=verdict['rule'])
+            if 'source_id' in verdict:
+                if not isinstance(verdict['source_id'], str) or not ID.fullmatch(verdict['source_id']):
+                    raise ValueError('invalid_filter_source')
+                decision['source_id'] = verdict['source_id']
             if verdict.get('until'):
                 decision['until'] = verdict['until']
         result['filter'] = decision

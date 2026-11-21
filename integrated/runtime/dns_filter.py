@@ -197,6 +197,9 @@ def validate_action(value):
         'subscription': {'id', 'enabled', 'interval', 'remove'},
         'allow': {'domain', 'mode'},
     }
+    if action == 'preview':
+        value = {'type': 'block', **value}
+        fields['preview'].add('type')
     if (action not in fields or set(value) != {'action', 'revision', *fields[action]}
             or not isinstance(value['revision'], str)
             or value['revision'] and not REVISION.fullmatch(value['revision'])):
@@ -206,6 +209,8 @@ def validate_action(value):
                 or len(value['local_rules'].encode('utf-8')) > MAX_LOCAL_BYTES):
             raise ValueError('本地规则须小于 16 KiB')
     if action == 'preview':
+        if value['type'] not in ('block', 'allow'):
+            raise ValueError('订阅类型无效')
         destination(value['url'])
         name = value['name']
         if not isinstance(name, str) or not 1 <= len(name) <= 64 or any(ord(c) < 32 for c in name):
@@ -268,7 +273,7 @@ class FilterManager:
         now = time.time()
         safe = {**model,
                 'allow': {name: end for name, end in model['allow'].items() if end is None or end > now},
-                'sources': [{k: v for k, v in item.items() if k not in ('url', 'content', 'accepted')}
+                'sources': [{'type': 'block', **{k: v for k, v in item.items() if k not in ('url', 'content', 'accepted')}}
                             for item in model['sources']]}
         return {**safe, 'revision': revision, 'mode': mode, 'available': runtime is not None,
                 'live_revision': runtime['revision'] if runtime else None, 'live_enabled': runtime['enabled'] if runtime else False,
@@ -404,7 +409,7 @@ class FilterManager:
                 raise ValueError('订阅已不存在')
             if action == 'refresh':
                 text = self.download(item['url'])
-                _, parsed = parse(text)
+                _, parsed = parse(text, source_type=item.get('type', 'block'))
                 if (not parsed['valid'] or parsed['protected'] or set(parsed['types']) - set(item['accepted'])
                         or parsed['invalid'] > item['parse']['invalid']):
                     self.save_draft(old, item, text, existing=item, parsed=parsed)
@@ -421,12 +426,13 @@ class FilterManager:
 
     def save_draft(self, revision, data, text, *, existing, parsed=None):
         if parsed is None:
-            _, parsed = parse(text)
+            _, parsed = parse(text, source_type=data.get('type', 'block'))
         value = destination(data['url'])
         item = copy.copy(existing) if existing else {
             'id': uuid.uuid4().hex, 'url': data['url'], 'name': data['name'],
-            'host': value.hostname, 'interval': data['interval'], 'enabled': True}
-        public = {'id': uuid.uuid4().hex, 'name': item['name'], 'host': item['host'], 'parse': parsed}
+            'host': value.hostname, 'interval': data['interval'], 'enabled': True, 'type': data['type']}
+        public = {'id': uuid.uuid4().hex, 'source_id': item['id'], 'name': item['name'], 'host': item['host'],
+                  'type': item.get('type', 'block'), 'parse': parsed}
         with self.lock:
             self.draft = {'public': public, 'revision': revision, 'item': item, 'new': existing is None, 'text': text}
         return '订阅预览已生成'

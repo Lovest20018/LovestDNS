@@ -158,6 +158,43 @@ def test_unbound_mode_reports_unavailable_and_retains_configuration(service):
     assert current['mode'] == 'recursive' and current['enabled'] and not current['live_enabled']
 
 
+def test_allow_subscription_legacy_model_and_scopes(service):
+    manager, _, feed, _, _ = service
+    state, job = run(manager, 'preview', url='https://example.test/block', name='legacy', interval=0)
+    assert job['phase'] == 'succeeded' and state['draft']['type'] == 'block'
+    state, _ = run(manager, 'apply_preview', preview=state['draft']['id'], partial=False)
+    old = state['revision']
+    model = manager.store.model(old)
+    source = model['sources'][0]
+    source.pop('type')
+    source['content'] = manager.store.save_list('||ad.example.test^\n@@||safe.ad.example.test^')
+    old = manager.store.apply(old, model)
+    assert manager.status()['sources'][0]['type'] == 'block'
+    terms, report = parse(
+        'exact.ad.example.test\n||safe.ad.example.test^\n@@||other.ad.example.test^\n'
+        '||unsafe.ad.example.test^$client=192.0.2.1\n/unsafe.*/\n0.0.0.0 unsafe.ad.example.test',
+        source_type='allow',
+    )
+    assert [term[:2] for term in terms] == [
+        ('allow_exact', 'exact.ad.example.test'), ('allow_suffix', 'safe.ad.example.test'),
+        ('allow_suffix', 'other.ad.example.test'),
+    ]
+    assert report['scopes'] == {'allow_exact': 1, 'allow_suffix': 2} and report['unsupported'] == 3
+    feed[0] = 'exact.ad.example.test\n@@||other.ad.example.test^'
+    state, job = run(manager, 'preview', url='https://example.test/allow', name='allow', interval=0, type='allow')
+    assert job['phase'] == 'succeeded' and state['draft']['type'] == 'allow'
+    source_id = state['draft']['source_id']
+    state, job = run(manager, 'apply_preview', preview=state['draft']['id'], partial=False)
+    assert job['phase'] == 'succeeded'
+    assert state['sources'][1]['id'] == source_id and state['sources'][1]['type'] == 'allow'
+    assert state['revision'] != old
+    compiled = json.loads((manager.store.root / (state['revision'] + '.policy')).read_text())
+    assert compiled['version'] == 3
+    assert 'safe.ad.example.test' in compiled['except']
+    assert compiled['allow_exact']['exact.ad.example.test']['source_id'] == source_id
+    assert compiled['allow_suffix']['other.ad.example.test']['rule'] == '@@||other.ad.example.test^'
+
+
 def test_clear_and_disable_discard_delayed_core_events(tmp_path):
     recorder = Recorder(tmp_path, tmp_path)
     recorder.configure(True)

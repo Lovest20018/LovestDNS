@@ -340,6 +340,59 @@ def verify(binary, baseline, blocklist, queries):
                 assert manager.store.revision() == activated
                 assert all(event['filter']['rule'] == '||adnet.example.test^' for event in blocked)
                 assert any(event['filter']['revision'] == original_revision for event in recorder.store.recent(decision='block')['events'])
+
+                feed[0] = ('single.adnet.example.test\n||safe.adnet.example.test^\n'
+                           '@@||exception.adnet.example.test^\n||conditional.adnet.example.test^$client=127.0.0.1')
+                state = apply(manager, 'preview', name='Controlled allow list', url='https://example.test/allow',
+                              interval=0, type='allow')
+                assert state['draft']['parse']['scopes'] == {'allow_exact': 1, 'allow_suffix': 2}
+                assert state['draft']['parse']['unsupported'] == 1
+                state = apply(manager, 'apply_preview', preview=state['draft']['id'], partial=True)
+                allow_source = state['sources'][-1]['id']
+                active_allow = state['revision']
+                whitelist_cases = {
+                    'single.adnet.example.test': 0, 'child.single.adnet.example.test': 5,
+                    'safe.adnet.example.test': 0, 'child.safe.adnet.example.test': 0,
+                    'unsafe.adnet.example.test': 5, 'exception.adnet.example.test': 0,
+                    'child.exception.adnet.example.test': 0, 'conditional.adnet.example.test': 5,
+                }
+                for transport in ('udp', 'tcp'):
+                    for name, code in whitelist_cases.items():
+                        assert exchange(port, name, transport)['rcode'] == code, (transport, name)
+                proof = manager.check('child.safe.adnet.example.test')
+                assert (proof['action'], proof['source_id'], proof['source'], proof['rule'], proof['revision']) == (
+                    'allow', allow_source, 'Controlled allow list', '||safe.adnet.example.test^', active_allow)
+                allowed = wait(lambda: [event for event in recorder.store.recent()['events']
+                                        if event['filter'].get('source_id') == allow_source])
+                assert all(event['filter']['revision'] == active_allow and event['filter']['action'] == 'allow'
+                           for event in allowed)
+                feed[0] = '@@||conditional.adnet.example.test^$client=127.0.0.1\n||replacement.adnet.example.test^'
+                state, failed = simulate(manager, 'refresh', id=allow_source)
+                assert failed['phase'] == 'failed' and state['revision'] == active_allow
+                assert state['draft']['source_id'] == allow_source
+                assert exchange(port, 'child.safe.adnet.example.test')['rcode'] == 0
+                assert exchange(port, 'conditional.adnet.example.test')['rcode'] == 5
+                state = apply(manager, 'subscription', id=allow_source, enabled=False, remove=False, interval=0)
+                assert exchange(port, 'child.safe.adnet.example.test')['rcode'] == 5
+                state = apply(manager, 'subscription', id=allow_source, enabled=True, remove=False, interval=0)
+                assert exchange(port, 'child.safe.adnet.example.test')['rcode'] == 0
+                feed[0] = '||safe.adnet.example.test^'
+                state = apply(manager, 'preview', name='Second allow list', url='https://example.test/second',
+                              interval=0, type='allow')
+                state = apply(manager, 'apply_preview', preview=state['draft']['id'], partial=False)
+                replacement = state['sources'][-1]['id']
+                state = apply(manager, 'allow', domain='safe.adnet.example.test', mode='permanent')
+                state = apply(manager, 'subscription', id=allow_source, enabled=True, remove=True, interval=0)
+                assert exchange(port, 'single.adnet.example.test')['rcode'] == 5
+                assert exchange(port, 'safe.adnet.example.test')['rcode'] == 0
+                assert manager.check('safe.adnet.example.test')['source'] == '本地精确放行'
+                assert manager.check('child.safe.adnet.example.test')['source_id'] == replacement
+                state = apply(manager, 'allow', domain='safe.adnet.example.test', mode='remove')
+                assert manager.check('safe.adnet.example.test')['source_id'] == replacement
+                report['allow_subscription'] = {'checks_per_transport': len(whitelist_cases),
+                                                'historical_provenance': len(allowed),
+                                                'failed_refresh_preserved': True, 'overlap_preserved': True}
+
                 recorder.request({'operation': 'clear'})
                 recorder.core_events.renew(endpoints, recorder.generation)
                 assert not recorder.store.recent()['events']
@@ -366,6 +419,9 @@ def verify(binary, baseline, blocklist, queries):
             with start(binary, config, work, work, port):
                 assert core_call(work, 'status')['revision'] == manager.store.revision()
                 assert exchange(port, 'ads.example.test')['rcode'] == 5
+                assert manager.check('child.safe.adnet.example.test')['source_id'] == replacement
+                for transport in ('udp', 'tcp'):
+                    assert exchange(port, 'child.safe.adnet.example.test', transport)['rcode'] == 0
                 if not queries:
                     assert exchange(port, 'adnet.example.test')['rcode'] == 5
             (work / 'core-env.json').write_text('{"CNAUTO":"no"}', encoding='utf-8')
