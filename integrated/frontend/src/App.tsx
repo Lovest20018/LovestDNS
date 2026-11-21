@@ -24,6 +24,7 @@ import { clearMaintenanceRequests } from './maintenanceRequests';
 import PageBoundary from './components/PageBoundary';
 import { clearDiagnosticRoutes } from './useDiagnosticRoute';
 import { clearSourceDevices } from './sourceDevices';
+import { domainListForFile, domainListLabel } from './domainLists';
 import './suite.css';
 
 type Page = 'cache' | 'dashboard' | 'diagnostics' | 'config' | 'env' | 'lists' | 'ttl' | 'advanced' | 'filter' | 'system' | 'deploy';
@@ -100,7 +101,7 @@ function routeFromHash(hash: string) {
     tab = params.has('component') ? 'logs' : path === '/cache' ? 'cache' : tab;
     page = tab === 'cache' ? 'cache' : 'system';
   }
-  return { page, tab, canonical };
+  return { page, tab, file: params.get('file'), canonical };
 }
 
 function sectionTitle(page: Page, tab: string) {
@@ -136,9 +137,11 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
   const { settingsVisible: gatewaySettingsVisible } = useGateway();
   const active = tasks.find(isActiveTask);
   const [hash, setHash] = useState(() => location.hash);
-  const { page, tab, canonical } = routeFromHash(hash);
+  const { page, tab, file, canonical } = routeFromHash(hash);
   const title = sectionTitle(page, tab);
   const primaryPage = navPage(page);
+  const domainList = page === 'lists' && caps?.permissions.configure ? domainListForFile(file) : undefined;
+  const breadcrumbTitle = domainList ? domainListLabel(domainList) : title;
   const { icon: ThemeIcon, label: themeLabel, next: nextTheme } = THEMES[theme];
   const heading = useRef<HTMLHeadingElement>(null);
   const focusHeading = useRef(false);
@@ -234,8 +237,8 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
           <Boxes size={19} />
         </button>
         <div className="suite-breadcrumb">
-          {title !== TITLES[primaryPage] && <><span>{TITLES[primaryPage]}</span><ChevronRight size={14} /></>}
-          <strong>{title}</strong>
+          {breadcrumbTitle !== TITLES[primaryPage] && <><span>{TITLES[primaryPage]}</span><ChevronRight size={14} /></>}
+          <strong>{breadcrumbTitle}</strong>
         </div>
         <div className="suite-top-actions">
           <button className="suite-icon-button" onClick={() => setTheme(nextTheme)}

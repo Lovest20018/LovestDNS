@@ -3,14 +3,14 @@
   "artifacts": {
     "openapi.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "f687c5044cdea8dec93e361e932f7fb5727e07898a81220e1e9e6fae49858aa8"
+      "sha256": "fa2d37d600cdeb3e86401e3235787af6b2dfff1a9c916c765cba97d0971f1654"
     },
     "samples.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "1e58b4ef12412dbb93c8e5ddc42dac47b3a9fd8ae8be4b8a90907137df71c6b7"
+      "sha256": "51ca2f37d6daef222f354377ac5fbf6d531110cef344c24526144fc005a526c6"
     }
   },
-  "candidate_version": "0.2.2-console.6",
+  "candidate_version": "0.2.2-console.7",
   "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
   "format_version": 1,
   "provenance": "All responses from actual Flask handlers with synthetic I/O and clocks; no live core/network acceptance evidence",
@@ -45,14 +45,14 @@
       "integrated/backend/history.py": "068715c1e54af2ec880712da543bd7a7c1e88f5567c213f0b2fd6007dea28713",
       "integrated/backend/installation.py": "64190ebaa3b32c2dfb6f5aa67a8a35303e77be1547114d8a6a866cfc44fd6a84",
       "integrated/backend/runtime_client.py": "f97b233696bcfb36eba5249d6557a57e0f3b8ef589dd064417a9b01f6dcd9408",
-      "integrated/backend/server.py": "13f8b97c405dfb03ad39408714fc9e0d872e19a51ab86e93ce46c69024357439",
+      "integrated/backend/server.py": "24ec47baf0b5dc3c7a13688d3f0074871332b24c9ba24a92e96450d3652199ef",
       "integrated/backend/software_update.py": "b52458da2c3da101c1f9def879a71a2aaf24134511fecaf5b1ffdc6f190b42bb",
       "integrated/frontend/package-lock.json": "a9cc6c4341237b1ddb91874a72cf08878df13787d20fc3cbc19b1bfc56a915a7",
       "integrated/frontend/package.json": "465e17dc4fde55be78c58247330b5bd39920eef42123a3917c564b41b2a08d38",
       "integrated/frontend/public/favicon.svg": "f40f9a0426f725f1294587b6b222af620f22785f9e3d173d067aed3c879c9642",
       "integrated/frontend/public/lovestdns-icon.png": "4679f95d1be09ad3d1e639c1dd0975a6891e55ba9a234505b3b87312619d9d13",
       "integrated/frontend/public/lovestdns-icon.svg": "f40f9a0426f725f1294587b6b222af620f22785f9e3d173d067aed3c879c9642",
-      "integrated/frontend/src/App.tsx": "bdf4bda7263d8384c888a92a12ccefe11bdd728dca6039117a6d9de09cf9e5b0",
+      "integrated/frontend/src/App.tsx": "e875ec0a01d666a13fa7ec4244e745e21d66eb2e309a57bc75d99bd5e23d26aa",
       "integrated/frontend/src/FilterProvider.tsx": "eb4087c51b2fb02a773c4140e97cd926170da4b67f475b811670fa291deb529e",
       "integrated/frontend/src/GatewayProvider.tsx": "05e27cb75358d7a039aefd948e549035dcee7a85fded236e46faf00851531abe",
       "integrated/frontend/src/MaintenanceProvider.tsx": "de56758803738ebf490b294826bf079ac49771d103685d40f5f2cc786f916059",
@@ -92,6 +92,7 @@
       "integrated/frontend/src/diagnosticRoute.ts": "48fe5d6c529fb3bb9a9b79ca5d8c8a0a69d7aa8963415d458c551447d1699874",
       "integrated/frontend/src/dnsListeners.ts": "146cbed173c3772238b97c52d2e8da5e896ec5e68882cf411fe191b845e2cc76",
       "integrated/frontend/src/domainEditor.ts": "2120e5fa7c9761d7c21b15c57206659273aee83a17796fc18e3a9928fa7fa3cf",
+      "integrated/frontend/src/domainLists.ts": "11368dd4583e77049307505d96cd7cfa7cb2e25edfcf546944f778e7250781d3",
       "integrated/frontend/src/envEditor.ts": "2b7381d358695c76e7ad87d48580757a0a5434fe24ea7a8d9e48a344e0ddbb8d",
       "integrated/frontend/src/fileDrafts.ts": "17d16cc4ebfaa8e0329e76ae0212dabe9e4b36ac085897e61b647c5619c4ebec",
       "integrated/frontend/src/filterApi.ts": "a3afa32ff1e5c7606ba474b73c74aa003743dbb79722b79ddbf756d2eaf6e692",
@@ -101,7 +102,7 @@
       "integrated/frontend/src/maintenanceContext.ts": "4d1f259c05f039fcbff2d40540d474d266d67d9a1bcf1b12b31f7388191f030a",
       "integrated/frontend/src/maintenanceRequests.ts": "6a57f91ec99523d5acc7f6b8d3d88a830a04afcec0fd62fd53a46c7280ce9ce0",
       "integrated/frontend/src/pages/AdvancedConfigPage.tsx": "6f2cd5e60269f7c397748eef842eb5a77f492acc68b05346d965a575ebdf5dca",
-      "integrated/frontend/src/pages/DomainListPage.tsx": "2d289d11a8faaa73e81b6ea3e1714837693a24cbc6dd209ab984f86f32ff2950",
+      "integrated/frontend/src/pages/DomainListPage.tsx": "7700033b15cb5f41c036484caace474466821f5511d4d78a773c9ccb396ff7e8",
       "integrated/frontend/src/pages/EnvConfigPage.tsx": "098c26492c092e71675033a38e901d6f2bf26a9eada99224412e0977955a3ae6",
       "integrated/frontend/src/pages/HomeWorkflow.css": "33fecbf45bd86dc98b9a9da01c2262a282e284fba586077cb4a8759df46024b0",
       "integrated/frontend/src/pages/SuiteCache.tsx": "b0a660aa6dfecc04bb0add12ee4138bffd2a47011502e673e7e53989c8934ba3",
@@ -290,7 +291,7 @@
       "scripts/test-cachedb-history-replay.py": "e22a2616a5e2456482df726d1c8e3e70bd17c9481529e199e3b435e71a385e4b",
       "scripts/test-cachedb-timeout.py": "f9ab7151a1fe186605e13df88c28f52437bccacbbf9cddc523b75de9ccd93c49",
       "scripts/test-cachedb-upgrade-rewarm.py": "918c6b24f70ad3c38361118b50ff351e9da3aefbfaa466e0d2a3bf069cc44cce",
-      "scripts/test-console-navigation.mjs": "6c7f576fbf7f130a61a0c660dd03be17a373117d5cc5c864e1f576b0522ea6e2",
+      "scripts/test-console-navigation.mjs": "df7c15b49ec61b7a66dd6a91fa9de32125f122f9fac7f0799941475bdcccdf00",
       "scripts/test-control-capacity.py": "b65529ea83823923dc46859e0f5293cb7a4def6d8ff991b55df770065f16f229",
       "scripts/test-dns-filter.py": "29f992a2fda7a6eca499a69d9adf050328384ad212cdd8b0f33e9df6d8968fc9",
       "scripts/test-dnscrypt-compatibility.py": "dc93ec3bd4615050e7184debbf8c9c10517ed71a12ad9983d78f18b043b929bd",
@@ -406,7 +407,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "594593e7f80571f0e70b19798ab5ec046820b4d9faed3693019b010956cc2f0f"
+    "sha256": "447a22e1635f7ecc50f4da82536c74dbe8e70a035fb6b82bc4e47e863e279c75"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

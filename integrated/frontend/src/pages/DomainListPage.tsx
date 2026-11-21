@@ -6,7 +6,8 @@ import { useUnsavedChanges } from '../unsaved';
 import { draftEpoch } from '../fileDrafts';
 import { useFileEditor } from '../useFileEditor';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { LIST_FILE_INFO } from '../types';
+import { DOMAIN_LISTS, domainListForFile, domainListLabel } from '../domainLists';
+import type { DomainList } from '../domainLists';
 import { Plus, X, FileText, Download, Copy, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '../hooks';
 import { copyText } from '../copyText';
@@ -29,39 +30,14 @@ const createCommentEntry = (): DomainEntry => ({
   comment: true,
 });
 
-const ALL_LISTS = [
-  ...LIST_FILE_INFO,
-  {
-    key: 'custom_cn_mark',
-    filename: 'custom_cn_mark.txt',
-    title: '自定义 CN 域名标记',
-    description: '额外定义标记为 CN 的域名。当域名被 USE_MARK_DATA 或 IP 库认定为非 CN 但你希望当成 CN 处理时使用。格式同 force_*_list。',
-    requiresForward: false,
-    defaultContent: `# 自定义 CN 域名标记\n# 当域名被误判为非 CN 时可在此添加\n`,
-  },
-  {
-    key: 'trackerslist',
-    filename: 'trackerslist.txt',
-    title: 'BT Tracker 列表',
-    description: 'BT tracker 域名列表，CN_TRACKER=yes 时这些域名强制走 dnscrypt。每行一个 tracker URL，会自动增量更新合并。',
-    requiresForward: false,
-    defaultContent: `# BT Tracker 列表\n# 每行一个 tracker URL\n# 自动增量更新合并\n`,
-  },
-];
-
 function subscribeRoute(listener: () => void) {
   window.addEventListener('hashchange', listener);
   return () => window.removeEventListener('hashchange', listener);
 }
+const DEFAULT_LIST = domainListForFile('force_dnscrypt_list.txt')!;
 const listPreferences = new Map<string, 'visual' | 'text'>();
 let preferenceScope = '';
-let lastList = 'force_dnscrypt_list';
-
-function clearDomainListPreferences() {
-  listPreferences.clear();
-  preferenceScope = '';
-  lastList = 'force_dnscrypt_list';
-}
+let lastList = DEFAULT_LIST;
 
 const listHash = () => location.hash;
 
@@ -69,30 +45,30 @@ export default function DomainListPage() {
   const { caps } = useSuite();
   const scope = `${draftEpoch()}:${caps?.instance_id}:${caps?.access_role}`;
   const hash = useSyncExternalStore(subscribeRoute, listHash);
-  const file = new URLSearchParams(hash.split('?')[1]).get('file');
-  const explicitList = ALL_LISTS.find(list => list.filename === file);
-  const activeTab = explicitList?.key ?? (scope === preferenceScope ? lastList : 'force_dnscrypt_list');
+  const [path, query] = hash.split('?');
+  const explicitList = path === '#/lists' ? domainListForFile(new URLSearchParams(query).get('file')) : undefined;
+  const activeList = explicitList ?? (scope === preferenceScope ? lastList : DEFAULT_LIST);
   useEffect(() => {
+    if (path !== '#/lists' || location.hash !== hash) return;
     if (scope !== preferenceScope) {
-      clearDomainListPreferences();
+      listPreferences.clear();
       preferenceScope = scope;
     }
-    lastList = activeTab;
-    if (hash === '#/lists' && location.hash === hash) {
-      const filename = ALL_LISTS.find(list => list.key === activeTab)?.filename;
-      if (filename) {
-        history.replaceState(history.state, '', `#/lists?file=${encodeURIComponent(filename)}`);
-        window.dispatchEvent(new HashChangeEvent('hashchange'));
-      }
+    lastList = activeList;
+    if (!explicitList) {
+      const params = new URLSearchParams(query);
+      params.set('file', activeList.filename);
+      history.replaceState(history.state, '', `#/lists?${params}`);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
     }
-  }, [activeTab, hash, scope]);
-  return <DomainFileEditor key={activeTab} activeTab={activeTab} scope={scope} />;
+  }, [activeList, explicitList, hash, path, query, scope]);
+  return <DomainFileEditor key={activeList.key} activeList={activeList} scope={scope} />;
 }
 
-function DomainFileEditor({ activeTab, scope }: { activeTab: string; scope: string }) {
+function DomainFileEditor({ activeList, scope }: { activeList: DomainList; scope: string }) {
   const { showToast, ToastComponent } = useToast();
+  const activeTab = activeList.key;
   const [editMode, setEditMode] = useState<'visual' | 'text'>(() => scope === preferenceScope ? listPreferences.get(activeTab) ?? 'text' : 'text');
-  const activeList = ALL_LISTS.find((l) => l.key === activeTab)!;
   const editor = useFileEditor(activeList.filename, activeList.defaultContent);
   const { content: rawContent, setContent: setRawContent, busy: saving, result: saveResult } = editor;
   const loading = !editor.loaded && !editor.error;
@@ -187,14 +163,14 @@ function DomainFileEditor({ activeTab, scope }: { activeTab: string; scope: stri
       </div>
 
       <div className="tab-bar suite-file-tabs suite-list-tabs">
-        {ALL_LISTS.map((list) => (
+        {DOMAIN_LISTS.map((list) => (
           <button
             key={list.key}
             aria-pressed={activeTab === list.key}
             className={`tab-item ${activeTab === list.key ? 'active' : ''}`}
             onClick={() => { window.location.hash = `/lists?file=${encodeURIComponent(list.filename)}`; }}
           >
-            {list.title.replace('强制 ', '').replace('域名列表', '')}
+            {domainListLabel(list)}
           </button>
         ))}
       </div>

@@ -93,17 +93,24 @@ try {
     await evaluate('history.back()');
     await wait(`location.hash === ${JSON.stringify(expected)}`);
   };
+  const routingBreadcrumb = async (label) => {
+    await wait(`document.querySelector('.suite-breadcrumb strong')?.textContent === ${JSON.stringify(label)}`);
+    assert.equal(await evaluate("document.querySelector('.suite-breadcrumb > span')?.textContent"), '域名分流');
+    assert.equal(await evaluate(`document.querySelector('.suite-list-tabs button[aria-pressed="true"]')?.textContent`), label);
+  };
 
   await wait("document.querySelectorAll('.suite-nav a').length===6");
   assert.deepEqual(await evaluate("[...document.querySelectorAll('.suite-nav a')].map(link=>link.querySelector('span').textContent)"),
     ['概览', '域名分流', '查询与诊断', '广告过滤', '维护', '系统设置']);
   await nav('域名分流');
   await wait("document.querySelector('textarea')?.value.includes('domain:example.com')");
+  await routingBreadcrumb('DNSCrypt');
   await assertSidebarAlignment();
   await screenshot('sidebar-desktop.png');
   const editorFont = await evaluate("getComputedStyle(document.querySelector('.textarea-code')).fontFamily");
   await click('强制转发');
   await wait("location.hash.includes('force_forward_list.txt')");
+  await routingBreadcrumb('强制转发');
   await wait("document.querySelector('textarea') && !document.querySelector('textarea').disabled");
   await change('textarea', 'domain:unsaved-navigation.example\n');
   await click('可视化编辑');
@@ -112,10 +119,24 @@ try {
   assert(await evaluate("document.activeElement.getBoundingClientRect().top >= document.querySelector('.suite-file-toolbar').getBoundingClientRect().bottom"),
     'A setting reached from the list editor must be visible below the sticky toolbar');
   await back('#/lists?file=force_forward_list.txt');
+  await routingBreadcrumb('强制转发');
   await wait("[...document.querySelectorAll('button')].some(button=>button.textContent==='可视化编辑' && button.classList.contains('active'))");
   await wait("[...document.querySelectorAll('input')].some(input=>input.value==='unsaved-navigation.example')");
   await nav('概览'); await nav('域名分流');
   await wait("location.hash.includes('force_forward_list.txt')");
+  await routingBreadcrumb('强制转发');
+  await click('强制递归', '.suite-list-tabs');
+  await routingBreadcrumb('强制递归');
+  await go('#/lists?file=custom_cn_mark.txt', '域名分流');
+  await routingBreadcrumb('自定义 CN 域名标记');
+  await screenshot('routing-breadcrumb-desktop.png');
+  await click('BT Tracker 列表', '.suite-list-tabs');
+  await routingBreadcrumb('BT Tracker 列表');
+  await back('#/lists?file=custom_cn_mark.txt');
+  await routingBreadcrumb('自定义 CN 域名标记');
+  await go('#/lists?file=unknown.txt&context=fixture', '域名分流');
+  await wait("location.hash === '#/lists?file=custom_cn_mark.txt&context=fixture'");
+  await routingBreadcrumb('自定义 CN 域名标记');
 
   await nav('系统设置');
   await wait("document.querySelector('#settings-search')");
@@ -330,6 +351,11 @@ try {
     }
   }
 
+  await go('#/lists?file=custom_cn_mark.txt', '域名分流');
+  await routingBreadcrumb('自定义 CN 域名标记');
+  await assertFits('domain routing at 320px');
+  await screenshot('routing-breadcrumb-320.png');
+  await go('#/settings?tab=runtime', '运行参数');
   await control({ role: 'observer', gateway: true });
   await send('Page.reload');
   await wait(`!!document.querySelector('${settingsNav}')`);
@@ -353,7 +379,7 @@ try {
   await go('#/settings?tab=updates', '软件更新');
   await wait("document.body?.textContent.includes('通过宿主机更新容器')");
   assert.equal(errors.length, 0, JSON.stringify(errors));
-  console.log('PASS: aligned sidebar, shared tabs, permissions, aliases, editor and task returns, optional gateway settings, release channel, full-width pages, mobile and themes');
+  console.log('PASS: aligned sidebar, list breadcrumbs, shared tabs, permissions, aliases, editor and task returns, optional gateway settings, release channel, full-width pages, mobile and themes');
   console.log('Screenshots: ' + output);
 } catch (error) {
   if (evaluate) console.error(await evaluate('location.hash + "\\n" + document.body.innerText').catch(() => fixtureLog));
