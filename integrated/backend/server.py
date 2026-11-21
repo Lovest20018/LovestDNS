@@ -1,10 +1,12 @@
 """Integrated-only API overlay. The frozen standalone backend is imported unchanged."""
 import json
+import ipaddress
 import os
 import re
 from pathlib import Path
 import sqlite3
 import shutil
+from contextlib import closing
 
 from flask import jsonify, request, g
 from werkzeug.exceptions import Conflict, ServiceUnavailable
@@ -295,6 +297,41 @@ def query_records_recent():
 
 def query_records_summary():
     return _query_records_params('analytics', {'hours'}, {'hours'}, hours=1)
+
+
+def _source_devices(ip=None, name=None):
+    from api_v1 import instance_identity
+
+    instance = instance_identity(STATE_DIR)
+    STATE_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with closing(sqlite3.connect(STATE_DIR / 'source-devices.sqlite', timeout=5)) as db, db:
+        db.execute('CREATE TABLE IF NOT EXISTS devices (ip TEXT PRIMARY KEY, name TEXT NOT NULL)')
+        if ip is not None:
+            if name:
+                db.execute('INSERT INTO devices VALUES (?, ?) ON CONFLICT(ip) DO UPDATE SET name=excluded.name', (ip, name))
+            else:
+                db.execute('DELETE FROM devices WHERE ip=?', (ip,))
+        return jsonify({'instance_id': instance, 'devices': dict(db.execute('SELECT ip, name FROM devices'))})
+
+
+def source_devices_list():
+    return _source_devices()
+
+
+def source_devices_write():
+    body = request.get_json()
+    if not isinstance(body, dict) or set(body) != {'ip', 'name'} or not all(isinstance(value, str) for value in body.values()):
+        return jsonify({'error': '请输入 IP 地址和备注名称'}), 400
+    ip, name = body['ip'].strip(), body['name'].strip()
+    try:
+        if '%' in ip:
+            raise ValueError
+        ip = str(ipaddress.ip_address(ip))
+    except ValueError:
+        return jsonify({'error': '请输入完整的 IPv4 或 IPv6 地址'}), 400
+    if len(name) > 64 or re.search(r'[\x00-\x1f\x7f]', name):
+        return jsonify({'error': '备注名称须在 64 个字符以内，且不能包含控制字符'}), 400
+    return _source_devices(ip, name)
 
 
 def _query_records_params(operation, allowed, numbers, **defaults):

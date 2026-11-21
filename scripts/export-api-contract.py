@@ -187,6 +187,12 @@ def collect_samples(server, stack, temp):
                     scenario='synthetic recorder I/O, default-off status; actual administrator-only handler')
             capture('query_recording_observer_forbidden', '/query-recording', 'query_recording_status', status=403,
                     scenario='real guard denies query history to external observer credentials')
+        capture('source_devices_write', '/source-devices', 'source_devices_write', method='PUT', role='admin',
+                body={'ip': '192.0.2.2', 'name': 'Test device'}, scenario='administrator names a synthetic source address')
+        capture('source_devices_list', '/source-devices', 'source_devices_list', role='admin',
+                scenario='administrator reads the temporary instance device mapping')
+        capture('source_devices_observer_forbidden', '/source-devices', 'source_devices_list', status=403,
+                scenario='external observer requests device names')
         query_event = {'id': 'synthetic-recorder-session:1', 'sequence': 1, 'observed_at': NOW - 1,
             'response_at': NOW - .999, 'source_ip': '192.0.2.2', 'source_port': 32000,
             'entry_address': '192.0.2.1', 'entry_port': 15453, 'component': 'mosdns', 'transport': 'udp',
@@ -195,7 +201,7 @@ def collect_samples(server, stack, temp):
             'addresses_complete': True, 'truncated': False, 'elapsed_ms': 1.0,
             'outcome': 'response_observed', 'timing_scope': 'passive_entry_packet_interval', 'branch': None, 'cache_hit': None}
         with patch.object(server.runtime_client, 'query_records_request', return_value={
-            'status': {**query_status, 'retained_rows': 1}, 'events': [query_event], 'next_before': None, 'history_changed': False}):
+            'status': {**query_status, 'retained_rows': 1}, 'events': [query_event], 'snapshot': 1, 'next_before': None, 'history_changed': False}):
             capture('query_records_recent', '/query-records', 'query_records_recent', role='admin',
                     scenario='synthetic passive event at recorder I/O boundary; no live traffic or cache/path inference')
         sample_revision = 'a' * 64

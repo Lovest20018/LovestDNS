@@ -148,7 +148,7 @@ def openapi_document(version):
         'timing_scope': {'enum': ['passive_entry_packet_interval', 'mosdns_entry_processing']}, 'branch': {'type': 'null'}, 'cache_hit': {'type': 'null'}}
     revision = {'type': 'string', 'pattern': '^(?:[a-f0-9]{64})?$'}
     filter_fields = {'action': {'enum': ['block', 'allow', 'pass']}, 'revision': revision,
-                     'id': text, 'source': text, 'rule': text, 'until': integer}
+                     'id': text, 'source': text, 'source_id': text, 'rule': text, 'until': integer}
     schemas['FilterDecision'] = obj(filter_fields, ['action', 'revision'])
     schemas['QueryEvent'] = obj({**event_fields, 'filter': ref('FilterDecision')}, list(event_fields))
     recording_fields = {'enabled': boolean, 'active': boolean, 'phase': {'enum': ['disabled', 'starting', 'recording', 'unavailable']},
@@ -161,9 +161,10 @@ def openapi_document(version):
         'limits': obj({key: integer for key in ('retention_seconds', 'rows', 'storage_bytes', 'database_bytes')}, ['retention_seconds', 'rows', 'storage_bytes', 'database_bytes'])}
     schemas['QueryRecording'] = obj(recording_fields, list(recording_fields))
     instance = {'type': 'string', 'format': 'uuid'}
+    schemas['SourceDevices'] = obj({'instance_id': instance, 'devices': dictionary(text)}, ['instance_id', 'devices'])
     schemas['QueryRecords'] = obj({'instance_id': instance, 'status': ref('QueryRecording'),
         'events': array(ref('QueryEvent'), maxItems=100), 'next_before': nullable_number,
-        'history_changed': boolean}, ['instance_id', 'status', 'events', 'next_before'])
+        'history_changed': boolean, 'snapshot': integer}, ['instance_id', 'status', 'events', 'next_before'])
     rank = array(obj({'value': text, 'count': integer}, ['value', 'count']), maxItems=10)
     bucket = obj({'start': integer, 'end': integer, 'count': integer,
                   'coverage': {'enum': ['complete', 'partial', 'unknown']}}, ['start', 'end', 'count', 'coverage'])
@@ -178,14 +179,15 @@ def openapi_document(version):
     issue = {'line': integer, 'rule': text, 'kind': text, 'reason': text, 'truncated': boolean}
     preview_counts = {**counts, 'types': array(text), 'issues': array(obj(issue, list(issue)), maxItems=100)}
     preview = {'id': text, 'name': text, 'host': text, 'parse': obj(preview_counts, list(preview_counts))}
+    source_type = {'enum': ['block', 'allow'], 'default': 'block'}
     subscription = {'id': text, 'name': text, 'host': text, 'enabled': boolean, 'interval': interval, 'updated': integer,
                     'parse': obj(counts, list(counts))}
     job = {'id': text, 'action': text, 'phase': {'enum': ['pending', 'succeeded', 'failed']}, 'message': text}
-    filter_status = {'enabled': boolean, 'local_rules': text, 'sources': array(obj(subscription, list(subscription)), maxItems=12),
+    filter_status = {'enabled': boolean, 'local_rules': text, 'sources': array(obj({**subscription, 'type': source_type}, list(subscription)), maxItems=12),
                      'allow': dictionary(nullable_number), 'rules': integer, 'revision': revision,
                      'mode': {'enum': ['recursive', 'mosdns', 'unavailable']}, 'available': boolean,
                      'live_revision': {'type': ['string', 'null']}, 'live_enabled': boolean,
-                     'draft': {'anyOf': [obj(preview, list(preview)), {'type': 'null'}]},
+                     'draft': {'anyOf': [obj({**preview, 'type': source_type}, list(preview)), {'type': 'null'}]},
                      'jobs': array(obj(job, list(job)), maxItems=8)}
     schemas['FilterStatus'] = obj(filter_status, list(filter_status))
     schemas['FilterCheck'] = obj({**filter_fields, 'action': {'enum': ['block', 'allow', 'pass', 'disabled']}, 'domain': text},
@@ -200,11 +202,13 @@ def openapi_document(version):
         'allow': {'domain': text, 'mode': {'enum': ['permanent', 'temporary', 'remove']}},
     }
     schemas['FilterAction'] = {'oneOf': [
-        {**obj({'action': {'const': action}, 'revision': revision, **props}, ['action', 'revision', *props]), 'additionalProperties': False}
+        {**obj({'action': {'const': action}, 'revision': revision, **props,
+                **({'type': source_type} if action == 'preview' else {})}, ['action', 'revision', *props]), 'additionalProperties': False}
         for action, props in action_fields.items()]}
     output = {"config_state": "ConfigState", "instance": "Instance", "capabilities": "Capabilities", "runtime": "Runtime", "metrics": "Metrics", "status": "Status", "env": "Env", "file_read": "File", "file_write": "SavedFile", "dns_query": "DnsResult", "dns_compare": "DnsReport", "dns_health": "DnsHealth", "apply_plan": "ApplyPlan", "task_list": "Tasks", "task_submit": "TaskResponse", "task_read": "TaskResponse", "history_list": "History", "history_read": "RevisionContent", "history_restore": "SavedFile", "logs": "Logs",
               'query_recording_status': 'QueryRecording', 'query_recording_configure': 'QueryRecording', 'query_records_clear': 'QueryRecording',
               'query_records_recent': 'QueryRecords', 'query_records_summary': 'QuerySummary',
+              'source_devices_list': 'SourceDevices', 'source_devices_write': 'SourceDevices',
               'dns_filter_status': 'FilterStatus', 'dns_filter_check': 'FilterCheck', 'dns_filter_action': 'FilterJob'}
     for name in set(output.values()):
         schemas[name + "Response"] = obj({"data": ref(name), "meta": ref("Meta")}, ["data", "meta"])
@@ -254,6 +258,8 @@ def openapi_document(version):
         body = {"dns_query": ref("Query"), "dns_compare": ref("Comparison"), "task_submit": ref("TaskSubmission"), "file_write": obj({"content": text, "expected_revision": file_version}, ["content"]), "history_restore": obj({"expected_revision": file_version})}.get(operation)
         if operation == 'query_recording_configure':
             body = {**obj({'enabled': boolean}, ['enabled']), 'additionalProperties': False}
+        if operation == 'source_devices_write':
+            body = {**obj({'ip': text, 'name': {'type': 'string', 'maxLength': 64}}, ['ip', 'name']), 'additionalProperties': False}
         if operation == 'dns_filter_action':
             body = ref('FilterAction')
         if body:

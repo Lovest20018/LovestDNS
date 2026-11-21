@@ -154,9 +154,11 @@ class Store:
         with closing(self.connect()) as db:
             db.execute('BEGIN')
             lost_before = self.lost_before(db, cutoff)
+            latest = db.execute("SELECT seq FROM sqlite_sequence WHERE name='events'").fetchone()
             table = 'events INDEXED BY blocked_seq' if decision == 'block' and self.has_block_index else 'events'
             rows = db.execute(f'SELECT seq,payload FROM {table} WHERE ' + ' AND '.join(clauses) + ' ORDER BY seq DESC LIMIT ?', (*args, limit + 1)).fetchall()
         return {'events': [dict(json.loads(payload), sequence=seq) for seq, payload in rows[:limit]],
+                'snapshot': snapshot if snapshot is not None else (latest[0] if latest else 0),
                 'next_before': rows[limit - 1][0] if len(rows) > limit else None,
                 'history_changed': snapshot is not None and start is not None and start < lost_before}
 

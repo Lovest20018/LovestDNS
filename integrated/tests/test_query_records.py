@@ -300,6 +300,55 @@ def test_stale_capture_status_never_claims_active(tmp_path):
     assert value['phase'] == 'unavailable' and not value['active'] and value['reason'] == 'recorder_stale'
 
 
+def test_source_devices_are_normalized_persistent_and_instance_scoped(client, monkeypatch, tmp_path):
+    from browser_auth import set_external_api
+    from test_browser_auth import provision
+
+    api, _, state = client
+    path = '/api/v1/source-devices'
+    body = {'ip': '2001:0DB8:0000::8', 'name': '  客厅电视  '}
+    monkeypatch.setenv('SUITE_READ_TOKEN', 'source-device-observer')
+    observer = {'Authorization': 'Bearer source-device-observer'}
+    assert api.get(path).status_code == 401
+    assert api.get(path, headers=observer).status_code == 403
+    assert api.put(path, headers=observer, json=body).status_code == 403
+    csrf = {'X-CSRF-Token': provision(client)}
+    assert api.put(path, json=body).status_code == 403
+    saved = api.put(path, json=body, headers=csrf).get_json()['data']
+    assert saved['devices'] == {'2001:db8::8': '客厅电视'}
+    second = api.put(path, json={'ip': '192.0.2.8', 'name': '客厅电视'}, headers=csrf).get_json()['data']
+    assert second['devices'] == {'2001:db8::8': '客厅电视', '192.0.2.8': '客厅电视'}
+    assert second['instance_id'] == saved['instance_id']
+
+    for bad in ({**body, 'ip': 'fe80::1%eth0'}, {**body, 'ip': 'host.test'},
+                {**body, 'name': '中' * 65}, {**body, 'name': '客厅\n电视'}):
+        assert api.put(path, json=bad, headers=csrf).status_code == 400
+    with server.app.test_client() as reopened:
+        assert reopened.get(path, headers=AUTH).get_json()['data'] == second
+        other_state = tmp_path / 'isolated-devices'
+        monkeypatch.setattr(server, 'STATE_DIR', other_state)
+        set_external_api(other_state, True)
+        isolated = reopened.get(path, headers=AUTH).get_json()['data']
+        assert isolated['devices'] == {} and isolated['instance_id'] != saved['instance_id']
+        monkeypatch.setattr(server, 'STATE_DIR', state)
+        assert reopened.get(path, headers=AUTH).get_json()['data'] == second
+    assert api.put(path, json={**body, 'name': '改名'}, headers=csrf).get_json()['data']['devices']['2001:db8::8'] == '改名'
+    assert api.put(path, json={**body, 'name': ''}, headers=csrf).get_json()['data']['devices'] == {'192.0.2.8': '客厅电视'}
+
+
+def test_live_records_can_keep_snapshot_without_a_fixed_time_window(tmp_path):
+    store = Store(tmp_path)
+    store.append([event(1), event(2), event(3)])
+    first = store.recent(limit=2)
+    assert [item['sequence'] for item in first['events']] == [3, 2]
+    store.append([event(4)])
+    request = validate_request({'operation': 'recent', 'snapshot': first['snapshot'], 'limit': 2})
+    request.pop('operation')
+    assert store.recent(**request) == first
+    assert [item['sequence'] for item in store.recent(**request, before=first['next_before'])['events']] == [1]
+    assert store.recent(limit=1)['events'][0]['sequence'] == 4
+
+
 @pytest.mark.parametrize('ipv6', [False, True])
 @pytest.mark.parametrize('wall_step', [0, .2, -.2])
 def test_slow_entry_check_keeps_pending_query_but_real_clock_step_resets(monkeypatch, ipv6, wall_step):

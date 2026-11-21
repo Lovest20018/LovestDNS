@@ -1073,6 +1073,116 @@
       }
     },
     {
+      "id": "source_devices_write",
+      "operation_id": "source_devices_write",
+      "provenance": {
+        "inputs": "administrator names a synthetic source address",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "body": {
+          "ip": "192.0.2.2",
+          "name": "Test device"
+        },
+        "headers": {
+          "X-Request-ID": "contract-source_devices_write"
+        },
+        "method": "PUT",
+        "path": "/api/v1/source-devices",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "devices": {
+              "192.0.2.2": "Test device"
+            },
+            "instance_id": "00000000-0000-4000-8000-000000000001"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-source_devices_write"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-source_devices_write"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "source_devices_list",
+      "operation_id": "source_devices_list",
+      "provenance": {
+        "inputs": "administrator reads the temporary instance device mapping",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-source_devices_list"
+        },
+        "method": "GET",
+        "path": "/api/v1/source-devices",
+        "role": "admin"
+      },
+      "response": {
+        "body": {
+          "data": {
+            "devices": {
+              "192.0.2.2": "Test device"
+            },
+            "instance_id": "00000000-0000-4000-8000-000000000001"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-source_devices_list"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-source_devices_list"
+        },
+        "status": 200
+      }
+    },
+    {
+      "id": "source_devices_observer_forbidden",
+      "operation_id": "source_devices_list",
+      "provenance": {
+        "inputs": "external observer requests device names",
+        "response": "real_flask_handler",
+        "scenario": "synthetic_test"
+      },
+      "request": {
+        "headers": {
+          "X-Request-ID": "contract-source_devices_observer_forbidden"
+        },
+        "method": "GET",
+        "path": "/api/v1/source-devices",
+        "role": "observer"
+      },
+      "response": {
+        "body": {
+          "error": {
+            "code": "FORBIDDEN",
+            "message": "只读接入不能访问配置、日志或维护任务"
+          },
+          "meta": {
+            "api_version": "1",
+            "request_id": "contract-source_devices_observer_forbidden"
+          }
+        },
+        "headers": {
+          "Cache-Control": "no-store",
+          "X-Request-ID": "contract-source_devices_observer_forbidden"
+        },
+        "status": 403
+      }
+    },
+    {
       "id": "query_records_recent",
       "operation_id": "query_records_recent",
       "provenance": {
@@ -1126,6 +1236,7 @@
             "history_changed": false,
             "instance_id": "00000000-0000-4000-8000-000000000001",
             "next_before": null,
+            "snapshot": 1,
             "status": {
               "active": false,
               "counters": {},

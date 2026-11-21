@@ -46,7 +46,7 @@ def validate_request(value):
             if key in value and (type(value[key]) is not int or not lower <= value[key] <= upper):
                 raise ValueError(f'{key} 超出范围')
         start, end = value.get('start'), value.get('end')
-        if start is not None or end is not None or 'snapshot' in value:
+        if start is not None or end is not None:
             if start is None or end is None or not 0 < end - start <= MAX_AGE:
                 raise ValueError('起止时间必须在同一个 24 小时窗口内')
         if 'source' in value:

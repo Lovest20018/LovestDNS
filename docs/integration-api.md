@@ -68,6 +68,7 @@ HTTP 200 表示请求本身完成，不等于 DNS 解析成功。DNS 查询应�
 | GET | `/api/v1/core-logs/{component}` | 否 | 读取最近 200 行脱敏日志 |
 | GET | `/api/v1/query-records/summary` | 否 | 最近 1 或 24 小时入口统计、采集覆盖和下钻快照 |
 | GET | `/api/v1/query-records` | 否 | 按窗口、游标、来源 IP、域名与响应筛选 |
+| GET/PUT | `/api/v1/source-devices` | 否 | 读取本实例的来源 IP 备注，或提交 `{"ip":"192.0.2.2","name":"客厅电视"}`。空名称清除该地址的备注 |
 | GET | `/api/v1/dns-filter` | 否 | 已保存版本、核心活动版本、订阅预览与任务 |
 | GET | `/api/v1/dns-filter/check` | 否 | 对一个域名读取活动过滤判定 |
 | POST | `/api/v1/dns-filter/actions` | 否 | 提交过滤任务。返回 202 后以任务状态确认生效 |

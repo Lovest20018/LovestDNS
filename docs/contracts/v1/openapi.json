@@ -1030,6 +1030,13 @@
                 "pattern": "^(?:[a-f0-9]{64})?$",
                 "type": "string"
               },
+              "type": {
+                "default": "block",
+                "enum": [
+                  "block",
+                  "allow"
+                ]
+              },
               "url": {
                 "type": "string"
               }
@@ -1184,6 +1191,9 @@
           "source": {
             "type": "string"
           },
+          "source_id": {
+            "type": "string"
+          },
           "until": {
             "minimum": 0,
             "type": "integer"
@@ -1231,6 +1241,9 @@
             "type": "string"
           },
           "source": {
+            "type": "string"
+          },
+          "source_id": {
             "type": "string"
           },
           "until": {
@@ -1374,6 +1387,13 @@
                       "issues"
                     ],
                     "type": "object"
+                  },
+                  "type": {
+                    "default": "block",
+                    "enum": [
+                      "block",
+                      "allow"
+                    ]
                   }
                 },
                 "required": [
@@ -1509,6 +1529,13 @@
                     "protected"
                   ],
                   "type": "object"
+                },
+                "type": {
+                  "default": "block",
+                  "enum": [
+                    "block",
+                    "allow"
+                  ]
                 },
                 "updated": {
                   "minimum": 0,
@@ -2905,6 +2932,10 @@
               "null"
             ]
           },
+          "snapshot": {
+            "minimum": 0,
+            "type": "integer"
+          },
           "status": {
             "$ref": "#/components/schemas/QueryRecording"
           }
@@ -3403,6 +3434,40 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/SavedFile"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ],
+        "type": "object"
+      },
+      "SourceDevices": {
+        "properties": {
+          "devices": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "instance_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id",
+          "devices"
+        ],
+        "type": "object"
+      },
+      "SourceDevicesResponse": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SourceDevices"
           },
           "meta": {
             "$ref": "#/components/schemas/Meta"
@@ -14341,6 +14406,658 @@
         "x-allowed-roles": [
           "admin",
           "observer"
+        ]
+      }
+    },
+    "/source-devices": {
+      "get": {
+        "description": "仅管理 Token",
+        "operationId": "source_devices_list",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Request-ID",
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{8,64}$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceDevicesResponse"
+                }
+              }
+            },
+            "description": "DNS 查询完成请检查 available/status；任务完成不代表规则已验证",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "输入无效",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "未认证",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "对象不存在或已过保留期",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "方法不支持",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "内容过大",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "内容类型无效",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "服务异常",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "UNAVAILABLE：采集/维护服务不可用；STALE_DATA：样本年龄大于 25 秒、未来时间或无效时间戳。无 data 字段。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerToken": []
+          }
+        ],
+        "summary": "批量读取本实例的来源设备备注，仅管理权限",
+        "x-allowed-roles": [
+          "admin"
+        ]
+      },
+      "put": {
+        "description": "仅管理 Token",
+        "operationId": "source_devices_write",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Request-ID",
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{8,64}$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "ip": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "maxLength": 64,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "ip",
+                  "name"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceDevicesResponse"
+                }
+              }
+            },
+            "description": "DNS 查询完成请检查 available/status；任务完成不代表规则已验证",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "输入无效",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "未认证",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "FORBIDDEN：权限不足；API_DISABLED：外部 Token 接入已关闭。默认关闭，可在网页服务信息开启。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "对象不存在或已过保留期",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "方法不支持",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "冲突",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "文件版本已改变",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "内容过大",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "内容类型无效",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "服务异常",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "UNAVAILABLE：采集/维护服务不可用；STALE_DATA：样本年龄大于 25 秒、未来时间或无效时间戳。无 data 字段。",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "const": "no-store",
+                  "type": "string"
+                }
+              },
+              "X-Request-ID": {
+                "schema": {
+                  "pattern": "^[A-Za-z0-9_-]{8,64}$",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerToken": []
+          }
+        ],
+        "summary": "保存来源设备备注，空名称清除备注",
+        "x-allowed-roles": [
+          "admin"
         ]
       }
     },
