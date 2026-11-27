@@ -49,6 +49,7 @@ def _open_database(path, inode):
             db.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires REAL NOT NULL, remembered INTEGER NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS attempts (address TEXT PRIMARY KEY, started REAL NOT NULL, count INTEGER NOT NULL)")
             db.execute("CREATE TABLE IF NOT EXISTS settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            db.commit()
             if inode is not None and database_inode(path) == inode:
                 _schema_inodes[path] = inode
         yield db
@@ -149,8 +150,11 @@ def attempt_address(address):
     except ValueError:
         return address
     if ip.version == 6:
+        mapped = ip.ipv4_mapped
+        if mapped is not None:
+            return str(mapped)
         return str(ipaddress.IPv6Network((int(ip), 64), strict=False))
-    return address
+    return str(ip)
 
 
 def attempt_limit_reached(db, address, now):

@@ -173,6 +173,18 @@ def test_session_reads_existing_admin_and_session_without_writes(client, monkeyp
         assert len(sqlite_trace) == 1 and sqlite_trace[0].startswith("SELECT sessions.*")
 
 
+def test_auth_schema_survives_first_operation_rollback(tmp_path, sqlite_schema_transaction):
+    path = tmp_path / "browser-auth.sqlite"
+    with sqlite_schema_transaction(path), pytest.raises(RuntimeError, match="injected auth failure"):
+        with database(tmp_path) as db:
+            db.execute("INSERT INTO settings VALUES ('external_api', 'enabled')")
+            raise RuntimeError("injected auth failure")
+
+    assert not browser_auth.external_api_enabled(tmp_path)
+    browser_auth.set_external_api(tmp_path, True)
+    assert browser_auth.external_api_enabled(tmp_path)
+
+
 @pytest.mark.parametrize("replacement", [False, True])
 def test_auth_database_rebuild_invalidates_schema_and_admin_caches(client, replacement):
     api, _, state = client
@@ -217,6 +229,24 @@ def test_login_throttling_groups_ipv6_addresses_by_network(client, monkeypatch):
     monkeypatch.setattr(browser_auth, "check_password_hash", lambda *_: pytest.fail("Rate limited login hashed a password"))
     assert api.post("/auth/login", json={"password": PASSWORD},
                     environ_overrides={"REMOTE_ADDR": "2001:0db8:0001:0002::a"}).status_code == 429
+
+
+def test_login_throttling_maps_ipv4_mapped_addresses_to_individual_ipv4_buckets(client):
+    api, _, state = client
+    reset_password(state, PASSWORD)
+
+    def login(address, password):
+        return api.post("/auth/login", json={"password": password}, environ_overrides={"REMOTE_ADDR": address})
+
+    for address in ("::ffff:192.0.2.1", "192.0.2.1", "::ffff:192.0.2.1", "192.0.2.1", "::ffff:192.0.2.1"):
+        assert login(address, "incorrect").status_code == 401
+    assert login("::ffff:192.0.2.1", PASSWORD).status_code == 429
+    assert login("192.0.2.1", PASSWORD).status_code == 429
+    assert login("::ffff:192.0.2.2", "incorrect").status_code == 401
+    with database(state) as db:
+        attempts = db.execute("SELECT address, count FROM attempts ORDER BY address")
+        assert [tuple(row) for row in attempts] == [("192.0.2.1", 5), ("192.0.2.2", 1)]
+    assert login("::ffff:192.0.2.2", PASSWORD).status_code == 200
 
 
 def test_failed_login_evicts_oldest_attempt_above_database_limit(client):

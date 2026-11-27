@@ -355,6 +355,23 @@ def test_source_devices_database_initializes_once_per_inode(client, sqlite_trace
     assert api.get(route, headers=AUTH).get_json()['data']['devices'] == {}
 
 
+def test_source_devices_schema_survives_first_operation_rollback(client, monkeypatch, sqlite_schema_transaction):
+    api, _, state = client
+    route = '/api/v1/source-devices'
+    body = {'ip': '192.0.2.3', 'name': 'test device'}
+
+    def fail_response(_):
+        raise RuntimeError('injected device response failure')
+
+    with sqlite_schema_transaction(state / 'source-devices.sqlite'), monkeypatch.context() as patch:
+        patch.setattr(server, 'jsonify', fail_response)
+        assert api.put(route, headers=AUTH, json=body).status_code == 500
+
+    assert api.get(route, headers=AUTH).get_json()['data']['devices'] == {}
+    saved = api.put(route, headers=AUTH, json=body).get_json()['data']
+    assert saved['devices'] == {body['ip']: body['name']}
+
+
 def test_source_devices_database_rejects_symlink_after_initialization(client, file_symlink):
     api, _, state = client
     route = '/api/v1/source-devices'

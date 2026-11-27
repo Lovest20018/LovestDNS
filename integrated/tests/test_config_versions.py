@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 import threading
 
 import pytest
@@ -70,6 +71,46 @@ def test_save_reuses_original_bytes_and_refreshes_backup_after_host_edit(client,
     assert reads == ([original, external, payload] if host_edit else [original, payload])
 
 
+def test_save_preserves_external_target_of_backup_symlink(client, tmp_path, file_symlink):
+    api, data, _ = client
+    target = data / 'custom_env.ini'
+    target.write_bytes(b'VALUE="original"\n')
+    external = tmp_path / 'outside-data.ini'
+    external.write_bytes(b'untouched')
+    backup = target.with_suffix('.ini.bak')
+    file_symlink(backup, external)
+
+    candidate = 'VALUE="saved"\n'
+    assert api.put('/api/v1/file/custom_env.ini', headers=AUTH, json={'content': candidate}).status_code == 200
+    assert target.read_bytes() == candidate.encode('utf-8')
+    assert backup.is_symlink() and backup.resolve() == external
+    assert external.read_bytes() == b'untouched'
+
+
+@pytest.mark.parametrize('backup_kind', ['directory', 'samefile', 'symlink'])
+def test_save_skips_unsafe_backup_path(client, monkeypatch, backup_kind):
+    api, data, _ = client
+    target = data / 'custom_env.ini'
+    target.write_bytes(b'VALUE="original"\n')
+    backup = target.with_suffix('.ini.bak')
+    marker = backup
+    if backup_kind == 'directory':
+        backup.mkdir()
+        marker = backup / 'keep'
+    elif backup_kind == 'samefile':
+        samefile = Path.samefile
+        monkeypatch.setattr(Path, 'samefile', lambda path, other: path == backup or samefile(path, other))
+    else:
+        is_symlink = Path.is_symlink
+        monkeypatch.setattr(Path, 'is_symlink', lambda path: path == backup or is_symlink(path))
+    marker.write_bytes(b'untouched')
+
+    candidate = 'VALUE="saved"\n'
+    assert api.put('/api/v1/file/custom_env.ini', headers=AUTH, json={'content': candidate}).status_code == 200
+    assert target.read_bytes() == candidate.encode('utf-8')
+    assert marker.read_bytes() == b'untouched'
+
+
 def test_status_admin_only_and_not_verified(client, monkeypatch):
     api = client[0]
     monkeypatch.setenv('SUITE_READ_TOKEN', 'read-test')
@@ -79,7 +120,6 @@ def test_status_admin_only_and_not_verified(client, monkeypatch):
 
 
 def test_oversized_existing_file_is_rejected_before_reading_or_history(client, monkeypatch):
-    from pathlib import Path
     api, data, _ = client
     target = data / 'custom_env.ini'
     target.write_bytes(b'#' * (server.base.FILE_SIZE_LIMITS['custom_env.ini'] + 1))

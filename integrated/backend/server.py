@@ -5,7 +5,6 @@ import os
 import re
 from pathlib import Path
 import sqlite3
-import shutil
 from contextlib import closing
 
 from flask import jsonify, request, g
@@ -16,6 +15,7 @@ from history import History
 import runtime_client
 from config_versions import revision as file_revision, expected_revision, check_revision
 from runtime.locking import MaintenanceBusy, maintenance_lock
+from runtime.maintenance import atomic_file
 from runtime.tasks import validate_submission
 from runtime.admission import CapacityBusy, slots
 from installation import read_object, recorded, installation_summary, provenance_summary
@@ -78,11 +78,11 @@ def _original_write(filename, payload, before, stamp):
             if before is not None:
                 try:
                     backup = Path(str(path) + ".bak")
-                    if backup.is_symlink() or (backup.exists() and (not backup.is_file() or backup.samefile(path))):
-                        shutil.copyfile(path, backup)
-                    else:
-                        backup.write_bytes(before)
-                except OSError:
+                    if not backup.is_symlink() and (
+                        not backup.exists() or (backup.is_file() and not backup.samefile(path))
+                    ):
+                        atomic_file(backup, before)
+                except (OSError, ValueError):
                     pass  # The durable intent is the authoritative backup.
             try:
                 with open(path, "wb") as target:
@@ -332,6 +332,7 @@ def _source_devices(ip=None, name=None):
         if inode is None or _source_device_inodes.get(path) != inode:
             path.chmod(0o600)
             db.execute('CREATE TABLE IF NOT EXISTS devices (ip TEXT PRIMARY KEY, name TEXT NOT NULL)')
+            db.commit()
             if inode is not None and database_inode(path) == inode:
                 _source_device_inodes[path] = inode
         if ip is not None:

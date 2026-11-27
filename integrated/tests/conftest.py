@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from pathlib import Path
 import sqlite3
 import sys
@@ -26,6 +27,25 @@ def sqlite_trace(monkeypatch):
 
     monkeypatch.setattr(sqlite3, "connect", traced)
     return statements
+
+
+@pytest.fixture
+def sqlite_schema_transaction(monkeypatch):
+    @contextmanager
+    def begin_on_connect(path):
+        connect = sqlite3.connect
+
+        def transactional(database, *args, **kwargs):
+            db = connect(database, *args, **kwargs)
+            if Path(database) == path:
+                db.execute("BEGIN")
+            return db
+
+        with monkeypatch.context() as patch:
+            patch.setattr(sqlite3, "connect", transactional)
+            yield
+
+    return begin_on_connect
 
 
 @pytest.fixture
