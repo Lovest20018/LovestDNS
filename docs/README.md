@@ -2,7 +2,7 @@
 
 ## 安装与使用
 
-- [v0.2.2 发行说明](releases/v0.2.2.md) · [v0.2.1 发行说明](releases/v0.2.1.md) · [v0.2.0 发行说明](releases/v0.2.0.md) · [v0.1.1 发行说明](releases/v0.1.1.md) · [v0.1.0 发行说明](releases/v0.1.0.md)
+- [v0.2.3 发行说明](releases/v0.2.3.md) · [v0.2.2 发行说明](releases/v0.2.2.md) · [v0.2.1 发行说明](releases/v0.2.1.md) · [v0.2.0 发行说明](releases/v0.2.0.md) · [v0.1.1 发行说明](releases/v0.1.1.md) · [v0.1.0 发行说明](releases/v0.1.0.md)
 - [Debian 安装、升级、代理、备份与回退](lovestdns-native-deployment.md)。
 - [Docker / PVE 兼容部署](lovestdns-pve-deployment.md)：源码构建与数据副本接入。
 - [DNS 诊断](dns-diagnostics.md)：查询、链路对照和报告。

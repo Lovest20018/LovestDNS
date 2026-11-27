@@ -3,14 +3,14 @@
   "artifacts": {
     "openapi.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "62d07368d3da2e3a6f9746f42406146cd43d69cc5a66efeac302025a28469f6c"
+      "sha256": "81643c0afddb6bdb5957e210f0349b41dc4a8fc3913228d74d193197512d69b9"
     },
     "samples.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "7d5e5aadc8729a6fb485988aa86b2ca2bddae9e4c09ee7d5d6c643aed437ba85"
+      "sha256": "88b739a1851469cd21e3bcb561ae507529113f1c0d210d7bd72c8e0fa8e5da1b"
     }
   },
-  "candidate_version": "0.2.3-rc.2",
+  "candidate_version": "0.2.3",
   "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
   "format_version": 1,
   "provenance": "All responses from actual Flask handlers with synthetic I/O and clocks; no live core/network acceptance evidence",
@@ -33,9 +33,9 @@
       "docker-compose-web.yaml": "0409bc4340124407c7a72fdb01a352f8ef74347e5470af9ae1d21e020d5d7214",
       "docker-compose.integrated.yaml": "b40f095e7fe8119b627abd161e1b4d62a8649a27e854978c67ec7813d8e845fb",
       "docker-compose.sidecar.yaml": "2e9bd7a32e43599b9aedbc8bae3ef9e7cd2b93379d642446016940903fc45609",
-      "docs/lovestdns-native-deployment.md": "7ca4ce58ff97b1a39586ea9d58c1cf1ace8fcc75e4a017c1cedcec10d33cba88",
-      "install.py": "c38f06bdf9dcf6692acd6ca54f89d5b25f3dfbe59e25f8f12a700ba80c1fbae2",
-      "integrated/README.md": "0686e8bc35f3ab373e3db4096c80fa501b02f604aa0a0d51f4fcb6b2e5964a31",
+      "docs/lovestdns-native-deployment.md": "7d42b99cc224dae971d6b80ea89ee433f7e967ab0d12c795fff6971763ab7d85",
+      "install.py": "74bf641779fb2740af3ad4f722b9f43641c8240214da934491280506b631c0f6",
+      "integrated/README.md": "27df87028fda04459aafae5db74ba154fed376c4dfcbc5c79157468225a95501",
       "integrated/backend/api_schema.py": "dae00dbbe885289a8bbc724ea305de8d0c2a7a1b0830611124d9c1dbb5be03d6",
       "integrated/backend/api_v1.py": "defb720bf7e7acfeafd4e1abae424377b629348e2a7db87453bf4a81d1ac44d4",
       "integrated/backend/browser_auth.py": "096ba6638b11b309aa029ef1a5a957c3f22c15b29b138f638518de8215ab01b6",
@@ -45,7 +45,7 @@
       "integrated/backend/history.py": "925a295c1080c96cafde7d81629632c319c8f809bb8ca8f309ab988b3e9dc2f6",
       "integrated/backend/installation.py": "64190ebaa3b32c2dfb6f5aa67a8a35303e77be1547114d8a6a866cfc44fd6a84",
       "integrated/backend/runtime_client.py": "f97b233696bcfb36eba5249d6557a57e0f3b8ef589dd064417a9b01f6dcd9408",
-      "integrated/backend/server.py": "6415da6d692a45ef7c51c1996cdd080fa54be22403b615c40d2c484b1de863d2",
+      "integrated/backend/server.py": "aae18c3b7c3005f23dd16a4aa7aae1459fb67d7f55073276716cec980bbdabdf",
       "integrated/backend/software_update.py": "b52458da2c3da101c1f9def879a71a2aaf24134511fecaf5b1ffdc6f190b42bb",
       "integrated/backend/state_database.py": "79b9eb301cd15ba7e1b5a005d076f921c23fba913e95aa908809f10a4c8313ac",
       "integrated/frontend/package-lock.json": "a9cc6c4341237b1ddb91874a72cf08878df13787d20fc3cbc19b1bfc56a915a7",
@@ -294,7 +294,7 @@
       "scripts/test-cachedb-history-replay.py": "e22a2616a5e2456482df726d1c8e3e70bd17c9481529e199e3b435e71a385e4b",
       "scripts/test-cachedb-timeout.py": "f9ab7151a1fe186605e13df88c28f52437bccacbbf9cddc523b75de9ccd93c49",
       "scripts/test-cachedb-upgrade-rewarm.py": "918c6b24f70ad3c38361118b50ff351e9da3aefbfaa466e0d2a3bf069cc44cce",
-      "scripts/test-console-navigation.mjs": "ee203e3be3776dd9b27504a800172187cec02531ac8e515afc1b9fca31ec273a",
+      "scripts/test-console-navigation.mjs": "ab3457ec719c29b0ed7c87c16325880edfe1f2cb95874415f503a88ae1085016",
       "scripts/test-control-capacity.py": "b65529ea83823923dc46859e0f5293cb7a4def6d8ff991b55df770065f16f229",
       "scripts/test-dns-filter.py": "29f992a2fda7a6eca499a69d9adf050328384ad212cdd8b0f33e9df6d8968fc9",
       "scripts/test-dnscrypt-compatibility.py": "dc93ec3bd4615050e7184debbf8c9c10517ed71a12ad9983d78f18b043b929bd",
@@ -308,7 +308,7 @@
       "scripts/test-native-root-hints.py": "d1aad18c4ff2f5832125b36001e8e17ad583bc3d3b487de51555e212b6246f43",
       "scripts/test-query-records.mjs": "57a50097e0af762a7ed3866ba516486d8861710b864ff52cc9028aeef65bbb5e",
       "scripts/test-redis-persistence-upgrade.py": "403ba8b366c5e841dcaca15823aadd56f90d78e0eb8b1d571004f6fd6a9223e0",
-      "scripts/test-ui-optimization.mjs": "9a9885d38a2e727846f35260228e8ca7c5cc58a55a0a305320c329e8403af4b7",
+      "scripts/test-ui-optimization.mjs": "0d136b66b28afd95bca7227d58a6099a163679c0b14f07569553c819106d2b06",
       "scripts/tests/test_cachedb_case_compat.py": "ed2babc4be9d734d32d4f0ba6ef7239682ee3a7c1cab6e33637773013c1b5f47",
       "scripts/tests/test_cachedb_history_replay.py": "eca9e8f308c2db5c276fe0b808850b8e54ceea746b476c6c22bb522484b3a37c",
       "scripts/tests/test_component_bundle.py": "735a2f76d4edf2a47b4652b67edd098e4e631a0e9187f10f55744626fdaa13d3",
@@ -410,7 +410,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "40af15637f62f7c15a51314cf0a5222523d6f53a3282971d27e0baafc2c4aa3a"
+    "sha256": "65751b1d27a5ac910dbdb47f11008c01973a4d3d6a65cd225490a6362ba3b2bb"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

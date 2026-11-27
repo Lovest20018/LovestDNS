@@ -1,6 +1,6 @@
 # LovestDNS Debian 原生部署
 
-当前原生候选面向 **Debian 12/13、Linux amd64、systemd**。DNS 核心、Web、采集器和维护服务由同一个 systemd 服务管理，运行时不需要 Docker。构建机仍使用 Docker 从固定 digest 的上游镜像中提取已校验的核心和模板；安装包携带原始核心二进制、专用 musl 加载器/依赖库及 Python 离线 wheel，不覆盖 Debian 的 libc，也不使用 chroot 或 Alpine 根文件系统。
+原生发行包面向 **Debian 12/13、Linux amd64、systemd**。DNS 核心、Web、采集器和维护服务由同一个 systemd 服务管理，运行时不需要 Docker。构建机仍使用 Docker 从固定 digest 的上游镜像中提取已校验的核心和模板；安装包携带原始核心二进制、专用 musl 加载器/依赖库及 Python 离线 wheel，不覆盖 Debian 的 libc，也不使用 chroot 或 Alpine 根文件系统。
 
 ## 发布包安装入口
 
@@ -16,7 +16,7 @@ sudo lovestdnsctl health
 sudo lovestdnsctl password
 ```
 
-根目录 `install.py` 默认选择 `0.2.1`，按精确标签下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`。安装器核对归档、路径、清单和载荷后执行包内安装器。归档和摘要由同一个 GitHub 发布账号提供。可通过 `--version` 指定不含 `v` 的其他已发布版本。
+根目录 `install.py` 默认选择 `0.2.3`，按精确标签下载 GitHub Release 中的 `lovestdns-native-debian-amd64.tar.gz` 及同名 `.sha256`。安装器核对归档、路径、清单和载荷后执行包内安装器。归档和摘要由同一个 GitHub 发布账号提供。可通过 `--version` 指定不含 `v` 的其他已发布版本。
 
 只下载且验证、不安装：
 
@@ -59,9 +59,9 @@ python3 -m venv .build/native-tools
 将安装包与通过可信渠道取得的 SHA-256 一起传到目标测试机；校验摘要后再解压。以下命令应在包目录执行：
 
 ```sh
-sha256sum -c lovestdns-native.tar.gz.sha256
-tar -xzf lovestdns-native.tar.gz
-cd lovestdns-0.2.1
+sha256sum -c lovestdns-native-debian-amd64.tar.gz.sha256
+tar -xzf lovestdns-native-debian-amd64.tar.gz
+cd lovestdns-0.2.3
 cp native.env.example /root/lovestdns-install.env
 chmod 600 /root/lovestdns-install.env
 nano /root/lovestdns-install.env
@@ -123,17 +123,17 @@ Web 编辑的 `custom_env.ini` 用于 DNS 参数与规则变量。原生版禁�
 
 设置由已修改初始密码的管理员会话和 CSRF 校验写入私有 `updates/network.json`，文件权限为 `0600`，接口不回传密码。相同协议、IP、端口和账号下密码留空保留；修改其中任一项须重新填写认证信息。清除认证时，SOCKS5 同时清除账号；选择直连清除全部代理信息。任务运行期间不可改设置；保存会清除旧的版本检查结果，安装前须重新检查。设置保留在 `updates`，不随 `state` 数据回退恢复旧值。
 
-更新代理自 v0.1.0 起提供。正式版通道默认开启，预览通道需显式选择。变更通道后需要重新检查发行版，再确认安装。[当前发行说明](releases/v0.2.2.md) · [已知限制](roadmap.md)
+更新代理自 v0.1.0 起提供。正式版通道默认开启，预览通道需显式选择。变更通道后需要重新检查发行版，再确认安装。[当前发行说明](releases/v0.2.3.md) · [已知限制](roadmap.md)
 
 首次从不含更新助手的版本迁移，需要通过当前安装入口升级一次，并保留实际实例名；之后可在前端完成同实例软件升级：
 
 ```sh
-sudo python3 install.py --version 0.2.1 --instance <实例名>
+sudo python3 install.py --version 0.2.3 --instance <实例名>
 ```
 
 默认实例省略 `--instance`。Docker 部署继续由宿主机 Compose 管理。网页更新仅允许已修改初始密码的管理员会话与 CSRF 校验，不接受外部管理/只读 Token、任意 URL、主机命令或其他实例参数。更新开始后暂停配置、认证设置和维护任务写入，DNS 查询与状态读取仍可用；有未保存草稿时请先保存或还原。
 
-原生安装器为当前实例安装独立的 `lovestdns[-实例名]-update.path` 和 `-update.service`：前者监听私有更新请求，后者运行包校验与原生安装器。助手独立于 DNS/Web 服务，按实例限制可写目录；任务与结果位于 `updates`，不随 `state` 回退而丢失。正常结束时清除临时下载，保留最近五份安装日志和原有升级备份。意外中断不会自动重放安装；结果恢复会重新核对当前版本、摘要收据与健康状态。磁盘不足会在停止 DNS 前拒绝安装，备份仍需由主机按保留策略管理。
+原生安装器为当前实例安装独立的 `lovestdns[-实例名]-update.path` 和 `-update.service`。前者监听私有更新请求，后者运行包校验与原生安装器。助手独立于 DNS/Web 服务，按实例限制可写目录。任务与结果位于 `updates`，可跨 `state` 回退保留。正常结束时清除临时下载，保留最近五份安装日志。意外中断后会重新核对当前版本、摘要收据与健康状态。磁盘不足时会在停止 DNS 前拒绝安装。
 
 控制命令与显式回退继续可用：
 
@@ -145,9 +145,12 @@ sudo lovestdnsctl logs
 sudo lovestdnsctl password
 sudo lovestdnsctl upgrade /path/to/lovestdns-native.tar.gz --sha256 <已核对的SHA-256>
 sudo lovestdnsctl rollback
+sudo lovestdnsctl prune --dry-run
 ```
 
 升级先核对包摘要、文件清单与 Python/二进制依赖，再停止当前实例，将 DNS 数据、面板状态、服务参数和 unit 保存为一致备份。新版本启动与真实 DNS 协议探测通过后才记为成功。启动失败时恢复先前版本及其数据/配置，并尝试启动、检查原服务。显式回退同样恢复当时备份；回退后将失去升级后新增的活动配置和缓存，但被替换的数据仍单独保存在 `backups/pre-rollback-*`，便于复核。
+
+安装成功后会清理超出保留范围的历史备份、版本和相关安装收据。正在运行的版本、当前回退点以及保留备份引用的版本受保护。默认另留最近两份备份和两个未受引用保护的版本。手动清理可通过 `--keep-backups` 和 `--keep-releases` 调整数量，并用 `--dry-run` 预览。需要长期留存的历史备份应在升级前转存。
 
 升级和回退都可能短暂中断 DNS。备份保留在本机，需要给版本、数据和多份备份留足磁盘空间；本机一致备份不能替代异机备份。重新安装已经回退过的候选时会生成独立 release 目录，不覆盖先前载荷。可将已校验的新包解压后用该包的 `install.py install` 恢复升级路径。
 
