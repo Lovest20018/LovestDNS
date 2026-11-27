@@ -44,7 +44,11 @@ def test_observer_serves_fast_clients_during_slow_reads_and_bounds_workers(tmp_p
     monkeypatch.setattr(observer.Collector, 'run', collect_once)
     servers = []
     serve = socketserver.BaseServer.serve_forever
-    monkeypatch.setattr(socketserver.BaseServer, 'serve_forever', servers.append)
+
+    def capture_server(server):
+        servers.append(server)
+
+    monkeypatch.setattr(socketserver.BaseServer, 'serve_forever', capture_server)
     observer.main()
     assert published.wait(2)
     server, = servers
@@ -95,6 +99,8 @@ def test_observer_serves_fast_clients_during_slow_reads_and_bounds_workers(tmp_p
         server.shutdown()
         server.server_close()
         worker.join(2)
+
+
 def test_rate_requires_same_process_and_monotonic_counters():
     first = {"total.num.queries": 10, "total.num.cachehits": 5, "total.num.cachemiss": 5, "time.up": 10}
     last = {"total.num.queries": 20, "total.num.cachehits": 13, "total.num.cachemiss": 7, "time.up": 15}

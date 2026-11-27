@@ -261,9 +261,11 @@ try {
   await wait(`!document.querySelector('${gatewayTab}')`);
   await evaluate(`document.querySelector('${gatewayToggle}').click()`);
   await nav('网关联动', settingsNav);
+  const previousGatewayPage = await evaluate('performance.timeOrigin');
   await send('Page.reload');
+  await wait(`performance.timeOrigin !== ${previousGatewayPage}`);
   await selected(settingsNav, '网关联动');
-  await wait(`document.querySelector('[aria-label="网关 API 地址"]')?.disabled === false`);
+  await wait(`document.querySelector('[aria-label="网关 API 地址"]:enabled')`);
   await change('[aria-label="网关 API 地址"]', 'https://192.0.2.100:18788/api/v1');
   await change('[aria-label="网关只读 Token"]', 'synthetic-gateway-observer-token-only');
   await click('保存并启用');
@@ -361,8 +363,9 @@ try {
   await screenshot('routing-breadcrumb-320.png');
   await go('#/settings?tab=runtime', '运行参数');
   await control({ role: 'observer', gateway: true });
+  const previousAdminPage = await evaluate('performance.timeOrigin');
   await send('Page.reload');
-  await wait(`!!document.querySelector('${settingsNav}')`);
+  await wait(`performance.timeOrigin !== ${previousAdminPage} && document.querySelector('${settingsNav}')`);
   assert.deepEqual(await settingsLinks(), ['服务信息']);
   await evaluate("document.querySelector('[aria-label=打开导航]').click()");
   await nav('系统设置');

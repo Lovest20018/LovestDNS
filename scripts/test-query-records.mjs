@@ -35,7 +35,7 @@ try {
   let id = 0; const pending = new Map(), errors = [];
   ws.addEventListener('message', event => { const m = JSON.parse(event.data); if (m.id) { const p = pending.get(m.id); pending.delete(m.id); if (p) m.error ? p.reject(new Error(JSON.stringify(m.error))) : p.resolve(m.result); } else if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails); });
   send = (method, params = {}) => new Promise((resolve, reject) => { const next = ++id; const timer = setTimeout(() => { pending.delete(next); reject(new Error('Browser command timed out: ' + method)); }, 10000); pending.set(next, { resolve: value => { clearTimeout(timer); resolve(value); }, reject: error => { clearTimeout(timer); reject(error); } }); ws.send(JSON.stringify({ id: next, method, params })); });
-  evaluate = async expression => { const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw Error(r.exceptionDetails.text); return r.result.value; };
+  evaluate = async expression => { const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result.value; };
   const wait = async expression => { for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await sleep(100); } throw Error('Timed out: ' + expression); };
   const click = (label, within = '') => evaluate(`(()=>{const b=[...document.querySelectorAll(${JSON.stringify((within ? within + ' ' : '') + 'button')})].find(b=>b.getClientRects().length&&b.textContent.trim()===${JSON.stringify(label)});if(!b)throw Error('Button missing: '+${JSON.stringify(label)});b.click();})()`);
   const input = (selector, value) => evaluate(`(() => {
@@ -178,10 +178,12 @@ try {
   await evaluate("document.querySelector('.suite-nav a[href=\"#/diagnostics\"]').click()");
   await wait("document.querySelector('[aria-label=\"筛选来源 IP\"]')?.value==='192.0.2.20' && document.querySelectorAll('.query-record-table tbody tr').length===50");
   assert.equal(await evaluate('location.hash'), filteredHash);
+  const previousPage = await evaluate('performance.timeOrigin');
   await send('Page.reload');
-  await wait("document.querySelector('[aria-label=\"筛选来源 IP\"]')?.value==='192.0.2.20' && document.querySelectorAll('.query-record-table tbody tr').length===50");
+  await wait(`performance.timeOrigin !== ${previousPage} && document.querySelector('[aria-label="筛选来源 IP"]')?.value==='192.0.2.20' && document.querySelectorAll('.query-record-table tbody tr').length===50`);
   assert.equal(await evaluate('location.hash'), filteredHash);
   await evaluate("document.querySelector('.query-record-table tbody .query-record-expand').click()");
+  await wait("!!document.querySelector('.query-record-desktop .query-record-detail .query-record-query')");
   await evaluate("document.querySelector('.query-record-desktop .query-record-detail .query-record-query').click()");
   await wait("document.querySelector('[aria-label=\"查询域名\"]')?.value==='128.synthetic-query.example.test.'");
   assert.equal(await evaluate("document.querySelector('[aria-label=\"查询记录类型\"]').value"), 'A');

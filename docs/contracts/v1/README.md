@@ -1,6 +1,6 @@
 # LovestDNS API v1 开发候选基线
 
-当前提供方基线对应 `0.2.2`，API 主版本为 `1`。通过能力接口可发现 `deployment=native/container`、当前 DNS 默认地址和端口，以及配置条件保存与应用记录能力。外部 Token 接入默认关闭。网页登录后的软件更新走 `/auth/software-update`。[API 说明](../../integration-api.md) · [发行说明](../../releases/v0.2.2.md)
+当前提供方基线对应 `0.2.3-rc.1`，API 主版本为 `1`。通过能力接口可发现 `deployment=native/container`、当前 DNS 默认地址和端口，以及配置条件保存与应用记录能力。外部 Token 接入默认关闭。网页登录后的软件更新走 `/auth/software-update`。[API 说明](../../integration-api.md) · [正式版发行说明](../../releases/v0.2.2.md)
 
 ## 文件与身份
 
