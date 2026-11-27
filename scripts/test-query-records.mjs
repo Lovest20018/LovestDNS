@@ -36,6 +36,22 @@ try {
   ws.addEventListener('message', event => { const m = JSON.parse(event.data); if (m.id) { const p = pending.get(m.id); pending.delete(m.id); if (p) m.error ? p.reject(new Error(JSON.stringify(m.error))) : p.resolve(m.result); } else if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails); });
   send = (method, params = {}) => new Promise((resolve, reject) => { const next = ++id; const timer = setTimeout(() => { pending.delete(next); reject(new Error('Browser command timed out: ' + method)); }, 10000); pending.set(next, { resolve: value => { clearTimeout(timer); resolve(value); }, reject: error => { clearTimeout(timer); reject(error); } }); ws.send(JSON.stringify({ id: next, method, params })); });
   evaluate = async expression => { const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text); return r.result.value; };
+  const reloadPage = async () => {
+    let listener, timer;
+    const loaded = new Promise((resolve, reject) => {
+      listener = ({ data }) => {
+        if (JSON.parse(data).method === 'Page.loadEventFired') resolve();
+      };
+      ws.addEventListener('message', listener);
+      timer = setTimeout(() => reject(Error('Page reload timed out')), 10000);
+    });
+    try {
+      await Promise.all([send('Page.reload'), loaded]);
+    } finally {
+      clearTimeout(timer);
+      ws.removeEventListener('message', listener);
+    }
+  };
   const wait = async expression => { for (let i = 0; i < 100; i++) { if (await evaluate(expression)) return; await sleep(100); } throw Error('Timed out: ' + expression); };
   const click = (label, within = '') => evaluate(`(()=>{const b=[...document.querySelectorAll(${JSON.stringify((within ? within + ' ' : '') + 'button')})].find(b=>b.getClientRects().length&&b.textContent.trim()===${JSON.stringify(label)});if(!b)throw Error('Button missing: '+${JSON.stringify(label)});b.click();})()`);
   const input = (selector, value) => evaluate(`(() => {
@@ -179,7 +195,7 @@ try {
   await wait("document.querySelector('[aria-label=\"筛选来源 IP\"]')?.value==='192.0.2.20' && document.querySelectorAll('.query-record-table tbody tr').length===50");
   assert.equal(await evaluate('location.hash'), filteredHash);
   const previousPage = await evaluate('performance.timeOrigin');
-  await send('Page.reload');
+  await reloadPage();
   await wait(`performance.timeOrigin !== ${previousPage} && document.querySelector('[aria-label="筛选来源 IP"]')?.value==='192.0.2.20' && document.querySelectorAll('.query-record-table tbody tr').length===50`);
   assert.equal(await evaluate('location.hash'), filteredHash);
   await evaluate("document.querySelector('.query-record-table tbody .query-record-expand').click()");
@@ -238,13 +254,14 @@ try {
     await shot('recent-mobile-' + width + '-response');
     await evaluate("document.querySelector('.query-record-card .query-record-expand').click()");
   }
+  const mobileRowCount = "document.querySelectorAll('.query-record-card').length";
   await click('管理采集');
   await click('关闭记录'); await wait("document.body.textContent.includes('未开启查询记录')");
-  assert.equal(await evaluate("document.querySelectorAll('.query-record-table tbody tr').length"), 50);
+  assert.equal(await evaluate(mobileRowCount), 50);
   await click('清空记录'); await click('取消');
-  assert.equal(await evaluate("document.querySelectorAll('.query-record-table tbody tr').length"), 50);
-  await click('清空记录'); await click('确认清空记录'); await wait("!document.querySelector('.query-record-table')");
-  assert(await evaluate("document.body.textContent.includes('0 条')"));
+  assert.equal(await evaluate(mobileRowCount), 50);
+  await click('清空记录'); await click('确认清空记录');
+  await wait(`${mobileRowCount} === 0 && document.body.textContent.includes('0 条')`);
   await send('Emulation.setDeviceMetricsOverride', { width: 1360, height: 1000, deviceScaleFactor: 1, mobile: false });
   await evaluate("location.hash='#/filter'");
   await wait("document.body.textContent.includes('按当前规则测试')");
@@ -391,6 +408,7 @@ try {
   await evaluate(`document.querySelector('.query-analytics-ranking a[href*="source=192.0.2.20"]').click()`);
   await wait("location.hash.includes('snapshot=') && !!document.querySelector('.query-record-table tbody .query-record-expand')");
   await evaluate("document.querySelector('.query-record-table tbody .query-record-expand').click()");
+  await wait("!!document.querySelector('.query-record-desktop .query-record-query')");
   await evaluate("document.querySelector('.query-record-desktop .query-record-query').click()");
   await wait("location.hash.includes('tab=query')");
   await control({ clear_records: true, seed_records: true });
@@ -407,6 +425,7 @@ try {
   await click('下一页');
   await wait("document.querySelector('.blocked-query-pages')?.textContent.includes('第 2 页') && !!document.querySelector('.dns-filter-page .blocked-query-summary button')");
   await evaluate("document.querySelector('.dns-filter-page .blocked-query-summary button').click()");
+  await wait("!!document.querySelector('.dns-filter-page .query-record-query')");
   await evaluate("document.querySelector('.dns-filter-page .query-record-query').click()");
   await wait("location.hash.includes('tab=query')");
   await control({ clear_records: true, seed_records: true });

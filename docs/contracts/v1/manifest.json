@@ -306,7 +306,7 @@
       "scripts/test-integrated-container.py": "4627f8701ffd8b1e0f4ee938f18a086815ddc02e2a2d1b8c5bc237d92d2bac9e",
       "scripts/test-native-instance.py": "faa5bf2f392b833df9814871f258037d40574d316d0f7ad796fbbb47d26150ec",
       "scripts/test-native-root-hints.py": "d1aad18c4ff2f5832125b36001e8e17ad583bc3d3b487de51555e212b6246f43",
-      "scripts/test-query-records.mjs": "e01a6d2ad677c0f6823a0402ad4e7c343779f80ee6152fd054b39c01a402f653",
+      "scripts/test-query-records.mjs": "8e013e26013d302f6b290de2758af40af7ca6e230654ef912a30e841aa9bd17f",
       "scripts/test-redis-persistence-upgrade.py": "403ba8b366c5e841dcaca15823aadd56f90d78e0eb8b1d571004f6fd6a9223e0",
       "scripts/test-ui-optimization.mjs": "2e5931fde78d33b7c9291660ab22e1553a695404d75b28ab77c0af4405e39fda",
       "scripts/tests/test_cachedb_case_compat.py": "ed2babc4be9d734d32d4f0ba6ef7239682ee3a7c1cab6e33637773013c1b5f47",
@@ -410,7 +410,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "f04128228b834844ee2bc160b32513230e9d0bd24240417e48ade8d6728ac7cc"
+    "sha256": "61d8ef4372d77b3418930525ee1e92dd9a601bfd85404a3b13384b626e772cb3"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",
