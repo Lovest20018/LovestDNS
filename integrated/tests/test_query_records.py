@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 import ipaddress
 import json
 import os
@@ -161,6 +163,16 @@ def event(ident=1):
     return events[0]
 
 
+def create_legacy_events_table(db):
+    db.execute('''CREATE TABLE events (seq INTEGER PRIMARY KEY AUTOINCREMENT, observed REAL NOT NULL,
+                  source TEXT NOT NULL, domain TEXT NOT NULL, qtype INTEGER NOT NULL, payload TEXT NOT NULL)''')
+
+
+def insert_legacy_event(db, value):
+    db.execute('INSERT INTO events(observed,source,domain,qtype,payload) VALUES(?,?,?,?,?)',
+               (value['observed_at'], value['source_ip'], value['domain'], value['qtype'], json.dumps(value)))
+
+
 def test_store_retention_literal_filters_pagination_and_restart(tmp_path):
     store = Store(tmp_path, max_rows=3, max_age=20)
     events = [event(i) for i in range(5)]
@@ -231,6 +243,218 @@ def test_store_physical_cap_applies_to_every_new_connection(tmp_path):
     assert store.path.with_name('events.sqlite-journal').stat().st_size == 0
 
 
+def test_store_reuses_writer_and_reopens_after_errors_or_close(tmp_path, sqlite_trace):
+    with closing(Store(tmp_path)) as store:
+        writer = store._writer
+        store.append([event()])
+        store.record_coverage(10, 20)
+        store.invalidate_coverage_after(15)
+        store.prune()
+        store.recent()
+        store.analytics(1)
+        store.clear()
+        assert store._writer is writer
+        assert sqlite_trace.count('PRAGMA journal_mode=TRUNCATE') == 1
+        assert writer.execute('PRAGMA journal_mode').fetchone() == ('truncate',)
+
+        writer.close()
+        store.append([event()])
+        replacement = store._writer
+        assert replacement is not writer
+        with pytest.raises(sqlite3.IntegrityError):
+            store.append([event(), dict(event(), source_ip=None)])
+        assert store._writer is None and store.summary()['retained_rows'] == 1
+        assert len(store.recent()['events']) == 1
+        store.append([event()])
+        assert store._writer is not replacement
+        assert store.summary()['retained_rows'] == 2
+        store.close()
+        store.append([event()])
+        assert store.summary()['retained_rows'] == 3
+        assert sqlite_trace.count('PRAGMA journal_mode=TRUNCATE') == 4
+
+
+def test_six_column_store_migrates_and_filters_mixed_event_versions(tmp_path, monkeypatch):
+    now = int(time.time())
+    template = dict(event(), observed_at=now - 10)
+    values = [
+        dict(template, elapsed_ms=3, filter={'action': 'block'}, rcode='REFUSED', timing_scope='mosdns_entry_processing'),
+        dict(template, elapsed_ms=9, filter={'action': 'allow'}),
+        dict(template, elapsed_ms=None, outcome='no_response_observed', rcode=None, filter={'action': 'pass'}),
+    ]
+    with closing(sqlite3.connect(tmp_path / 'events.sqlite')) as db, db:
+        create_legacy_events_table(db)
+        for value in values:
+            insert_legacy_event(db, value)
+    with closing(Store(tmp_path)) as store:
+        store.append(values)
+        with closing(store.connect()) as db:
+            assert db.execute('SELECT schema_ver FROM events ORDER BY seq').fetchall() == [(0,)] * 3 + [(1,)] * 3
+        overview = store.analytics(1, now=now)
+        assert overview['total'] == overview['evaluated'] == 6
+        assert overview['blocked'] == 2 and overview['p95_ms'] == 9 and overview['latency_samples'] == 4
+        assert overview['latency_scopes'] == {'mosdns_entry_processing': 2, template['timing_scope']: 2}
+        for i, criteria in enumerate(({'response': 'REFUSED', 'decision': 'block'},
+                                      {'response': 'NOERROR', 'decision': 'allow'},
+                                      {'response': 'no_response_observed', 'decision': 'pass'})):
+            expected = [dict(values[i], sequence=i+4), dict(values[i], sequence=i+1)]
+            assert store.recent(**criteria)['events'] == expected
+            with monkeypatch.context() as patch:
+                patch.setattr(store, 'has_typed_columns', False)
+                assert store.recent(**criteria)['events'] == expected
+                assert store.analytics(1, now=now) == overview
+
+
+def test_typed_store_reads_without_evaluating_json_extract(tmp_path, monkeypatch):
+    now = int(time.time())
+    template = dict(event(), observed_at=now - 10)
+    values = [dict(template, elapsed_ms=sample, timing_scope='mosdns_entry_processing' if sample <= 10 else 'passive_entry_packet_interval',
+                   filter={'action': 'block' if sample <= 2 else 'allow'}) for sample in range(1, 21)]
+    values += [dict(template, elapsed_ms=500, outcome='no_response_observed', rcode=None, filter={'action': 'pass'}),
+               dict(template, elapsed_ms='999', filter=None), dict(template, elapsed_ms=True),
+               dict(template, elapsed_ms=-1), dict(template, elapsed_ms=10 ** 400)]
+    with closing(Store(tmp_path)) as store:
+        store.append(values)
+        with closing(store.connect()) as db:
+            assert db.execute('SELECT elapsed_ms FROM events WHERE seq > 21 ORDER BY seq').fetchall() == [
+                (None,), (None,), (-1.0,), (None,)]
+            assert db.execute('SELECT DISTINCT schema_ver FROM events').fetchall() == [(1,)]
+        connect = store.connect
+        statements, json_calls = [], []
+
+        def track_json(payload, path):
+            json_calls.append(path)
+            raise AssertionError('Unexpected JSON extraction for typed events')
+
+        def traced_connection(**kwargs):
+            db = connect(**kwargs)
+            db.create_function('json_extract', 2, track_json, deterministic=True)
+            db.set_trace_callback(statements.append)
+            return db
+
+        monkeypatch.setattr(store, 'connect', traced_connection)
+        overview = store.analytics(1, now=now)
+        assert overview['total'] == 25 and overview['latency_samples'] == 20 and overview['p95_ms'] == 19
+        assert overview['blocked'] == 2 and overview['evaluated'] == 21
+        assert overview['blocked_sources'] == [{'value': template['source_ip'], 'count': 2}]
+        assert overview['latency_scopes'] == {'mosdns_entry_processing': 10, 'passive_entry_packet_interval': 10}
+        assert len(store.recent(response='NOERROR', decision='allow')['events']) == 18
+        blocked = [dict(values[1], sequence=2), dict(values[0], sequence=1)]
+        assert store.recent(decision='block')['events'] == blocked
+        assert any('INDEXED BY blocked_seq' in statement for statement in statements)
+        monkeypatch.setattr(store, 'has_block_index', False)
+        assert store.recent(decision='block')['events'] == blocked
+        assert not json_calls
+
+
+@pytest.mark.parametrize('operation', ['clear', 'prune'])
+def test_full_legacy_database_recovers_schema_after_space_is_freed(tmp_path, monkeypatch, operation):
+    now = int(time.time())
+    kept = dict(event(), observed_at=now - 10, rcode='REFUSED', filter={'action': 'block'}, padding='x' * 3000)
+    with closing(sqlite3.connect(tmp_path / 'events.sqlite')) as db:
+        db.execute('PRAGMA max_page_count=32')
+        create_legacy_events_table(db)
+        with pytest.raises(sqlite3.OperationalError) as error:
+            for index in range(128):
+                with db:
+                    insert_legacy_event(db, kept if not index else dict(kept, observed_at=now - 100))
+        assert error.value.sqlite_errorcode == sqlite3.SQLITE_FULL
+        assert db.execute('PRAGMA page_count').fetchone() == (32,)
+        assert db.execute('PRAGMA freelist_count').fetchone() == (0,)
+
+    def fail_second_alter():
+        # Adding a nullable column can fit even in a dense SQLite file. Inject
+        # FULL after the first ALTER to exercise rollback of a partial migration.
+        error = sqlite3.OperationalError('database or disk is full')
+        error.sqlite_errorcode = sqlite3.SQLITE_FULL
+        raise error
+
+    class MigrationConnection(sqlite3.Connection):
+        def execute(self, sql, *args):
+            if sql.startswith('ALTER TABLE events ADD COLUMN outcome ') and fail_migration:
+                fail_second_alter()
+            return super().execute(sql, *args)
+
+    fail_migration = True
+    connect = sqlite3.connect
+    monkeypatch.setattr(sqlite3, 'connect', lambda *args, **kwargs: connect(*args, factory=MigrationConnection, **kwargs))
+    with closing(Store(tmp_path, max_bytes=128 * 1024, max_age=3600)) as store:
+        assert not store.has_typed_columns and not store.has_block_index
+        assert not store.has_coverage and not store.has_retention
+        with closing(store.connect()) as db:
+            assert len(db.execute('PRAGMA table_info(events)').fetchall()) == 6
+        total = store.summary()['retained_rows']
+        assert total > 1 and store.analytics(1, now=now)['blocked'] == total
+        assert len(store.recent(response='REFUSED', decision='block')['events']) == total
+
+        fail_migration = False
+        if operation == 'clear':
+            store.clear()
+            expected = []
+        else:
+            store.prune(now=now + 3550)
+            expected = [dict(kept, sequence=1)]
+        assert store.has_typed_columns and store.has_block_index and store.has_coverage and store.has_retention
+        assert store.recent(response='REFUSED', decision='block')['events'] == expected
+        store.append([kept])
+        assert store.recent(decision='block')['events'] == [dict(kept, sequence=total + 1), *expected]
+        assert store.path.stat().st_size == 128 * 1024
+        assert store.path.with_name('events.sqlite-journal').stat().st_size == 0
+
+
+@pytest.mark.parametrize('operation', ['clear', 'prune'])
+def test_reads_keep_schema_flags_from_before_snapshot(tmp_path, monkeypatch, operation):
+    now = int(time.time())
+    kept = dict(event(), observed_at=now - 10, rcode='REFUSED', filter={'action': 'block'})
+    connect = sqlite3.connect
+    with closing(connect(tmp_path / 'events.sqlite')) as db, db:
+        create_legacy_events_table(db)
+        insert_legacy_event(db, kept)
+        insert_legacy_event(db, dict(kept, observed_at=now - 100))
+    with monkeypatch.context() as patch:
+        patch.setattr(Store, '_ensure_optional_schema', lambda *_: None)
+        store = Store(tmp_path, max_age=3600)
+
+    pinned = threading.Barrier(3, timeout=5)
+    migrated = threading.Event()
+
+    class PausedReadConnection(sqlite3.Connection):
+        def execute(self, sql, *args):
+            cursor = super().execute(sql, *args)
+            if sql == "SELECT seq FROM sqlite_sequence WHERE name='events'":
+                pinned.wait()
+                assert migrated.wait(5)
+            return cursor
+
+    filters = {'response': 'REFUSED', 'decision': 'block'}
+    with closing(store), ThreadPoolExecutor(max_workers=2) as readers:
+        before_recent = store.recent(**filters)
+        before_analytics = store.analytics(1, now=now)
+        assert len(before_recent['events']) == before_analytics['blocked'] == 2
+        # WAL lets the writer commit a schema change while both readers keep their old snapshots.
+        with store._write_connection() as db:
+            assert db.execute('PRAGMA journal_mode=WAL').fetchone() == ('wal',)
+        with monkeypatch.context() as patch:
+            patch.setattr(sqlite3, 'connect',
+                          lambda *args, **kwargs: connect(*args, factory=PausedReadConnection, **kwargs))
+            recent = readers.submit(store.recent, **filters)
+            analytics = readers.submit(store.analytics, 1, now=now)
+            try:
+                pinned.wait()
+                if operation == 'clear':
+                    store.clear()
+                else:
+                    store.prune(now=now + 3550)
+                assert store.has_typed_columns and store.has_block_index and store.has_coverage and store.has_retention
+            finally:
+                migrated.set()
+            assert recent.result(timeout=5) == before_recent
+            assert analytics.result(timeout=5) == before_analytics
+        expected = [] if operation == 'clear' else [dict(kept, sequence=1)]
+        assert store.recent(**filters)['events'] == expected
+        assert store.analytics(1, now=now)['blocked'] == len(expected)
+
+
 def test_settings_default_off_persist_and_clear_discards_old_generation(tmp_path):
     state, run = tmp_path / 'state', tmp_path / 'run'
     state.mkdir(); run.mkdir()
@@ -245,6 +469,122 @@ def test_settings_default_off_persist_and_clear_discards_old_generation(tmp_path
     assert recorder.events.qsize() == 512 and recorder.counters['queue_drops'] == 88
     recorder.configure(False)
     assert not Recorder(state, run).enabled
+
+
+def test_slow_write_keeps_status_and_emit_responsive_and_clear_fences_old_events(tmp_path, monkeypatch):
+    recorder = Recorder(tmp_path, tmp_path)
+    recorder.configure(True)
+    previous = recorder.generation
+    old, fresh = event(1), dict(event(2), domain='after-clear.example.')
+    append_entered, release_append, fresh_written = threading.Event(), threading.Event(), threading.Event()
+    clear_entered, release_clear = threading.Event(), threading.Event()
+    append, clear = recorder.store.append, recorder.store.clear
+
+    def slow_append(events):
+        with recorder.store.lock:
+            append_entered.set()
+            assert release_append.wait(5)
+            append(events)
+            if fresh in events:
+                fresh_written.set()
+
+    def slow_clear():
+        clear_entered.set()
+        assert release_clear.wait(5)
+        clear()
+
+    monkeypatch.setattr(recorder.store, 'append', slow_append)
+    monkeypatch.setattr(recorder.store, 'clear', slow_clear)
+    recorder.emit(previous, old)
+    writer = threading.Thread(target=recorder.write_loop, daemon=True)
+    writer.start()
+    try:
+        with ThreadPoolExecutor(max_workers=2) as calls:
+            try:
+                assert append_entered.wait(2)
+                clearing = calls.submit(recorder.request, {'operation': 'clear'})
+                status = calls.submit(recorder.status).result(timeout=1)
+                assert status['enabled'] and status['retained_rows'] == 0
+                calls.submit(recorder.emit, previous, old).result(timeout=1)
+                assert not clear_entered.is_set() and recorder.generation == previous
+
+                release_append.set()
+                assert clear_entered.wait(2)
+                with pytest.raises(RuntimeError, match='采集状态已改变'):
+                    recorder.analytics(1)
+                recorder.emit(previous, old)
+                recorder.emit(recorder.generation, fresh)
+                release_clear.set()
+                clearing.result(timeout=2)
+                assert fresh_written.wait(2)
+                assert [value['domain'] for value in recorder.store.recent()['events']] == [fresh['domain']]
+                assert recorder.counters['discarded_events'] >= 1
+            finally:
+                release_append.set()
+                release_clear.set()
+    finally:
+        recorder.stop.set()
+        writer.join(timeout=2)
+        recorder.store.close()
+    assert not writer.is_alive()
+
+
+@pytest.mark.parametrize('scenario', ['shared', 'error', 'clear'])
+def test_recorder_analytics_singleflight_for_the_same_generation_and_hours(tmp_path, monkeypatch, scenario):
+    recorder = Recorder(tmp_path, tmp_path)
+    recorder.store.append([dict(event(), observed_at=time.time() - 10)])
+    analytics = recorder.store.analytics
+    started, release, following = threading.Event(), threading.Event(), threading.Event()
+    requests = []
+
+    def slow_analytics(hours):
+        requests.append(hours)
+        started.set()
+        assert release.wait(5)
+        if scenario == 'error':
+            raise sqlite3.OperationalError('injected analytics failure')
+        return analytics(hours)
+
+    def request():
+        return recorder.request({'operation': 'analytics', 'hours': 1})
+
+    monkeypatch.setattr(recorder.store, 'analytics', slow_analytics)
+    with closing(recorder.store), ThreadPoolExecutor(max_workers=2) as clients:
+        leader = clients.submit(request)
+        try:
+            assert started.wait(2)
+            flight = recorder.summary_flights[(recorder.generation, 1)]
+            wait = flight.done.wait
+
+            def track_wait(timeout):
+                assert timeout == 1.5
+                following.set()
+                return wait(timeout)
+
+            monkeypatch.setattr(flight.done, 'wait', track_wait)
+            follower = clients.submit(request)
+            assert following.wait(1)
+            with pytest.raises(RuntimeError, match='正在计算解析概览'):
+                recorder.analytics(24)
+            if scenario == 'clear':
+                recorder.request({'operation': 'clear'})
+        finally:
+            release.set()
+
+        if scenario == 'shared':
+            first, second = leader.result(timeout=2), follower.result(timeout=2)
+            assert first == second == request()
+            assert first['total'] == first['status']['retained_rows'] == 1
+        else:
+            error, match = ((sqlite3.OperationalError, 'injected analytics failure') if scenario == 'error'
+                            else (RuntimeError, '采集状态已改变'))
+            for client in (leader, follower):
+                with pytest.raises(error, match=match):
+                    client.result(timeout=2)
+            assert not recorder.summary_cache
+        assert requests == [1] and not recorder.summary_flights
+        monkeypatch.setattr(recorder.store, 'analytics', analytics)
+        assert request()['total'] == (0 if scenario == 'clear' else 1)
 
 
 @pytest.mark.parametrize('value', [{'operation': 'configure', 'enabled': 1}, {'operation': 'recent', 'limit': 101},
@@ -446,6 +786,7 @@ def test_slow_entry_check_keeps_pending_query_but_real_clock_step_resets(monkeyp
     monkeypatch.setattr(query_recorder, 'local_addresses', lambda: {'192.0.2.1', '2001:db8::1'})
     monkeypatch.setattr(query_recorder, 'PacketSocket', Capture)
     recorder = SimpleNamespace(stop=stop, enabled=True, generation=1, lock=threading.RLock(), run=None,
+                               storage_lock=threading.Lock(),
                                session='clock-regression', counters=query_recorder.Counter(),
                                store=SimpleNamespace(invalidate_coverage_after=lambda _: None),
                                core_events=SimpleNamespace(renew=lambda *_: None),

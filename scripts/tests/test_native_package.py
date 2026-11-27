@@ -1,4 +1,4 @@
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 import hashlib
 import importlib.util
 from io import BytesIO
@@ -7,9 +7,11 @@ import os
 from pathlib import Path, PurePosixPath
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tarfile
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -279,6 +281,259 @@ def resolve_selected_release(monkeypatch, current, selected):
         return resolve(path, *args, **kwargs)
 
     monkeypatch.setattr(Path, 'resolve', resolve_link)
+
+
+@pytest.fixture
+def prune_instance(tmp_path, monkeypatch):
+    p = {key: tmp_path / key for key in ('home', 'storage', 'config', 'unit', 'run', 'ctl')}
+    p['name'] = 'lovestdns-test'
+    for root in (p['home'] / 'releases', p['home'] / 'receipts', p['storage'] / 'backups'):
+        root.mkdir(parents=True)
+
+    # Simulate the install lock on Windows and assert that install and prune
+    # never try to acquire the non-reentrant lock twice.
+    held = False
+
+    @contextmanager
+    def exclusive(paths):
+        nonlocal held
+        assert paths == p and not held
+        held = True
+        try:
+            yield
+        finally:
+            held = False
+
+    monkeypatch.setattr(install, 'install_lock', exclusive)
+    return p
+
+
+@pytest.fixture
+def install_link(monkeypatch):
+    aliases = {}
+    resolve, path_stat = Path.resolve, Path.stat
+
+    def link(path, target, *, is_dir=False):
+        try:
+            path.symlink_to(target, target_is_directory=is_dir)
+        except OSError as exc:
+            if os.name != 'nt' or exc.winerror != 1314:
+                raise
+            # These Windows runners lack symlink privileges. Keep the same
+            # symlink metadata and resolution at the filesystem boundary.
+            path.touch()
+            aliases[path] = target
+
+    def resolve_link(path, *args, **kwargs):
+        return resolve(aliases.get(path, path), *args, **kwargs)
+
+    def stat_link(path, *, follow_symlinks=True):
+        if path in aliases:
+            if not follow_symlinks:
+                return SimpleNamespace(st_mode=stat.S_IFLNK)
+            path = aliases[path]
+        return path_stat(path, follow_symlinks=follow_symlinks)
+
+    monkeypatch.setattr(Path, 'resolve', resolve_link)
+    monkeypatch.setattr(Path, 'stat', stat_link)
+    return link
+
+
+def older_directory(path, age_order, content=b''):
+    path.mkdir()
+    (path / 'payload').write_bytes(content)
+    stamp = 1_700_000_000_000_000_000 + age_order * 100_000
+    os.utime(path, ns=(stamp, stamp))
+    return path
+
+
+def test_prune_cli_preview_and_actual_removal_protect_referenced_paths(prune_instance, install_link, monkeypatch, capsys):
+    p = prune_instance
+    releases, receipts, backups = p['home'] / 'releases', p['home'] / 'receipts', p['storage'] / 'backups'
+    active = older_directory(releases / 'active', 0)
+    rollback = older_directory(releases / 'older-rollback', 1)
+    retry = older_directory(releases / 'old-retry-a1b2', 2, b'retry')
+    kept_release = older_directory(releases / 'newer-unused', 3)
+    protected = older_directory(backups / '20261001-120000', 0)
+    record = protected / 'release.json'
+    record.write_text(json.dumps({'release': str(rollback)}))
+    os.utime(protected, ns=(active.stat().st_mtime_ns, active.stat().st_mtime_ns))
+    old_backup = older_directory(backups / '20261003-120000', 2, b'backup')
+    displaced = older_directory(backups / 'pre-rollback-a3b1', 3, b'displaced')
+    kept_backup = older_directory(backups / '20261002-120000-abcd', 4)
+    unknown = older_directory(backups / 'foreign-backup', 1, b'preserve')
+    outside = older_directory(p['home'] / 'outside', 2, b'outside')
+    (backups / '20261002-220000').touch()
+    (releases / 'non-release-file').touch()
+    install_link(p['home'] / 'current', active, is_dir=True)
+    install_link(backups / '20261004-120000', outside, is_dir=True)
+    install_link(releases / 'external-link', outside, is_dir=True)
+    displaced_mtime = displaced.stat().st_mtime_ns
+    install_link(displaced / 'nested-link', outside, is_dir=True)
+    os.utime(displaced, ns=(displaced_mtime, displaced_mtime))
+    (p['home'] / 'rollback.json').write_text(json.dumps({'backup': str(protected)}))
+    for name in (active.name, rollback.name, kept_release.name, retry.name, 'external-link', 'orphan'):
+        (receipts / (name + '.json')).write_bytes(b'{}')
+    install_link(receipts / 'linked.json', receipts / 'orphan.json')
+    (receipts / 'directory.json').mkdir()
+    (receipts / 'foreign.txt').touch()
+
+    monkeypatch.setattr(install.os, 'geteuid', lambda: 0, raising=False)
+    monkeypatch.setattr(install, 'paths', lambda instance: p)
+    monkeypatch.setattr(sys, 'argv', ['lovestdnsctl', 'prune', '--keep-backups', '1', '--keep-releases', '1', '--dry-run'])
+    install.main()
+    preview = json.loads(capsys.readouterr().out)
+    assert preview == {'dry_run': True, 'protected_backups': [str(protected)], 'kept_backups': [str(kept_backup)],
+                       'removed_backups': [str(displaced), str(old_backup)],
+                       'protected_releases': [str(active), str(rollback)], 'kept_releases': [str(kept_release)],
+                       'removed_releases': [str(retry)],
+                       'removed_receipts': [str(receipts / f'{name}.json') for name in ('external-link', retry.name, 'orphan')],
+                       'reclaimed_bytes': len(b'displacedbackupretry{}{}{}')}
+    for key in ('removed_backups', 'removed_releases', 'removed_receipts'):
+        assert all(Path(name).exists() for name in preview[key])
+
+    assert install.prune(p, keep_backups=1, keep_releases=1) == {**preview, 'dry_run': False}
+    for key in ('removed_backups', 'removed_releases', 'removed_receipts'):
+        assert not any(Path(name).exists() for name in preview[key])
+    assert unknown.is_dir() and (outside / 'payload').read_bytes() == b'outside'
+    assert (p['home'] / 'current').resolve(strict=True) == active and record.is_file()
+    assert (backups / '20261004-120000').is_symlink() and (releases / 'external-link').is_symlink()
+    assert (backups / '20261002-220000').is_file() and (releases / 'non-release-file').is_file()
+    assert (receipts / 'linked.json').is_symlink() and (receipts / 'directory.json').is_dir()
+    assert (receipts / 'foreign.txt').is_file()
+    assert all((receipts / (release.name + '.json')).is_file() for release in (active, rollback, kept_release))
+    assert not install.prune(p, keep_backups=1, keep_releases=1)['reclaimed_bytes']
+
+
+def test_prune_refuses_a_redirected_release_root(prune_instance, install_link, tmp_path):
+    p = prune_instance
+    releases = p['home'] / 'releases'
+    releases.rmdir()
+    outside = tmp_path / 'other-instance'
+    outside.mkdir()
+    release = older_directory(outside / 'release', 0, b'outside')
+    backup = older_directory(p['storage'] / 'backups/20261001-120000', 0)
+    install_link(releases, outside, is_dir=True)
+    with pytest.raises(ValueError, match='Unsafe releases directory'):
+        install.prune(p, keep_backups=0, keep_releases=0)
+    assert release.is_dir() and backup.is_dir()
+
+
+@pytest.mark.parametrize('broken', ['invalid-json', 'unreadable', 'wrong-type', 'outside-backup', 'bad-release'])
+def test_prune_rejects_invalid_rollback_metadata_before_any_removal(prune_instance, tmp_path, monkeypatch, broken):
+    p = prune_instance
+    release = older_directory(p['home'] / 'releases/old', 0, b'release')
+    backup = older_directory(p['storage'] / 'backups/20261001-120000', 0, b'backup')
+    receipt = p['home'] / 'receipts/orphan.json'
+    receipt.touch()
+    rollback = p['home'] / 'rollback.json'
+    rollback.write_text(json.dumps({'backup': str(backup)}))
+    (backup / 'release.json').write_text(json.dumps({'release': str(release)}))
+    if broken == 'invalid-json':
+        rollback.write_text('{')
+    elif broken == 'unreadable':
+        read = Path.read_text
+
+        def read_text(path, *args, **kwargs):
+            if path == rollback:
+                raise PermissionError('injected unreadable rollback.json')
+            return read(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, 'read_text', read_text)
+    elif broken == 'wrong-type':
+        rollback.write_text(json.dumps({'backup': []}))
+    elif broken == 'outside-backup':
+        rollback.write_text(json.dumps({'backup': str(tmp_path)}))
+    else:
+        (backup / 'release.json').write_text(json.dumps({'release': str(tmp_path)}))
+
+    with pytest.raises(ValueError, match='invalid rollback.json or release.json'):
+        install.prune(p, keep_backups=0, keep_releases=0)
+    assert all(path.exists() for path in (release, backup, receipt))
+
+
+@pytest.mark.parametrize('value', ['-1', '101', '1.5'])
+def test_prune_cli_rejects_invalid_retention_counts(value, monkeypatch, capsys):
+    monkeypatch.setattr(sys, 'argv', ['lovestdnsctl', 'prune', '--keep-backups', value])
+    with pytest.raises(SystemExit) as error:
+        install.main()
+    assert error.value.code == 2 and '--keep-backups' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('prune_error', [None, OSError, ValueError])
+def test_same_second_upgrades_reserve_unique_backups_and_prune_after_commit(prune_instance, tmp_path, monkeypatch,
+                                                                          capsys, prune_error):
+    p = prune_instance
+    package_dir = package(tmp_path)
+    releases, backups = p['home'] / 'releases', p['storage'] / 'backups'
+    active = older_directory(releases / 'old', 0)
+    (active / 'manifest.json').write_text(json.dumps({'version': 'old'}))
+    old_backups = [older_directory(backups / f'20261001-12000{i}', i) for i in range(3)]
+    old_releases = [older_directory(releases / f'old-retry-{i}', i) for i in range(3)]
+    install.write_env(p['config'], {**install.DEFAULTS, 'WEB_UI_TOKEN': 'local-test-token'})
+    p['unit'].write_text('old unit')
+    current = p['home'] / 'current'
+    current.mkdir()
+    selected, pruned, suffix_sizes = [active], [], []
+    resolve_selected_release(monkeypatch, current, selected)
+    suffixes = iter(['1a2b', '1a2b', '3c4d'])
+    token_hex, prune, lock = install.secrets.token_hex, install._prune_unlocked, install.install_lock
+    lock_events = []
+
+    @contextmanager
+    def tracked_lock(paths):
+        with lock(paths):
+            lock_events.append('acquired')
+            try:
+                yield
+            finally:
+                lock_events.append('released')
+
+    def token(size):
+        if size == 2:
+            suffix_sizes.append(size)
+            return next(suffixes)
+        return token_hex(size)
+
+    def prune_after_upgrade(paths, **options):
+        lock_events.append('pruned')
+        assert options == {'keep_backups': 2, 'keep_releases': 2}
+        assert p['ctl'].is_file() and current.resolve() == selected[-1]
+        backup = Path(json.loads((p['home'] / 'rollback.json').read_text())['backup'])
+        assert json.loads((backup / 'release.json').read_text())['release'] == str(selected[-2])
+        pruned.append(backup)
+        if prune_error:
+            raise prune_error('injected prune failure')
+        return prune(paths, **options)
+
+    def unexpected_restore(*args, **kwargs):
+        pytest.fail('A cleanup error rolled back a successful install')
+
+    for name, substitute in {
+        'paths': lambda _: p, 'dependencies': lambda: None, 'is_active': lambda _: True,
+        'command': lambda *args, **kwargs: None, 'healthy': lambda _: {'dns_responded': True},
+        'switch': lambda path, release: selected.append(release), 'configure_online_updater': lambda *_: None,
+        'restore': unexpected_restore, 'install_lock': tracked_lock, '_prune_unlocked': prune_after_upgrade,
+        'time': SimpleNamespace(strftime=lambda _: '20261127-120000', time=time.time),
+    }.items():
+        monkeypatch.setattr(install, name, substitute)
+    monkeypatch.setattr(install.secrets, 'token_hex', token)
+    monkeypatch.setattr(shutil, 'disk_usage', lambda _: SimpleNamespace(free=1024 ** 3))
+    args = SimpleNamespace(instance='test', config=None, import_data=None)
+    for expected in ('test.1', 'test.2'):
+        manifest = package_dir / 'manifest.json'
+        manifest.write_text(json.dumps({**json.loads(manifest.read_text()), 'version': expected}))
+        install.install(args, package_dir)
+        captured = capsys.readouterr()
+        assert json.loads(captured.out)['installed'] == expected
+        assert ('injected prune failure' in captured.err) == bool(prune_error)
+        assert selected[-1].name == expected
+
+    assert lock_events == ['acquired', 'pruned', 'released'] * 2
+    assert suffix_sizes == [2, 2, 2]
+    assert [path.name for path in pruned] == ['20261127-120000-1a2b', '20261127-120000-3c4d']
+    assert all(path.is_dir() for path in pruned)
+    assert old_backups[0].is_dir() == old_releases[0].is_dir() == bool(prune_error)
 
 
 @pytest.mark.parametrize('failure', ['copy', 'venv', 'self-check', 'receipt', 'readiness'])

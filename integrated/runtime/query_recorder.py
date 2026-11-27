@@ -21,6 +21,9 @@ from runtime.query_wire import Correlator, MAX_PENDING, MAX_STREAMS, WAIT_SECOND
 MAX_QUEUE = 512
 MAX_RESPONSE = 512 * 1024
 SUMMARY_CACHE_SECONDS = 3
+SUMMARY_WAIT_SECONDS = 1.5
+SUMMARY_BUSY = '正在计算解析概览'
+SUMMARY_STATE_CHANGED = '查询记录采集状态已改变，请重试'
 RECORD_FILTERS = {'limit', 'before', 'source', 'domain', 'qtype', 'exact', 'response', 'start', 'end', 'snapshot', 'decision'}
 RECORD_NUMBERS = {'limit': (1, 100), 'before': (1, 2 ** 53 - 1), 'qtype': (0, 65535),
                   'start': (0, 253402300799), 'end': (1, 253402300800), 'snapshot': (0, 2 ** 53 - 1)}
@@ -96,14 +99,24 @@ def entry_endpoints(run):
     return endpoints
 
 
+class SummaryFlight:
+    def __init__(self):
+        self.done = threading.Event()
+        self.result = None
+        self.error = None
+
+
 class Recorder:
     def __init__(self, state, run):
         self.state, self.run = state, run
+        # When both are needed, acquire the storage lock before the state lock.
+        self.storage_lock = threading.Lock()
         self.lock = threading.RLock()
         self.events = queue.Queue(MAX_QUEUE)
         self.counters = Counter()
         self.session = uuid.uuid4().hex
         self.generation = 0
+        self.clearing = False
         self.enabled = False
         self.phase, self.reason, self.endpoints = 'disabled', None, []
         self.updated_at = time.time()
@@ -119,6 +132,7 @@ class Recorder:
         self.core_active = False
         self.summary_slot = threading.BoundedSemaphore(1)
         self.summary_cache = {}
+        self.summary_flights = {}
 
     def configure(self, enabled):
         with self.lock:
@@ -164,11 +178,17 @@ class Recorder:
         if op == 'configure':
             self.configure(request['enabled'])
         elif op == 'clear':
-            with self.lock:
-                self.generation += 1
-                self.core_events.session = None
-                self.store.clear()
-                self.summary_cache.clear()
+            with self.storage_lock:
+                with self.lock:
+                    self.generation += 1
+                    self.summary_cache.clear()
+                    self.core_events.session = None
+                    self.clearing = True
+                try:
+                    self.store.clear()
+                finally:
+                    with self.lock:
+                        self.clearing = False
         elif op == 'recent':
             return {'status': self.status(), **self.store.recent(**request)}
         elif op == 'analytics':
@@ -177,21 +197,41 @@ class Recorder:
 
     def analytics(self, hours):
         with self.lock:
+            if self.clearing:
+                raise RuntimeError(SUMMARY_STATE_CHANGED)
             generation = self.generation
             cached = self.summary_cache.get(hours)
             if cached and time.monotonic() - cached[0] < SUMMARY_CACHE_SECONDS:
                 return {'status': self.status(), **cached[1]}
-        if not self.summary_slot.acquire(blocking=False):
-            raise RuntimeError('正在计算解析概览')
-        try:
-            data = self.store.analytics(hours)
-            with self.lock:
-                if self.generation != generation:
-                    raise RuntimeError('查询记录采集状态已改变，请重试')
-                self.summary_cache[hours] = (time.monotonic(), data)
-                return {'status': self.status(), **data}
-        finally:
-            self.summary_slot.release()
+            key = (generation, hours)
+            flight = self.summary_flights.get(key)
+            leader = flight is None
+            if leader:
+                if not self.summary_slot.acquire(blocking=False):
+                    raise RuntimeError(SUMMARY_BUSY)
+                flight = self.summary_flights[key] = SummaryFlight()
+
+        if leader:
+            try:
+                flight.result = self.store.analytics(hours)
+            except BaseException as exc:
+                flight.error = exc
+            finally:
+                with self.lock:
+                    if flight.error is None and self.generation == generation:
+                        self.summary_cache[hours] = (time.monotonic(), flight.result)
+                    del self.summary_flights[key]
+                    self.summary_slot.release()
+                    flight.done.set()
+        elif not flight.done.wait(SUMMARY_WAIT_SECONDS):
+            raise RuntimeError(SUMMARY_BUSY)
+
+        with self.lock:
+            if self.generation != generation:
+                raise RuntimeError(SUMMARY_STATE_CHANGED)
+            if flight.error is not None:
+                raise flight.error
+            return {'status': self.status(), **flight.result}
 
     def emit(self, generation, event):
         try:
@@ -214,19 +254,22 @@ class Recorder:
                         batch.append(self.events.get(timeout=remaining))
                     except queue.Empty:
                         break
-                with self.lock:
-                    events = [event for generation, event in batch if generation == self.generation and self.enabled]
-                    self.counters['discarded_events'] += len(batch) - len(events)
+                with self.storage_lock:
+                    with self.lock:
+                        events = [event for generation, event in batch if generation == self.generation and self.enabled]
+                        self.counters['discarded_events'] += len(batch) - len(events)
                     if events:
                         self.store.append(events)
-                        self.counters['stored_events'] += len(events)
+                        with self.lock:
+                            self.counters['stored_events'] += len(events)
             except queue.Empty:
                 pass
             except (OSError, ValueError, sqlite3.Error):
                 self.counters['storage_drops'] += len(batch)
             if time.monotonic() >= deadline:
                 try:
-                    self.store.prune()
+                    with self.storage_lock:
+                        self.store.prune()
                 except (OSError, sqlite3.Error):
                     self.counters['storage_errors'] += 1
                 deadline = time.monotonic() + 5
@@ -236,6 +279,7 @@ class Recorder:
         deadline = 0
         clock_offset = time.time() - time.monotonic()
         streak_start, last_check, recorded_until, previous_loss = None, None, None, None
+        invalidate_after = None
         try:
             while not self.stop.is_set():
                 mono = time.monotonic()
@@ -275,11 +319,13 @@ class Recorder:
                             if drops:
                                 self.counters['kernel_drops'] += drops
                                 correlator.reset()
+                        coverage = None
                         with self.lock:
                             now = time.time()
                             loss = tuple(self.counters[key] for key in COVERAGE_LOSS)
                             if clock_step and offset < clock_offset:
-                                self.store.invalidate_coverage_after(int(now))
+                                cutoff = int(now)
+                                invalidate_after = cutoff if invalidate_after is None else min(invalidate_after, cutoff)
                             if (streak_start is None or last_check is None or mono - last_check > 2
                                     or clock_step or loss != previous_loss):
                                 streak_start, recorded_until = int(now) + 1, None
@@ -292,9 +338,22 @@ class Recorder:
                                     covered_until = int(now) - WAIT_SECONDS - 2
                                     left = recorded_until if recorded_until is not None else streak_start
                                     if covered_until - left >= 5:
-                                        self.store.record_coverage(left, covered_until)
-                                        recorded_until = covered_until
+                                        coverage = left, covered_until
                         clock_offset = offset
+                        # Coverage can be retried at the next sample. Packet capture
+                        # should keep running while the writer holds the storage lock.
+                        if (invalidate_after is not None or coverage) and self.storage_lock.acquire(blocking=False):
+                            try:
+                                if invalidate_after is not None:
+                                    self.store.invalidate_coverage_after(invalidate_after)
+                                    invalidate_after = None
+                                with self.lock:
+                                    still_recording = self.enabled and generation == self.generation
+                                if coverage and still_recording:
+                                    self.store.record_coverage(*coverage)
+                                    recorded_until = coverage[1]
+                            finally:
+                                self.storage_lock.release()
                     except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):
                         if capture:
                             capture.close()
@@ -337,8 +396,10 @@ def main():
     os.umask(0o077)
     recorder = Recorder(state, run)
     recorder.core_events.start()
-    threading.Thread(target=recorder.write_loop, daemon=True).start()
-    threading.Thread(target=recorder.capture_loop, daemon=True).start()
+    writer = threading.Thread(target=recorder.write_loop, daemon=True)
+    capture = threading.Thread(target=recorder.capture_loop, daemon=True)
+    writer.start()
+    capture.start()
 
     class Handler(socketserver.StreamRequestHandler):
         def handle(self):
@@ -379,9 +440,15 @@ def main():
             finally:
                 self.slots.release()
 
-    with Server(str(path), Handler) as service:
-        path.chmod(0o600)
-        service.serve_forever(poll_interval=.2)
+    try:
+        with Server(str(path), Handler) as service:
+            path.chmod(0o600)
+            service.serve_forever(poll_interval=.2)
+    finally:
+        recorder.stop.set()
+        writer.join()
+        capture.join()
+        recorder.store.close()
 
 
 if __name__ == '__main__':

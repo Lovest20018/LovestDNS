@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install, upgrade and roll back one LovestDNS systemd instance on Debian."""
+"""Install, upgrade, roll back and prune one LovestDNS systemd instance on Debian."""
 import argparse
 from contextlib import contextmanager
 import hashlib
@@ -14,6 +14,7 @@ import secrets
 import shlex
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tarfile
@@ -24,6 +25,7 @@ import urllib.request
 
 MAX_ARCHIVE = 256 * 1024 * 1024
 MAX_EXTRACTED = 768 * 1024 * 1024
+BACKUP_NAME = re.compile(r'\d{8}-\d{6}(?:-[a-f0-9]{4})?')
 
 DNS_KEYS = {'TZ', 'CNAUTO', 'CNFALL', 'CN_TRACKER', 'USE_HOSTS', 'IPV6', 'SOCKS5', 'SERVER_IP',
             'CUSTOM_FORWARD', 'CUSTOM_FORWARD_TTL', 'AUTO_FORWARD', 'AUTO_FORWARD_CHECK', 'USE_MARK_DATA',
@@ -351,6 +353,107 @@ def install_lock(p):
         yield
 
 
+def _prune_root(parent, name):
+    try:
+        root = parent.resolve() / name
+        if root.is_symlink() or root.resolve() != root:
+            raise ValueError(f'Unsafe {name} directory: {root}')
+    except RuntimeError as exc:
+        raise ValueError(f'Unsafe {name} directory: {exc}') from exc
+    return root
+
+
+def _rollback_reference(record, field, root, *, missing_ok=False):
+    try:
+        mode = record.lstat().st_mode
+    except FileNotFoundError:
+        if missing_ok:
+            return None
+        raise
+    if not stat.S_ISREG(mode):
+        raise ValueError(f'{record.name} must be a regular file')
+    path = Path(json.loads(record.read_text(encoding='utf-8'))[field])
+    if not path.is_absolute():
+        raise ValueError(f'{record.name} requires an absolute {field} path')
+    path = path.resolve(strict=True)
+    if path.parent != root or not path.is_dir():
+        raise ValueError(f'{record.name} references a {field} outside {root}')
+    return path
+
+
+def _prune_candidates(root, protected, *, backups=False):
+    candidates = []
+    if root.exists():
+        for path in root.iterdir():
+            if path in protected:
+                continue
+            if backups and not (BACKUP_NAME.fullmatch(path.name) or path.name.startswith('pre-rollback-')):
+                continue
+            info = path.lstat()
+            if stat.S_ISDIR(info.st_mode) and path.resolve() == path:
+                candidates.append((info.st_mtime_ns, path))
+    return [path for _, path in sorted(candidates, reverse=True)]
+
+
+def prune(p, *, keep_backups=2, keep_releases=2, dry_run=False):
+    for keep in (keep_backups, keep_releases):
+        if type(keep) is not int or keep < 0:
+            raise ValueError('Retention counts must be non-negative integers')
+    with install_lock(p):
+        return _prune_unlocked(p, keep_backups=keep_backups, keep_releases=keep_releases, dry_run=dry_run)
+
+
+def _prune_unlocked(p, *, keep_backups=2, keep_releases=2, dry_run=False):
+    """Prune an instance while the caller holds its install lock."""
+    backups = _prune_root(p['storage'], 'backups')
+    releases = _prune_root(p['home'], 'releases')
+    receipts = _prune_root(p['home'], 'receipts')
+    protected_backups, protected_releases = set(), set()
+    current = p['home'] / 'current'
+    if current.exists() or current.is_symlink():
+        active = current.resolve(strict=True)
+        if active.parent != releases or not active.is_dir():
+            raise ValueError('Current release is outside this instance')
+        protected_releases.add(active)
+    try:
+        backup = _rollback_reference(p['home'] / 'rollback.json', 'backup', backups, missing_ok=True)
+        if backup is not None:
+            protected_backups.add(backup)
+            protected_releases.add(_rollback_reference(backup / 'release.json', 'release', releases))
+    except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+        raise ValueError(f'Cannot prune with invalid rollback.json or release.json: {exc}') from exc
+
+    backup_candidates = _prune_candidates(backups, protected_backups, backups=True)
+    release_candidates = _prune_candidates(releases, protected_releases)
+    kept_backups, removed_backups = backup_candidates[:keep_backups], backup_candidates[keep_backups:]
+    kept_releases, removed_releases = release_candidates[:keep_releases], release_candidates[keep_releases:]
+    removed_directories = removed_backups + removed_releases
+    removed_release_names = {path.name for path in removed_releases}
+    removed_receipts = []
+    reclaimed_bytes = sum(file.stat().st_size for directory in removed_directories for file in directory.rglob('*')
+                          if not file.is_symlink() and file.is_file())
+    if receipts.exists():
+        for receipt in sorted(receipts.iterdir()):
+            info = receipt.lstat()
+            if receipt.suffix != '.json' or not stat.S_ISREG(info.st_mode):
+                continue
+            release = releases / receipt.stem
+            if receipt.stem in removed_release_names or release.is_symlink() or not release.is_dir():
+                removed_receipts.append(receipt)
+                reclaimed_bytes += info.st_size
+
+    if not dry_run:
+        for directory in removed_directories:
+            shutil.rmtree(directory)
+        for receipt in removed_receipts:
+            receipt.unlink()
+    return {'dry_run': bool(dry_run), 'protected_backups': list(map(str, sorted(protected_backups))),
+            'kept_backups': list(map(str, kept_backups)), 'removed_backups': list(map(str, removed_backups)),
+            'protected_releases': list(map(str, sorted(protected_releases))),
+            'kept_releases': list(map(str, kept_releases)), 'removed_releases': list(map(str, removed_releases)),
+            'removed_receipts': list(map(str, removed_receipts)), 'reclaimed_bytes': reclaimed_bytes}
+
+
 def installation_receipt(p, release, archive_sha256=None):
     """Keep the outer archive digest outside its own payload and bind it to this release."""
     manifest = (release / 'manifest.json').read_bytes()
@@ -480,8 +583,16 @@ def install(args, package):
                     raise ValueError('Not enough space for a consistent rollback backup')
                 if was_active:
                     stop(p)
-                candidate_backup = p['storage'] / 'backups' / time.strftime('%Y%m%d-%H%M%S')
-                candidate_backup.mkdir(mode=0o700)
+                stamp = time.strftime('%Y%m%d-%H%M%S')
+                for _ in range(16):
+                    candidate_backup = p['storage'] / 'backups' / f'{stamp}-{secrets.token_hex(2)}'
+                    try:
+                        candidate_backup.mkdir(mode=0o700)
+                    except FileExistsError:
+                        continue
+                    break
+                else:
+                    raise FileExistsError('Could not reserve a unique rollback backup directory')
                 for name in ('data', 'state'):
                     shutil.copytree(p['storage'] / name, candidate_backup / name, symlinks=True)
                 shutil.copyfile(p['config'], candidate_backup / 'service.env')
@@ -510,8 +621,6 @@ def install(args, package):
                 atomic(p['home'] / 'rollback.json', json.dumps({'backup': str(backup)}))
             ctl = '#!/bin/sh\nexec /usr/bin/python3 ' + shlex.quote(str(p['home'] / 'current/install.py')) + ' --instance ' + shlex.quote(args.instance) + ' "$@"\n'
             atomic(p['ctl'], ctl, 0o755)
-            print(json.dumps({'installed': manifest['version'], 'service': p['name'], 'config_file': str(p['config']),
-                              'control': str(p['ctl']), 'rollback_backup': str(backup) if backup else None, **result}))
         except BaseException:
             try:
                 if prepared and old:
@@ -535,6 +644,14 @@ def install(args, package):
                 except (OSError, RuntimeError) as exc:
                     print(f'Could not clean failed release {release}: {exc}', file=sys.stderr)
             raise
+
+        # The upgrade is committed. Finish cleanup before releasing the install lock.
+        try:
+            _prune_unlocked(p, keep_backups=2, keep_releases=2)
+        except (OSError, ValueError) as exc:
+            print(f'Could not prune old backups and releases: {exc}', file=sys.stderr)
+    print(json.dumps({'installed': manifest['version'], 'service': p['name'], 'config_file': str(p['config']),
+                      'control': str(p['ctl']), 'rollback_backup': str(backup) if backup else None, **result}))
 
 
 def restore(p, backup, *, manual=False):
@@ -598,6 +715,13 @@ def restore(p, backup, *, manual=False):
             raise
 
 
+def _retention_count(value):
+    count = int(value)
+    if not 0 <= count <= 100:
+        raise argparse.ArgumentTypeError('expected an integer between 0 and 100')
+    return count
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--instance', default='')
@@ -612,6 +736,10 @@ def main():
     for name in ('status', 'health', 'start', 'stop', 'restart', 'logs', 'rollback', 'password'):
         commands.add_parser(name)
     commands.add_parser('api').add_argument('mode', choices=['on', 'off', 'status'])
+    cleanup = commands.add_parser('prune', help='Remove unreferenced backups and releases')
+    cleanup.add_argument('--keep-backups', type=_retention_count, default=2, help='Unreferenced backups to keep (default: 2)')
+    cleanup.add_argument('--keep-releases', type=_retention_count, default=2, help='Unreferenced releases to keep (default: 2)')
+    cleanup.add_argument('--dry-run', action='store_true', help='List paths and bytes without deleting them')
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error('Run as root or through sudo')
@@ -623,6 +751,8 @@ def main():
             install(args, unpack_upgrade(args.archive, args.sha256, Path(directory)))
     elif args.action == 'health':
         print(json.dumps(healthy(p, timeout=10)))
+    elif args.action == 'prune':
+        print(json.dumps(prune(p, keep_backups=args.keep_backups, keep_releases=args.keep_releases, dry_run=args.dry_run)))
     elif args.action == 'rollback':
         with install_lock(p):
             backup = Path(json.loads((p['home'] / 'rollback.json').read_text())['backup']).resolve(strict=True)
