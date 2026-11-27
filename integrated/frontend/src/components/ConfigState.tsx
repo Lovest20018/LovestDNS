@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { dirtyFileNames, subscribeFileDraft } from '../fileDrafts';
 import { RefreshCw } from 'lucide-react';
 import { suiteFetch, errorText } from '../suiteApi';
-import { useSuite } from '../suiteContext';
+import { useSuiteConfig } from '../suiteContext';
 import { isActiveTask, useMaintenance } from '../maintenanceContext';
 import { configFileAction, configFileLabel, configFileLink } from '../configFiles';
 
@@ -12,7 +12,7 @@ const LABELS = { unknown: '本次启动后暂无应用记录', recorded: '与应
 const subscribeDrafts = (listener: () => void) => subscribeFileDraft('*', listener);
 
 export default function ConfigState({ compact = false }: { compact?: boolean }) {
-  const { caps, paused } = useSuite();
+  const { caps, paused } = useSuiteConfig();
   const { tasks } = useMaintenance();
   const applying = tasks.some(task => task.action !== 'save_redis_snapshot' && isActiveTask(task));
   const drafts = useSyncExternalStore(subscribeDrafts, dirtyFileNames);

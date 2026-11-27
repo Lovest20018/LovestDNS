@@ -1,6 +1,6 @@
 import { ExternalLink, KeyRound, Network, Server, ShieldCheck, TerminalSquare } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useSuite } from '../suiteContext';
+import { useSuiteConfig } from '../suiteContext';
 import { useGateway } from '../gatewayContext';
 import { errorText, externalApiSetting } from '../suiteApi';
 import { Section, Empty, Notice, Permission } from '../components/SuiteUI';
@@ -13,7 +13,7 @@ import SoftwareUpdateNetwork from '../components/SoftwareUpdateNetwork';
 import './SuitePage.css';
 
 export default function SuiteDeploy() {
-  const { caps } = useSuite();
+  const { caps } = useSuiteConfig();
   const { settingsVisible: gatewaySettingsVisible } = useGateway();
   const readRoute = () => new URLSearchParams(window.location.hash.split('?')[1]);
   const [route, setRoute] = useState(readRoute);

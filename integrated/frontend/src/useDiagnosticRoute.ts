@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { diagnosticHash, parseDiagnosticRoute } from './diagnosticRoute';
 import type { DiagnosticRoute } from './diagnosticRoute';
 import { clearQueryHistory } from './queryHistory';
@@ -22,7 +22,7 @@ export function useDiagnosticRoute(instance: string, canRecord: boolean) {
   const key = `${STORAGE_PREFIX}${instance}:${canRecord ? 'admin' : 'read'}`;
   let remembered = '';
   try { remembered = sessionStorage.getItem(key) ?? ''; } catch { /* Use the URL alone. */ }
-  const route = parseDiagnosticRoute(hash, remembered, canRecord);
+  const route = useMemo(() => parseDiagnosticRoute(hash, remembered, canRecord), [hash, remembered, canRecord]);
   const canonical = diagnosticHash(route);
   useEffect(() => {
     if (!instance || hash.split('?')[0] !== '#/diagnostics' || new URLSearchParams(hash.split('?')[1]).get('tab') === 'gateway') return;

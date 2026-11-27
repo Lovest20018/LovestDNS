@@ -1,11 +1,11 @@
 import { parseListContent, serializeListContent } from '../domainEditor';
 import type { DomainEntry } from '../domainEditor';
 import EditorToolbar from '../components/EditorToolbar';
-import { useSuite } from '../suiteContext';
+import { useSuiteConfig } from '../suiteContext';
 import { useUnsavedChanges } from '../unsaved';
 import { draftEpoch } from '../fileDrafts';
 import { useFileEditor } from '../useFileEditor';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { DOMAIN_LISTS, domainListForFile, domainListLabel } from '../domainLists';
 import type { DomainList } from '../domainLists';
 import { Plus, X, FileText, Download, Copy, ArrowUp, ArrowDown } from 'lucide-react';
@@ -42,7 +42,7 @@ let lastList = DEFAULT_LIST;
 const listHash = () => location.hash;
 
 export default function DomainListPage() {
-  const { caps } = useSuite();
+  const { caps } = useSuiteConfig();
   const scope = `${draftEpoch()}:${caps?.instance_id}:${caps?.access_role}`;
   const hash = useSyncExternalStore(subscribeRoute, listHash);
   const [path, query] = hash.split('?');
@@ -75,11 +75,17 @@ function DomainFileEditor({ activeList, scope }: { activeList: DomainList; scope
   const loadFailed = !editor.loaded || !!editor.error;
   const loadFile = () => editor.load(true);
   const isTrackerList = activeTab === 'trackerslist';
-  const entries = isTrackerList ? [] : parseListContent(rawContent);
+  const { entries, ruleCount, commentCount, disabledRuleCount } = useMemo(() => {
+    const entries = editMode === 'visual' && !isTrackerList ? parseListContent(rawContent) : [];
+    let ruleCount = 0, disabledRuleCount = 0;
+    for (const entry of entries) {
+      if (entry.prefix === '__comment__') continue;
+      ruleCount++;
+      if (entry.comment) disabledRuleCount++;
+    }
+    return { entries, ruleCount, commentCount: entries.length - ruleCount, disabledRuleCount };
+  }, [editMode, isTrackerList, rawContent]);
   const setEntries = (update: DomainEntry[] | ((old: DomainEntry[]) => DomainEntry[])) => setRawContent(serializeListContent(typeof update === 'function' ? update(entries) : update));
-  const ruleCount = entries.filter((entry) => entry.prefix !== '__comment__').length;
-  const commentCount = entries.length - ruleCount;
-  const disabledRuleCount = entries.filter((entry) => entry.prefix !== '__comment__' && entry.comment).length;
   const getCurrentContent = () => rawContent;
   const hasUnsavedChanges = editor.dirty;
   useUnsavedChanges(hasUnsavedChanges);

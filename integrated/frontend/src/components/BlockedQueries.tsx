@@ -3,7 +3,7 @@ import { diagnosticHash, parseDiagnosticRoute, queryRecordParams } from '../diag
 import { recentQueries } from '../queryRecords';
 import type { QueryRecords, QuerySummary } from '../queryRecords';
 import { errorText, when } from '../suiteApi';
-import { useSuite } from '../suiteContext';
+import { useSuiteConfig } from '../suiteContext';
 import { navigationPosition, restoreQueryPosition, useQueryHistory } from '../queryHistory';
 import { useSourceDevices } from '../sourceDevices';
 import { QueryDetails } from './RecentQueries';
@@ -15,7 +15,7 @@ type Range = Pick<QuerySummary, 'start' | 'end' | 'snapshot'>;
 type Pages = { window?: Range; snapshot?: number; cursors: number[] };
 
 export default function BlockedQueries({ windowData }: { windowData?: Pick<QuerySummary, 'start' | 'end' | 'snapshot'> }) {
-  const { caps, paused } = useSuite();
+  const { caps, paused } = useSuiteConfig();
   const { devices } = useSourceDevices();
   const memory = useQueryHistory<{ pages: Pages | null; open: string; snapshot?: number; live?: boolean }>(
     windowData ? 'homeBlocks' : 'filterBlocks', { pages: null, open: '' });

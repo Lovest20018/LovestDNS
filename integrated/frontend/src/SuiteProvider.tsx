@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { SuiteContext, SuiteConfigContext } from './suiteContext';
 import type { ProbeObservation, ProbeResult } from './suiteContext';
@@ -30,6 +30,7 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
   const [probe, setProbe] = useState<ProbeObservation | null>(null);
   const [probeChecking, setProbeChecking] = useState(false);
   const [probeError, setProbeError] = useState('');
+  const probeInput = useRef({ caps, error, runtime });
   const probeRequest = useRef<AbortController | null>(null);
   const capabilitiesCache = useRef<Capabilities | null>(null);
   const capabilitiesAt = useRef(0);
@@ -63,7 +64,12 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [probe]);
 
-  const runProbe = async () => {
+  useLayoutEffect(() => {
+    probeInput.current = { caps, error, runtime };
+  }, [caps, error, runtime]);
+
+  const runProbe = useCallback(async () => {
+    const { caps, error, runtime } = probeInput.current;
     if (!caps?.permissions.diagnose || error || probeRequest.current) return;
     const abort = new AbortController();
     const process = processFingerprint(runtime);
@@ -88,7 +94,7 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
         setProbeChecking(false);
       }
     }
-  };
+  }, []);
 
   const read = useCallback(async (force = false) => {
     if (inFlight.current) return;
@@ -207,10 +213,14 @@ export default function SuiteProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [runtime, runtimeDeadline, appendGap, paused]);
 
-  const config = useMemo(() => ({ caps, runningEnv, statusError, refresh, error }), [caps, runningEnv, statusError, refresh, error]);
+  const config = useMemo(() => ({ caps, runningEnv, statusError, refresh, error, paused }),
+    [caps, runningEnv, statusError, refresh, error, paused]);
+  const suite = useMemo(() => ({ runningEnv, statusError, refreshing, caps, runtime, samples, loading, error,
+    runtimeError, runtimeStale, paused, probe, probeChecking, probeError, runProbe, refresh, setPaused }),
+    [runningEnv, statusError, refreshing, caps, runtime, samples, loading, error,
+      runtimeError, runtimeStale, paused, probe, probeChecking, probeError, runProbe, refresh]);
   return <SuiteConfigContext.Provider value={config}>
-    <SuiteContext.Provider value={{ runningEnv, statusError, refreshing, caps, runtime, samples, loading, error,
-      runtimeError, runtimeStale, paused, probe, probeChecking, probeError, runProbe, refresh, setPaused }}>
+    <SuiteContext.Provider value={suite}>
       {children}
     </SuiteContext.Provider>
   </SuiteConfigContext.Provider>;

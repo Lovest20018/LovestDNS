@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { errorText, suiteFetch } from './suiteApi';
-import { useSuite } from './suiteContext';
+import { useSuiteConfig } from './suiteContext';
 
 type Devices = Record<string, string>;
 type Snapshot = { devices: Devices; error: string; loaded: boolean };
@@ -47,7 +47,7 @@ function load(key: string, instance: string) {
 }
 
 export function useSourceDevices() {
-  const { caps } = useSuite();
+  const { caps } = useSuiteConfig();
   const instance = caps?.instance_id ?? '';
   const key = instance && caps?.permissions.configure ? instance + ':' + caps.access_role : '';
   const snapshot = useSyncExternalStore(subscribe, () => entries.get(key)?.snapshot ?? empty);

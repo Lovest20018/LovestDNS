@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { MouseEvent } from 'react';
-import { useSuite } from './suiteContext';
+import { useSuiteConfig } from './suiteContext';
 
 let session: string = crypto.randomUUID?.() ?? String(Math.random());
 const key = 'lovestdnsQueryHistory';
@@ -9,7 +9,7 @@ type Item<T> = { scope: string; hash: string; payload: T; focus?: string; scroll
 export function clearQueryHistory() { session = String(Math.random()); }
 
 export function useQueryHistory<T>(name: string, fallback: T) {
-  const { caps } = useSuite();
+  const { caps } = useSuiteConfig();
   const scope = [session, caps?.instance_id, caps?.access_role, name].join(':');
   const read = useCallback((): Item<T> | null => {
     const entry = window.history.state?.[key]?.[name] as Item<T> | undefined;

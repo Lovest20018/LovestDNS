@@ -63,6 +63,23 @@ def release_flags(version, release):
     return {'candidate_only': not release, 'release_approved': release, 'performance_acceptance': False}
 
 
+def installed_component_entries(package):
+    entries = {}
+    path = package / 'components/manifest.json'
+    if path.exists():
+        manifest = json.loads(path.read_text(encoding='utf-8'))
+        if not isinstance(manifest, dict) or not isinstance(manifest.get('components'), dict):
+            raise ValueError('Invalid installed component manifest')
+        declared = manifest['components']
+        selected = manifest.get('selected', list(declared))
+        if not isinstance(selected, list) or any(not isinstance(name, str) or name not in declared for name in selected):
+            raise ValueError('Invalid installed component selection')
+        entries = {name: declared[name] for name in selected}
+    # Older packages installed the source candidate outside the bundle's declared selection.
+    entries.setdefault('dnscrypt', {'binaries': {'dnscrypt-proxy': 'dnscrypt-proxy'}, 'runtime': {}})
+    return entries
+
+
 def refresh(base, expected, frontend, output, *, release=False, mosdns_filter=None):
     base, frontend, output = map(Path, (base, frontend, output))
     if output.exists() or output.with_suffix(output.suffix + '.sha256').exists():
@@ -95,7 +112,13 @@ def refresh(base, expected, frontend, output, *, release=False, mosdns_filter=No
                 or components.get('versions') != {name: value['version'] for name, value in lock['components'].items()}
                 or old['files'].get('libexec/mosdns') != lock['frozen']['mosdns']['sha256']):
             raise ValueError('Base does not contain the selected reviewed component set')
-        candidate = runpy.run_path(str(ROOT / 'packaging/components/dnscrypt_candidate.py'))['verify'](package / 'components/dnscrypt')
+        entries = installed_component_entries(package)
+        try:
+            dnscrypt_binary = entries['dnscrypt']['binaries']['dnscrypt-proxy']
+        except (KeyError, TypeError) as error:
+            raise ValueError('Invalid installed DNSCrypt component metadata') from error
+        verify_dnscrypt = runpy.run_path(str(ROOT / 'packaging/components/dnscrypt_candidate.py'))['verify']
+        candidate = verify_dnscrypt(package / 'components/dnscrypt', binary_path=dnscrypt_binary)
         if components.get('source_candidate', {}).get('binary_sha256') != candidate['binary_sha256']:
             raise ValueError('Base DNSCrypt component metadata differs from its binary')
         components = {**components, 'lock_sha256': components.get('lock_sha256') or components.get('bundle_lock_sha256'), **flags}
@@ -104,10 +127,10 @@ def refresh(base, expected, frontend, output, *, release=False, mosdns_filter=No
             raise ValueError('Base component lock mismatch')
         excluded = {'components/mosdns-filter', 'components/mosdns-filter.json'}
         if release:
-            # The original upstream binary is shadowed by the reviewed component.
-            candidate_entry = {'binaries': {'dnscrypt-proxy': 'dnscrypt-proxy'}, 'runtime': {}}
-            bundle['omit_superseded_native_dnscrypt'](package, candidate_entry)
-            excluded.add('libexec/dnscrypt-proxy')
+            for name in components['selected']:
+                if name in entries:
+                    bundle['omit_superseded_native_component'](package, name, entries[name])
+                    excluded.update(f'libexec/{binary}' for binary in bundle['NAMES'][name])
         inherited = {name: checksum for name, checksum in old['files'].items()
                      if name.startswith(('core/', 'lib/', 'libexec/', 'components/', 'wheels/'))
                      and name not in excluded}

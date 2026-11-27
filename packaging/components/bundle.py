@@ -80,15 +80,27 @@ def wrapper(component, binary, entry, *, container=False):
     return prefix + 'exec ' + program + ' "$@"\n'
 
 
-def omit_superseded_native_dnscrypt(target, entry):
+def omit_superseded_native_component(target, component, entry):
+    if not isinstance(component, str) or component not in NAMES:
+        raise ValueError('Unknown native component: ' + str(component))
     target = Path(target)
-    binary = 'dnscrypt-proxy'
-    executable = target / 'components/dnscrypt' / relative(entry['binaries'][binary])
-    launcher = target / 'core' / binary
-    if (not executable.is_file() or not launcher.is_file()
-            or launcher.read_text(encoding='utf-8') != wrapper('dnscrypt', binary, entry)):
-        raise ValueError('Native DNSCrypt launcher must use the selected component before omitting the upstream binary')
-    (target / 'libexec' / binary).unlink(missing_ok=True)
+    binaries = sorted(NAMES[component])
+    for binary in binaries:
+        try:
+            executable = target / 'components' / component / relative(entry['binaries'][binary])
+            expected = wrapper(component, binary, entry).encode('utf-8')
+        except (AttributeError, KeyError, TypeError) as error:
+            raise ValueError(f'Invalid native {component} metadata for {binary}') from error
+        launcher = target / 'core' / binary
+        if (executable.is_symlink() or not executable.is_file() or launcher.is_symlink()
+                or not launcher.is_file() or launcher.read_bytes() != expected):
+            raise ValueError(f'Native {component} launcher must use the selected component before omitting {binary}')
+    for binary in binaries:
+        (target / 'libexec' / binary).unlink(missing_ok=True)
+
+
+def omit_superseded_native_dnscrypt(target, entry):
+    omit_superseded_native_component(target, 'dnscrypt', entry)
 
 
 def install(source, target, lock, selected=None, *, container=False):
@@ -111,7 +123,7 @@ def install(source, target, lock, selected=None, *, container=False):
             # locations so existing orchestration keeps its exact command path.
             if path.is_symlink():
                 path.unlink()
-            path.write_text(wrapper(name, binary, manifest['components'][name], container=container))
+            path.write_text(wrapper(name, binary, manifest['components'][name], container=container), encoding='utf-8', newline='\n')
             path.chmod(0o755)
             executable = payload / name / manifest['components'][name]['binaries'][binary]
             executable.chmod(0o755)
@@ -121,8 +133,9 @@ def install(source, target, lock, selected=None, *, container=False):
                     other.unlink()
                 shutil.copyfile(path, other)
                 other.chmod(0o755)
-    if not container and 'dnscrypt' in selected:
-        omit_superseded_native_dnscrypt(target, manifest['components']['dnscrypt'])
+    if not container:
+        for name in selected:
+            omit_superseded_native_component(target, name, manifest['components'][name])
     payload.mkdir(parents=True, exist_ok=True)
     (payload / 'manifest.json').write_text(json.dumps({**manifest, 'selected': selected}, sort_keys=True, indent=2) + '\n')
     return {'selected': selected, 'lock_sha256': manifest['lock_sha256'],

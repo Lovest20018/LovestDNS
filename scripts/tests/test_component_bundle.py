@@ -7,6 +7,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 bundle = runpy.run_path(str(ROOT / 'packaging/components/bundle.py'))
+UPSTREAM_BINARIES = {'redis-server', 'redis-cli', 'unbound', 'unbound-checkconf', 'dnscrypt-proxy', 'mosdns'}
 
 
 def fixture(tmp_path):
@@ -24,6 +25,14 @@ def fixture(tmp_path):
                                                 for p in source.rglob('*') if p.is_file()}}
     (source / 'manifest.json').write_text(json.dumps(manifest))
     return source, lock
+
+
+def add_upstream_binaries(target):
+    upstream = target / 'libexec'
+    upstream.mkdir(parents=True)
+    for binary in UPSTREAM_BINARIES:
+        (upstream / binary).write_text('upstream ' + binary)
+    return upstream
 
 
 def test_bundle_rejects_tamper_unlisted_files_and_other_lock(tmp_path):
@@ -51,15 +60,47 @@ def test_single_component_install_preserves_frozen_launcher_and_runtime(tmp_path
     (target / 'core/mosdns').write_text('frozen launcher')
     (target / 'lib').mkdir()
     (target / 'lib/original-loader').write_text('frozen runtime')
-    (target / 'libexec').mkdir()
-    (target / 'libexec/dnscrypt-proxy').write_text('upstream DNSCrypt')
+    upstream = add_upstream_binaries(target)
     result = bundle['install'](source, target, lock, ['redis'])
     assert result['selected'] == ['redis']
     assert (target / 'core/mosdns').read_text() == 'frozen launcher'
     assert (target / 'lib/original-loader').read_text() == 'frozen runtime'
-    assert (target / 'libexec/dnscrypt-proxy').read_text() == 'upstream DNSCrypt'
+    assert {path.name: path.read_text() for path in upstream.iterdir()} == {
+        name: 'upstream ' + name for name in {'unbound', 'unbound-checkconf', 'dnscrypt-proxy', 'mosdns'}}
     assert not (target / 'components/unbound').exists()
     assert '$base/components/redis/bin/redis-server' in (target / 'core/redis-server').read_text()
+
+
+def test_all_selected_native_components_omit_only_superseded_upstream_binaries(tmp_path):
+    source, lock = fixture(tmp_path)
+    target = tmp_path / 'package'
+    upstream = add_upstream_binaries(target)
+    result = bundle['install'](source, target, lock, ['redis', 'unbound', 'dnscrypt'])
+    assert set(result['selected']) == {'redis', 'unbound', 'dnscrypt'}
+    assert {path.name for path in upstream.iterdir()} == {'mosdns'}
+    assert (upstream / 'mosdns').read_text() == 'upstream mosdns'
+
+
+@pytest.mark.parametrize('component', ['redis', 'unbound', 'dnscrypt'])
+@pytest.mark.parametrize('fault', ['launcher', 'line-endings', 'executable'])
+def test_native_component_omission_validates_every_binary_before_removing_any(tmp_path, component, fault):
+    source, lock = fixture(tmp_path)
+    target = tmp_path / 'package'
+    bundle['install'](source, target, lock, [component])
+    upstream = add_upstream_binaries(target)
+    entry = bundle['verify'](source, lock)['components'][component]
+    binary = sorted(bundle['NAMES'][component])[-1]
+    launcher = target / 'core' / binary
+    if fault == 'launcher':
+        launcher.write_bytes(b'upstream launcher\n')
+    elif fault == 'line-endings':
+        launcher.write_bytes(launcher.read_bytes().replace(b'\n', b'\r\n'))
+    else:
+        (target / 'components' / component / entry['binaries'][binary]).unlink()
+    with pytest.raises(ValueError, match='launcher'):
+        bundle['omit_superseded_native_component'](target, component, entry)
+    assert {path.name: path.read_text() for path in upstream.iterdir()} == {
+        name: 'upstream ' + name for name in UPSTREAM_BINARIES}
 
 
 def test_selected_native_dnscrypt_omits_only_the_shadowed_upstream_binary(tmp_path):
@@ -75,11 +116,12 @@ def test_selected_native_dnscrypt_omits_only_the_shadowed_upstream_binary(tmp_pa
     assert (target / 'components/dnscrypt/bin/dnscrypt-proxy').read_text() == 'immutable executable'
 
 
-def test_native_dnscrypt_omission_preserves_the_upstream_binary_if_the_launcher_differs(tmp_path):
+def test_legacy_dnscrypt_omission_validates_the_launcher(tmp_path):
     (tmp_path / 'core').mkdir()
     (tmp_path / 'components/dnscrypt').mkdir(parents=True)
     (tmp_path / 'libexec').mkdir()
-    (tmp_path / 'core/dnscrypt-proxy').write_text('upstream launcher')
+    launcher = tmp_path / 'core/dnscrypt-proxy'
+    launcher.write_bytes(b'upstream launcher\n')
     (tmp_path / 'components/dnscrypt/dnscrypt-proxy').write_text('reviewed DNSCrypt')
     upstream = tmp_path / 'libexec/dnscrypt-proxy'
     upstream.write_text('upstream DNSCrypt')
@@ -87,6 +129,9 @@ def test_native_dnscrypt_omission_preserves_the_upstream_binary_if_the_launcher_
     with pytest.raises(ValueError, match='launcher'):
         bundle['omit_superseded_native_dnscrypt'](tmp_path, entry)
     assert upstream.read_text() == 'upstream DNSCrypt'
+    launcher.write_bytes(bundle['wrapper']('dnscrypt', 'dnscrypt-proxy', entry).encode('utf-8'))
+    bundle['omit_superseded_native_dnscrypt'](tmp_path, entry)
+    assert not upstream.exists()
 
 
 @pytest.mark.parametrize('path', ['../escape', '/absolute', 'bin/../escape', 'bin//file', 'bin/evil"name', 'bin/evil$name'])

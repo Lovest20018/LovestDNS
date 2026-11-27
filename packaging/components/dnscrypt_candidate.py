@@ -12,11 +12,13 @@ def digest(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def verify(source):
+def verify(source, *, binary_path='dnscrypt-proxy'):
     source = Path(source)
+    if binary_path not in ('dnscrypt-proxy', 'bin/dnscrypt-proxy'):
+        raise ValueError('Unexpected DNSCrypt candidate binary path')
     lock_path = ROOT / 'packaging/dnscrypt-source.lock.json'
     lock = json.loads(lock_path.read_text())
-    manifest_path, binary = source / 'source-manifest.json', source / 'dnscrypt-proxy'
+    manifest_path, binary = source / 'source-manifest.json', source / binary_path
     if source.is_symlink() or manifest_path.is_symlink() or binary.is_symlink():
         raise ValueError('DNSCrypt candidate inputs must be regular files')
     manifest = json.loads(manifest_path.read_text())

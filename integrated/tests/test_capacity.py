@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import threading
+import time
 
 import pytest
 
@@ -27,8 +28,16 @@ def test_diagnostic_slots_apply_across_processes_and_release_after_kill(tmp_path
         child.kill()
         child.wait(timeout=5)
         child.stdout.close()
-    with slots(tmp_path, 1):
-        pass
+    # Windows can signal process exit before releasing its byte-range locks.
+    deadline = time.monotonic() + (1 if sys.platform == 'win32' else 0)
+    while True:
+        try:
+            with slots(tmp_path, 1):
+                return
+        except CapacityBusy:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
 
 
 def test_busy_diagnostic_releases_web_capacity_and_preserves_v1_envelope(client, monkeypatch, tmp_path):

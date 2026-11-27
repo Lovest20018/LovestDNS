@@ -4,7 +4,7 @@ import { dnsAddress, entryListeners } from '../dnsListeners';
 import { cacheSaveSummary, componentSummary, CORE } from '../runtimePresentation';
 import { bytes, when } from '../suiteApi';
 import type { RuntimeSnapshot } from '../suiteApi';
-import { useSuite } from '../suiteContext';
+import { useSuite, useSuiteConfig } from '../suiteContext';
 import { Empty, Section, Status } from './SuiteUI';
 import TrendChart from './TrendChart';
 import ConfigState from './ConfigState';
@@ -36,7 +36,7 @@ export default function RuntimeStatus({ tasks }: { tasks?: ReactNode }) {
 }
 
 function Component({ name, runtime }: { name: string; runtime: RuntimeSnapshot | null }) {
-  const { caps } = useSuite();
+  const { caps } = useSuiteConfig();
   const item = runtime?.components[name];
   if (!item) return <div className="suite-home-component"><strong>{name}</strong><Status value="neutral" label="未采集" /></div>;
   const summary = componentSummary(name, item);

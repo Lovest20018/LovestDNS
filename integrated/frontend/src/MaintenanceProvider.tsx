@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ApiError, errorText, suiteFetch } from './suiteApi';
 import type { MaintenanceTask } from './suiteApi';
 import { clearMaintenanceRequests, createMaintenanceRequest, pendingMaintenanceRequest, rememberMaintenanceRequest } from './maintenanceRequests';
 import { isActiveTask, MaintenanceContext, requestExpired } from './maintenanceContext';
 import type { Submission } from './maintenanceContext';
-import { useSuite } from './suiteContext';
+import { useSuiteConfig } from './suiteContext';
 
 export default function MaintenanceProvider({ instance, allowed, children }: { instance?: string; allowed: boolean; children: ReactNode }) {
-  const { paused } = useSuite();
+  const { paused } = useSuiteConfig();
   const [tasks, setTasks] = useState<MaintenanceTask[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [reading, setReading] = useState(false);
@@ -102,7 +102,7 @@ export default function MaintenanceProvider({ instance, allowed, children }: { i
   }, [allowed, instance, paused, refresh]);
   useEffect(() => () => sending.current?.abort(), [allowed, instance]);
 
-  const submit = async (action: MaintenanceTask['action'], expected: string | null = null) => {
+  const submit = useCallback(async (action: MaintenanceTask['action'], expected: string | null = null) => {
     if (!instance || !allowed || sending.current || latest.current.some(isActiveTask)) return false;
     const prior = pendingMaintenanceRequest(instance);
     if (prior && (!lookupMissing || prior.retryRejected || requestExpired(prior) || prior.action !== action || prior.expected_sha256 !== expected)) return false;
@@ -147,16 +147,17 @@ export default function MaintenanceProvider({ instance, allowed, children }: { i
       generation.current++;
       if (!abort.signal.aborted) void refresh();
     }
-  };
+  }, [instance, allowed, lookupMissing, receive, refresh]);
 
   const pending = pendingMaintenanceRequest(instance);
-  const dismissExpired = () => {
+  const dismissExpired = useCallback(() => {
+    const pending = pendingMaintenanceRequest(instance);
     if (!pending || !lookupMissing || !requestExpired(pending)) return;
     clearMaintenanceRequests();
     setLookupMissing(false);
     setSubmission(null);
-  };
-  return <MaintenanceContext.Provider value={{ tasks, loaded, reading, readError, pending, lookupMissing, submission, refresh, submit, dismissExpired }}>
-    {children}
-  </MaintenanceContext.Provider>;
+  }, [instance, lookupMissing]);
+  const value = useMemo(() => ({ tasks, loaded, reading, readError, pending, lookupMissing, submission, refresh, submit, dismissExpired }),
+    [tasks, loaded, reading, readError, pending, lookupMissing, submission, refresh, submit, dismissExpired]);
+  return <MaintenanceContext.Provider value={value}>{children}</MaintenanceContext.Provider>;
 }

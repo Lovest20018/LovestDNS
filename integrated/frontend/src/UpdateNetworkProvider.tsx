@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { errorText, softwareUpdate, softwareUpdateNetwork } from './suiteApi';
 import type { UpdateNetwork } from './suiteApi';
@@ -39,13 +39,13 @@ export default function UpdateNetworkProvider({ children }: { children: ReactNod
     }
   }, []);
 
-  const edit = (change: Partial<UpdateNetworkDraft>) => setEditor(current =>
-    current && { ...current, draft: { ...current.draft, ...change } });
-  const restore = () => {
+  const edit = useCallback((change: Partial<UpdateNetworkDraft>) => setEditor(current =>
+    current && { ...current, draft: { ...current.draft, ...change } }), []);
+  const restore = useCallback(() => {
     setEditor(current => current && { ...current, draft: draftOf(current.saved) });
     setError('');
-  };
-  const save = async () => {
+  }, []);
+  const save = useCallback(async () => {
     if (!editor || write.current) return;
     const { draft } = editor;
     write.current = true;
@@ -65,8 +65,9 @@ export default function UpdateNetworkProvider({ children }: { children: ReactNod
       write.current = false;
       setSaving(false);
     }
-  };
-  return <UpdateNetworkContext.Provider value={{
+  }, [editor]);
+  const value = useMemo(() => ({
     saved: editor?.saved ?? null, draft: editor?.draft ?? null, dirty, saving, message, error, load, edit, restore, save,
-  }}>{children}</UpdateNetworkContext.Provider>;
+  }), [editor, dirty, saving, message, error, load, edit, restore, save]);
+  return <UpdateNetworkContext.Provider value={value}>{children}</UpdateNetworkContext.Provider>;
 }

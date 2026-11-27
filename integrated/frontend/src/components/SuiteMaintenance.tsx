@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Clock, Database, FileCheck, RefreshCw } from 'lucide-react';
 import { bytes, errorText, suiteFetch, when } from '../suiteApi';
-import { useSuite } from '../suiteContext';
+import { useSuiteConfig } from '../suiteContext';
 import { dirtyFileDrafts, dirtyFileNames, subscribeFileDraft } from '../fileDrafts';
 import { configFileLabel, configFileLink } from '../configFiles';
 import { isActiveTask, requestExpired, taskLabel, TASK_NAMES, useMaintenance } from '../maintenanceContext';
@@ -33,7 +33,7 @@ function TaskResult({ task, historical = false, next = '#/diagnostics?tab=query'
 }
 
 export default function SuiteMaintenance({ caps, runtime, mode = 'system', configAction = 'all' }: { caps: Capabilities; runtime: RuntimeSnapshot | null; mode?: 'config' | 'system' | 'cache'; configAction?: 'all' | 'restart' | 'apply' }) {
-  const { error: connectionError } = useSuite();
+  const { error: connectionError } = useSuiteConfig();
   const { tasks, loaded, readError, reading, refresh, submission, pending, lookupMissing, submit, dismissExpired } = useMaintenance();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [plan, setPlan] = useState<ApplyPlan | null>(null);

@@ -11,10 +11,15 @@ export function SourceAddress({ ip, name }: { ip: string; name?: string }) {
     <span className="source-address-separator" aria-hidden="true"> · </span></span>}<code>{ip}</code></span>;
 }
 
-export function SourceDeviceEditor({ address, name = '', onClose }: { address?: string; name?: string; onClose?: () => void }) {
+export function SourceDeviceEditor({ address, name = '', onClose, draft: controlledDraft }: {
+  address?: string; name?: string; onClose?: () => void;
+  draft?: { value: string; onChange: (value: string) => void };
+}) {
   const { save } = useSourceDevices();
   const [ip, setIp] = useState(address ?? '');
-  const [draft, setDraft] = useState(name);
+  const [localDraft, setLocalDraft] = useState(name);
+  const draft = controlledDraft?.value ?? localDraft;
+  const setDraft = controlledDraft?.onChange ?? setLocalDraft;
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ text: string; error: boolean }>();
   const submit = async (value: string) => {

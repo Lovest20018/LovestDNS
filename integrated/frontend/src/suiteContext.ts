@@ -22,7 +22,7 @@ export interface SuiteState {
   refresh: () => Promise<void>; setPaused: (paused: boolean) => void;
 }
 export const SuiteContext = createContext<SuiteState | null>(null);
-export type SuiteConfigState = Pick<SuiteState, 'caps' | 'runningEnv' | 'statusError' | 'refresh' | 'error'>;
+export type SuiteConfigState = Pick<SuiteState, 'caps' | 'runningEnv' | 'statusError' | 'refresh' | 'error' | 'paused'>;
 export const SuiteConfigContext = createContext<SuiteConfigState | null>(null);
 export function useSuiteConfig() {
   const state = useContext(SuiteConfigContext);

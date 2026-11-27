@@ -13,7 +13,7 @@ import UpdateNetworkProvider from './UpdateNetworkProvider';
 import { isActiveTask, useMaintenance } from './maintenanceContext';
 import GatewayProvider from './GatewayProvider';
 import { useGateway } from './gatewayContext';
-import { useSuite } from './suiteContext';
+import { useSuite, useSuiteConfig } from './suiteContext';
 import { browserAuth, errorText, setBrowserCsrf } from './suiteApi';
 import type { BrowserSession } from './suiteApi';
 import { Status, Permission, Offline } from './components/SuiteUI';
@@ -124,18 +124,44 @@ const THEMES = {
 } as const;
 
 function Console(props: Parameters<typeof Shell>[0]) {
-  const { caps } = useSuite();
+  const { caps } = useSuiteConfig();
   return <MaintenanceProvider key={caps?.instance_id ?? ''} instance={caps?.instance_id} allowed={caps?.permissions.maintain === true}>
     <FilterProvider key={`${caps?.instance_id}-${caps?.access_role}`}><UpdateNetworkProvider><GatewayProvider><Shell {...props} /></GatewayProvider></UpdateNetworkProvider></FilterProvider>
   </MaintenanceProvider>;
 }
 
-function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: Theme; setTheme: (value: Theme) => void; onLogout: () => void; onPassword: () => void; actionError: string }) {
-  const { caps, error, runtimeError, paused, setPaused, loading, refreshing, refresh } = useSuite();
+function InstanceLink() {
+  const { caps, error, loading } = useSuite();
   const { tasks } = useMaintenance();
+  const active = tasks.some(isActiveTask);
+  return <a href="#/status" className="suite-instance"><div className="suite-instance-icon"><Network size={17} /></div><div><small>当前 DNS</small><strong title={caps?.name ?? 'LovestDNS'}>{caps?.name ?? 'LovestDNS'}</strong></div><Status value={error ? 'warning' : 'neutral'} label={error ? '失联' : active ? '维护中' : loading ? '连接中' : caps?.deployment === 'native' ? '原生' : caps ? '容器' : '等待连接'} /></a>;
+}
+
+function RefreshControls() {
+  const { paused, setPaused, refreshing, refresh } = useSuite();
+  return <div className="suite-instance-refresh" role="group" aria-label="实例状态刷新">
+    <button className="suite-refresh" onClick={() => void refresh()} disabled={refreshing} aria-busy={refreshing}
+      aria-label="刷新状态" title="刷新状态">
+      <Activity size={16} className={refreshing ? 'spin' : ''} /><span>状态刷新</span>
+    </button>
+    <button className="suite-refresh suite-refresh-toggle" onClick={() => setPaused(!paused)}
+      aria-label={paused ? '恢复自动刷新' : '暂停自动刷新'} title={paused ? '恢复自动刷新' : '暂停自动刷新'}>
+      {paused ? <Play size={16} /> : <Pause size={16} />}
+    </button>
+  </div>;
+}
+
+function RuntimeWarning() {
+  const { error, runtimeError } = useSuite();
+  const { tasks } = useMaintenance();
+  if (!runtimeError || error || tasks.some(isActiveTask)) return null;
+  return <div className="suite-global-warning"><Activity size={16} /><span>运行状态读取暂不可用。{runtimeError}</span></div>;
+}
+
+function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: Theme; setTheme: (value: Theme) => void; onLogout: () => void; onPassword: () => void; actionError: string }) {
+  const { caps, error, paused, refresh } = useSuiteConfig();
   const filter = useFilterView();
   const { settingsVisible: gatewaySettingsVisible } = useGateway();
-  const active = tasks.find(isActiveTask);
   const [hash, setHash] = useState(() => location.hash);
   const { page, tab, file, canonical } = routeFromHash(hash);
   const title = sectionTitle(page, tab);
@@ -221,7 +247,7 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
     <aside inert={narrow && !mobileOpen} ref={sidebar} id="suite-navigation" aria-label="主导航" className={`suite-sidebar ${mobileOpen ? 'is-open' : ''}`}>
       <a href="#/" className="suite-brand"><img className="suite-brand-mark" src="/lovestdns-icon.svg" alt="" /><div><strong>LovestDNS</strong><span>DNS 管理面板</span></div></a>
       <button className="suite-mobile-close" onClick={() => setMobileOpen(false)} aria-label="关闭导航"><X size={18} /></button>
-      <a href="#/status" className="suite-instance"><div className="suite-instance-icon"><Network size={17} /></div><div><small>当前 DNS</small><strong title={caps?.name ?? 'LovestDNS'}>{caps?.name ?? 'LovestDNS'}</strong></div><Status value={error ? 'warning' : 'neutral'} label={error ? '失联' : active ? '维护中' : loading ? '连接中' : caps?.deployment === 'native' ? '原生' : caps ? '容器' : '等待连接'} /></a>
+      <InstanceLink />
       <nav className="suite-nav" onClick={(event) => {
         if (!mobileOpen || !(event.target instanceof Element && event.target.closest('a')) || event.defaultPrevented) return;
         focusHeading.current = true;
@@ -245,16 +271,7 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
             aria-label={`主题：${themeLabel}，点击切换`} title={`主题：${themeLabel}`}>
             <ThemeIcon size={17} aria-hidden="true" />
           </button>
-          <div className="suite-instance-refresh" role="group" aria-label="实例状态刷新">
-            <button className="suite-refresh" onClick={() => void refresh()} disabled={refreshing} aria-busy={refreshing}
-              aria-label="刷新状态" title="刷新状态">
-              <Activity size={16} className={refreshing ? 'spin' : ''} /><span>状态刷新</span>
-            </button>
-            <button className="suite-refresh suite-refresh-toggle" onClick={() => setPaused(!paused)}
-              aria-label={paused ? '恢复自动刷新' : '暂停自动刷新'} title={paused ? '恢复自动刷新' : '暂停自动刷新'}>
-              {paused ? <Play size={16} /> : <Pause size={16} />}
-            </button>
-          </div>
+          <RefreshControls />
           <details className="suite-account" ref={account}>
             <summary><KeyRound size={16} />账户</summary>
             <div className="suite-account-menu">
@@ -266,7 +283,7 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
       </header>
       <section className="suite-content"><div className="suite-page-heading"><h1 ref={heading} tabIndex={-1}>{title}</h1></div>
         {(error || actionError) && <div className="suite-global-error"><HeartPulse size={16} /><div><strong>{error ? '连接暂时中断，草稿已保留' : '操作未完成'}</strong><p>{error || actionError}</p></div><button className="btn btn-secondary btn-sm" onClick={() => void refresh()}>重试</button></div>}
-        {runtimeError && !error && !active && page !== 'dashboard' && <div className="suite-global-warning"><Activity size={16} /><span>运行状态读取暂不可用。{runtimeError}</span></div>}
+        {page !== 'dashboard' && <RuntimeWarning />}
         {paused && <div className="suite-refresh-paused" role="status"><div><strong>自动刷新已暂停</strong><p>页面保留上次结果。进行中的维护任务会继续跟踪，DNS 查询记录沿用当前开关。</p></div></div>}
         {primaryPage === 'deploy' && caps && <nav className="suite-page-tabs" aria-label="系统设置分区">
           {caps.permissions.configure && DNS_SETTINGS.map((item) => <a key={item.page} href={item.href} aria-current={page === item.page ? 'page' : undefined}>{item.label}</a>)}

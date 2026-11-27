@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, memo, useEffect, useRef, useState } from 'react';
 import { Database, RefreshCw } from 'lucide-react';
-import { useSuite } from '../suiteContext';
+import { useSuiteConfig } from '../suiteContext';
 import { suiteFetch, errorText } from '../suiteApi';
 import { recentQueries, recordingValid } from '../queryRecords';
 import type { QueryEvent, QueryRecords, QueryRecording } from '../queryRecords';
@@ -13,6 +13,7 @@ import { filterLabels } from '../filterApi';
 import { useFilterView } from '../filterContext';
 import { navigationPosition, restoreQueryPosition, useQueryHistory } from '../queryHistory';
 import { useSourceDevices } from '../sourceDevices';
+import { useMediaQuery } from '../useMediaQuery';
 import { SourceAddress, SourceDeviceEditor } from './SourceDevices';
 import './RecentQueries.css';
 
@@ -28,8 +29,9 @@ const date = (seconds: number) => new Date(seconds * 1000).toLocaleString('zh-CN
 const RESPONSES = [['NOERROR', 'NOERROR'], ['NXDOMAIN', 'NXDOMAIN'], ['SERVFAIL', 'SERVFAIL'],
   ['REFUSED', 'REFUSED'], ['FORMERR', 'FORMERR'], ['NOTIMP', 'NOTIMP'], ['no_response_observed', '未观察到响应']];
 
-export default function RecentQueries({ route: inputRoute, navigate }: { route: DiagnosticRoute; navigate: Navigate }) {
-  const { caps, paused } = useSuite();
+function RecentQueries({ route: inputRoute, navigate }: { route: DiagnosticRoute; navigate: Navigate }) {
+  const { caps, paused } = useSuiteConfig();
+  const compact = useMediaQuery('(max-width: 700px)');
   const { devices } = useSourceDevices();
   const memory = useQueryHistory<{ expanded: string; snapshot?: number }>('queryRecords', { expanded: '' });
   const route = { ...inputRoute, snapshot: inputRoute.snapshot ?? memory.restoration?.payload.snapshot ?? null };
@@ -43,6 +45,7 @@ export default function RecentQueries({ route: inputRoute, navigate }: { route: 
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [deviceDraft, setDeviceDraft] = useState<{ dataKey: string; eventId: string; name: string } | null>(null);
   const expanded = memory.value.expanded;
   const request = useRef<AbortController | null>(null);
   const allowed = caps?.features.query_recording === true && caps.permissions.configure;
@@ -88,6 +91,7 @@ export default function RecentQueries({ route: inputRoute, navigate }: { route: 
         } : {}) } } : old);
         setConfirmClear(false);
         if (clear) {
+          setDeviceDraft(null);
           memory.write({ expanded: '' });
           memory.dismissRestoration();
           navigate({ before: null, snapshot: route.end === null ? null : route.snapshot }, true);
@@ -129,8 +133,18 @@ export default function RecentQueries({ route: inputRoute, navigate }: { route: 
     data-query-focus={`record-source:${event.id}`} href={diagnosticHash({ ...route, source: event.source_ip, before: null })}>
     <SourceAddress ip={event.source_ip} name={devices[event.source_ip]} /></a>;
   const open = (event: QueryEvent) => expanded === event.id;
-  const toggle = (event: QueryEvent) => memory.write({ ...memory.value, expanded: open(event) ? '' : event.id });
+  const toggle = (event: QueryEvent) => {
+    setDeviceDraft(null);
+    memory.write({ ...memory.value, expanded: open(event) ? '' : event.id });
+  };
+  // Keep an open device note draft when the expanded row changes layout.
+  const details = (event: QueryEvent) => <QueryDetails event={event} route={route} deviceEditor={{
+    draft: deviceDraft?.dataKey === dataKey && deviceDraft.eventId === event.id ? deviceDraft.name : null,
+    setDraft: name => setDeviceDraft(current => name !== null ? { dataKey, eventId: event.id, name }
+      : current?.dataKey === dataKey && current.eventId === event.id ? null : current),
+  }} />;
   const recent = (discardWindow = false) => {
+    setDeviceDraft(null);
     memory.write({ expanded: '' });
     memory.dismissRestoration();
     navigate({
@@ -178,8 +192,8 @@ export default function RecentQueries({ route: inputRoute, navigate }: { route: 
       const position = navigationPosition(event);
       if (position) memory.write({ expanded, snapshot: data?.snapshot }, { ...position, focus: expanded ? `record:${expanded}` : position.focus });
     }}>
-    {data?.events.length ? <>
-      <div className="suite-table-scroll query-record-desktop">
+    {!data?.events.length ? <Empty title={busy ? '正在读取查询记录' : '暂无符合条件的记录'}>{status?.enabled ? '确认客户端请求已到达当前入口，或调整筛选条件。' : '开启记录后，新的入口请求会显示在这里。'}</Empty>
+      : !compact ? <div className="suite-table-scroll query-record-desktop">
         <table className="info-table query-record-table">
           <thead><tr><th>查询域名</th><th>设备来源 / 时间</th><th>响应</th><th>观测耗时</th></tr></thead>
           <tbody>{data.events.map(event => <Fragment key={event.id}>
@@ -189,19 +203,17 @@ export default function RecentQueries({ route: inputRoute, navigate }: { route: 
               <td><strong>{responseText(event)}{event.truncated ? ' · 报文截断' : ''}</strong>
                 {event.filter?.action === 'block' && <span className="query-record-blocked">DNS 过滤拦截</span>}</td>
               <td>{elapsedText(event)}</td></tr>
-            {open(event) && <tr className="query-record-detail-row"><td colSpan={4}><QueryDetails event={event} route={route} /></td></tr>}
+            {open(event) && <tr className="query-record-detail-row"><td colSpan={4}>{details(event)}</td></tr>}
           </Fragment>)}</tbody>
         </table>
-      </div>
-      <ul className="query-record-cards" aria-label="查询记录">{data.events.map(event => <li key={event.id} className="query-record-card">
+      </div> : <ul className="query-record-cards" aria-label="查询记录">{data.events.map(event => <li key={event.id} className="query-record-card">
         <button type="button" className="query-record-expand" data-query-focus={`record:${event.id}`} aria-expanded={open(event)} onClick={() => toggle(event)}>{event.domain}</button>
         <span className="query-record-card-type">{event.record_type} · {event.transport.toUpperCase()}</span>
         <div className="query-record-card-source">{sourceLink(event)}<time>{date(event.observed_at)}</time></div>
         <dl className="query-record-card-result"><div><dt>响应</dt><dd>{responseText(event)}{event.truncated ? ' · 报文截断' : ''}
           {event.filter?.action === 'block' && <span className="query-record-blocked">DNS 过滤拦截</span>}</dd></div><div><dt>观测耗时</dt><dd>{elapsedText(event)}</dd></div></dl>
-        {open(event) && <QueryDetails event={event} route={route} />}
-      </li>)}</ul>
-    </> : <Empty title={busy ? '正在读取查询记录' : '暂无符合条件的记录'}>{status?.enabled ? '确认客户端请求已到达当前入口，或调整筛选条件。' : '开启记录后，新的入口请求会显示在这里。'}</Empty>}
+        {open(event) && details(event)}
+      </li>)}</ul>}
     </div>
     {data && <div className="suite-button-row query-record-pages"><button className="btn btn-secondary btn-sm" disabled={busy || route.before === null && (route.end !== null || route.snapshot === null)} onClick={() => recent()}>返回最近</button><button className="btn btn-secondary btn-sm" disabled={busy || data.next_before === null} onClick={() => {
       memory.write({ expanded, snapshot: data.snapshot });
@@ -220,11 +232,18 @@ export default function RecentQueries({ route: inputRoute, navigate }: { route: 
   </Section>;
 }
 
-export function QueryDetails({ event, route }: { event: QueryEvent; route: DiagnosticRoute }) {
-  const { caps } = useSuite();
+export default memo(RecentQueries);
+
+type DeviceEditor = { draft: string | null; setDraft: (name: string | null) => void };
+
+export function QueryDetails({ event, route, deviceEditor }: { event: QueryEvent; route: DiagnosticRoute; deviceEditor?: DeviceEditor }) {
+  const { caps } = useSuiteConfig();
   const { apply, task } = useFilterView();
   const { devices, allowed } = useSourceDevices();
-  const [edit, setEdit] = useState(false);
+  const [localDraft, setLocalDraft] = useState<string | null>(null);
+  const draft = deviceEditor ? deviceEditor.draft : localDraft;
+  const setDraft = deviceEditor?.setDraft ?? setLocalDraft;
+  const deviceName = devices[event.source_ip];
   const verdict = event.filter;
   const [notice, setNotice] = useState('');
   const [error, setError] = useState(false);
@@ -261,12 +280,13 @@ export function QueryDetails({ event, route }: { event: QueryEvent; route: Diagn
     <div className="query-detail-device">
       <span>设备来源</span>
       <a href={diagnosticHash({ ...route, source: event.source_ip, before: null })}>
-        <SourceAddress ip={event.source_ip} name={devices[event.source_ip]} /></a>
+        <SourceAddress ip={event.source_ip} name={deviceName} /></a>
       <span>端口 {event.source_port}</span>
-      {allowed && <button type="button" className="btn btn-secondary btn-sm" aria-expanded={edit}
-        onClick={() => setEdit(!edit)}>{devices[event.source_ip] ? '编辑备注' : '添加备注'}</button>}
+      {allowed && <button type="button" className="btn btn-secondary btn-sm" aria-expanded={draft !== null}
+        onClick={() => setDraft(draft === null ? deviceName ?? '' : null)}>{deviceName ? '编辑备注' : '添加备注'}</button>}
     </div>
-    {edit && <SourceDeviceEditor address={event.source_ip} name={devices[event.source_ip]} onClose={() => setEdit(false)} />}
+    {draft !== null && <SourceDeviceEditor address={event.source_ip} name={deviceName} onClose={() => setDraft(null)}
+      draft={{ value: draft, onChange: setDraft }} />}
     {notice && <Notice tone={error ? 'error' : undefined}>{notice}</Notice>}
     <div className="suite-button-row query-detail-actions">
     {verdict?.action === 'block' && caps?.features.dns_filter && <>

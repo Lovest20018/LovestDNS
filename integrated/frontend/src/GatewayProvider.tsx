@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { gatewayConfig } from './gatewayApi';
 import type { GatewayConfig } from './gatewayApi';
 import type { GatewayConnectionTest } from './gatewayContext';
 import { GatewayContext } from './gatewayContext';
 import { errorText } from './suiteApi';
-import { useSuite } from './suiteContext';
+import { useSuiteConfig } from './suiteContext';
 
 export default function GatewayProvider({ children }: { children: ReactNode }) {
-  const { caps } = useSuite();
+  const { caps } = useSuiteConfig();
   const setupKey = `lovestdns-gateway-setup:${caps?.instance_id ?? ''}`;
   const [setupRequested, setSetupState] = useState(() => {
     try { return sessionStorage.getItem(setupKey) === '1'; } catch { return false; }
@@ -58,6 +58,8 @@ export default function GatewayProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', load);
     };
   }, [caps?.instance_id, reload]);
-  return <GatewayContext.Provider value={{ config, loading, error, reload, connectionTest, setConnectionTest,
-    settingsVisible: config?.enabled === true || setupRequested, setSetupRequested, applyConfig }}>{children}</GatewayContext.Provider>;
+  const value = useMemo(() => ({ config, loading, error, reload, connectionTest, setConnectionTest,
+    settingsVisible: config?.enabled === true || setupRequested, setSetupRequested, applyConfig }),
+    [config, loading, error, reload, connectionTest, setupRequested, setSetupRequested, applyConfig]);
+  return <GatewayContext.Provider value={value}>{children}</GatewayContext.Provider>;
 }

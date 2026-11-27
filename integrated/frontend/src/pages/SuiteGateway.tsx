@@ -1,10 +1,10 @@
 import { useGateway } from '../gatewayContext';
-import { useSuite } from '../suiteContext';
+import { useSuiteConfig } from '../suiteContext';
 import GatewayObservation from '../components/GatewayObservation';
 import { Empty, Notice } from '../components/SuiteUI';
 
 export default function SuiteGateway() {
-  const { caps } = useSuite();
+  const { caps } = useSuiteConfig();
   const { config, loading, error, reload } = useGateway();
   return <div className="suite-page">
     {caps?.permissions.configure && <div className="suite-local-links"><a href="#/settings?tab=gateway">网关联动设置</a></div>}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ListFilter, Plus, RefreshCw, Shield } from 'lucide-react';
 import { checkFilter, filterLabels, filterPreviewHref } from '../filterApi';
 import type { FilterAction, FilterCheck, FilterSource, FilterSourceType, FilterState } from '../filterApi';
@@ -11,6 +11,7 @@ import './SuiteFiltering.css';
 
 const intervals = [[0, '仅手动'], [21600, '每 6 小时'], [86400, '每天'], [604800, '每周']] as const;
 const LOCAL_RULES_BYTES = 16 * 1024;
+const UTF8_ENCODER = new TextEncoder();
 const reasons: Record<string, string> = {
   pattern: '复杂匹配表达式', cosmetic: '元素隐藏规则', modifier: '扩展修饰符',
   hosts_rewrite: '指定 IP 的重写', invalid_domain: '域名格式无效', line_too_long: '规则行超长',
@@ -149,8 +150,9 @@ function ManualAllow({ state, blockedReason, statusId, apply }: {
   const [mode, setMode] = useState<'temporary' | 'permanent'>('temporary');
   const [search, setSearch] = useState('');
   const disabled = !!blockedReason;
-  const entries = Object.entries(state.allow).sort(([a], [b]) => a.localeCompare(b));
-  const visible = entries.filter(([name]) => name.toLowerCase().includes(search.trim().toLowerCase()));
+  const entries = useMemo(() => Object.entries(state.allow).sort(([a], [b]) => a.localeCompare(b)), [state.allow]);
+  const searchTerm = search.trim().toLowerCase();
+  const visible = useMemo(() => entries.filter(([name]) => name.toLowerCase().includes(searchTerm)), [entries, searchTerm]);
   return <>
     <p className="suite-note">精确匹配此域名，作用于整个实例。如需覆盖子域名，可在<a href="#/filter?tab=rules">本地规则</a>中添加域名例外。</p>
     <form className="dns-filter-inline" onSubmit={async event => {
@@ -193,9 +195,11 @@ function FilterEditor({ state, blockedReason, statusId, apply }: {
   const { draft, setDraft } = useFilterView();
   const { enabled, local, revision } = draft ?? { enabled: state.enabled, local: state.local_rules, revision: state.revision };
   const conflict = revision !== state.revision;
-  const ruleLines = local.split('\n').filter(line => line.trim() && !/^\s*[#!]/.test(line)).length;
-  const characters = Array.from(local).length;
-  const bytes = new TextEncoder().encode(local).length;
+  const { ruleLines, characters, bytes } = useMemo(() => ({
+    ruleLines: local.split('\n').filter(line => line.trim() && !/^\s*[#!]/.test(line)).length,
+    characters: Array.from(local).length,
+    bytes: UTF8_ENCODER.encode(local).length,
+  }), [local]);
   const tooLarge = bytes > LOCAL_RULES_BYTES;
   const reason = blockedReason || (conflict ? '请先核对活动版本，再应用草稿。' : tooLarge ? '本地规则已超出容量，请删减后应用。'
     : !draft ? '无待应用修改' : '');
