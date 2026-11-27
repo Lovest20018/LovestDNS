@@ -131,6 +131,7 @@ try {
   await go('#/system?tab=status', '运行状态');
   await wait("document.querySelectorAll('.suite-home-component').length===8");
   assert(await evaluate("!document.querySelector('.suite-home-auxiliary').open"));
+  assert(await evaluate("!!document.querySelector('[aria-label=刷新状态] svg.lucide-refresh-cw')"));
   await control({ age: 24 });
   await evaluate("document.querySelector('[aria-label=暂停自动刷新]').click()");
   await evaluate("document.querySelector('[aria-label=刷新状态]').click()");

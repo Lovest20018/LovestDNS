@@ -9,6 +9,8 @@ from flask import jsonify, request
 root = Path(__file__).resolve().parents[1]
 home = runpy.run_path(str(root / 'scripts/home-console-fixture.py'))
 server = home['server']
+home['update_network'].save(home['updates'], home['update_network'].DEFAULT, server.VERSION)
+home['seed_update']('0.2.2')
 GATEWAY_URL = 'https://192.0.2.100:18788/api/v1'
 state = {'gateway': True, 'gateway_revision': 1, 'role': 'admin', 'deployment': 'native', 'filter_refreshes': 0}
 

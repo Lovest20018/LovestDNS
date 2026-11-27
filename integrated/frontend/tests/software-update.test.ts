@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setBrowserCsrf, softwareUpdate, softwareUpdateNetwork } from '../src/suiteApi.ts';
 
-const status = { schema_version: 1, supported: true, current_version: 'test.old', phase: 'ready',
+const status = { schema_version: 1, supported: true, current_version: 'test.old', phase: 'ready', release_relation: 'newer',
   release: { version: 'test.next', archive_sha256: 'a'.repeat(64), archive_bytes: 2000, prerelease: true,
     published_at: '2026-01-01T00:00:00Z', notes: 'Fixture notes',
     url: 'https://github.com/Lovest20018/LovestDNS/releases/tag/vtest.next' } };
@@ -16,7 +16,7 @@ test('update submission uses browser CSRF and pins exactly the checked version a
     assert.equal(url, '/auth/software-update'); requests.push(init!);
     return new Response(JSON.stringify(status));
   };
-  await softwareUpdate({ action: 'check' });
+  assert.equal((await softwareUpdate({ action: 'check' })).release_relation, 'newer');
   const body = { action: 'apply' as const, version: 'test.next', archive_sha256: 'a'.repeat(64) };
   await softwareUpdate(body);
   assert.equal(requests[1].method, 'POST');
@@ -29,7 +29,7 @@ test('update submission uses browser CSRF and pins exactly the checked version a
 test('malformed update states and foreign release links cannot reach the settings UI', async (t) => {
   const original = globalThis.fetch;
   t.after(() => { globalThis.fetch = original; });
-  for (const value of [null, { ...status, phase: 'unknown' }, { ...status, message: {} },
+  for (const value of [null, { ...status, phase: 'unknown' }, { ...status, message: {} }, { ...status, release_relation: 'malformed' },
     { ...status, release: { ...status.release, archive_sha256: 'unverified' } },
     { ...status, release: { ...status.release, url: 'javascript:alert(1)' } }]) {
     globalThis.fetch = async () => new Response(JSON.stringify(value));

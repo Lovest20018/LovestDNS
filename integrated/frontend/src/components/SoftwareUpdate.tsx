@@ -20,7 +20,7 @@ export default function SoftwareUpdate({ loadedVersion }: { loadedVersion: strin
   const reading = useRef(false);
   const pollingActive = useRef(false);
   const unsaved = useSyncExternalStore(useCallback(listener => subscribeFileDraft('*', listener), []), dirtyFileDrafts);
-  const { dirty: networkDirty, saving: networkSaving } = useUpdateNetwork();
+  const { saved: network, dirty: networkDirty, saving: networkSaving } = useUpdateNetwork();
   const networkBlocked = networkDirty || networkSaving;
   const applyBlocked = unsaved || networkBlocked;
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -49,7 +49,8 @@ export default function SoftwareUpdate({ loadedVersion }: { loadedVersion: strin
     return () => { abort.abort(); clearTimeout(timer); };
   }, [refresh, jobId, networkSaving]);
   const release = status?.release;
-  const available = phase === 'ready' && !!release && release.version !== status?.current_version;
+  const available = phase === 'ready' && !!release && status?.release_relation === 'newer';
+  const message = phase === 'ready' && release && !status?.release_relation ? '请重新检查更新以核对版本。' : status?.message;
   const confirm = available && release?.archive_sha256 === confirmDigest;
   const submit = async (action: 'check' | 'apply') => {
     if (active || submitting || networkBlocked || (action === 'apply' && (!available || applyBlocked))) return;
@@ -71,12 +72,15 @@ export default function SoftwareUpdate({ loadedVersion }: { loadedVersion: strin
     {!status && !error && <p className="suite-muted">正在读取更新状态…</p>}
     {status?.supported === false && <Notice tone="info">{status.reason}</Notice>}
     {status?.supported && <>
-      <div className="suite-software-versions"><div><span>当前版本</span><strong>{status.current_version}</strong></div>
-        {release && <div><span>最新发布{release.prerelease ? ' · 预发布版' : ''}</span><strong>{release.version}</strong></div>}</div>
+      <div className="suite-software-versions">
+        <div><span>当前版本</span><strong>{status.current_version}</strong></div>
+        {release && <div><span>最新发布{release.prerelease ? ' · 预发布版' : ''}</span><strong>{release.version}</strong></div>}
+        {network && <div><span>更新通道</span><strong>{network.channel === 'stable' ? '仅正式版' : '包含预览版'}</strong></div>}
+      </div>
       <p className="suite-muted">安装前校验官方安装包并备份现有配置与数据。升级时 DNS 和网页会短暂重启，失败时尝试恢复原版本；关闭网页不会中断任务。</p>
       {networkBlocked && <Notice tone="warning">{networkSaving ? '正在保存更新设置并提交检查。' : '更新设置有未保存的修改。请保存或还原后继续。'}</Notice>}
-      {(active || status.message) && <Notice tone={phase === 'failed' ? 'error' : 'info'}>
-        {active && <strong>{PHASES[phase]} · </strong>}{status.message}
+      {(active || message) && <Notice tone={phase === 'failed' ? 'error' : 'info'}>
+        {active && <strong>{PHASES[phase]} · </strong>}{message}
         {active && error && <span> 正在等待服务恢复，页面会继续读取结果。</span>}
       </Notice>}
       {status.checked_at && <p className="suite-muted">上次检查：{new Date(status.checked_at * 1000).toLocaleString()}</p>}
@@ -88,7 +92,7 @@ export default function SoftwareUpdate({ loadedVersion }: { loadedVersion: strin
           <p>确认更新到 <strong>{release!.version}</strong>？{release!.prerelease && '这是预发布版本。'}升级会短暂重启 DNS 与网页服务。</p>
           <div><button className="btn btn-primary" disabled={submitting || applyBlocked} onClick={() => void submit('apply')}>确认更新并重启</button>
             <button className="btn btn-secondary" disabled={submitting} onClick={() => setConfirmDigest('')}>取消</button></div>
-        </div> : <button className="btn btn-primary" disabled={submitting || applyBlocked} onClick={() => setConfirmDigest(release!.archive_sha256)}>更新到此版本</button>}
+        </div> : <button className="btn btn-primary" disabled={submitting || applyBlocked} onClick={() => setConfirmDigest(release!.archive_sha256)}>升级到 {release!.version}</button>}
       </div>}
       {phase === 'succeeded' && status.current_version !== versionAtMount && <button className="btn btn-primary" onClick={() => window.location.reload()}>刷新页面使用新版本</button>}
     </>}

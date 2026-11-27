@@ -220,10 +220,10 @@ function RecentQueries({ route: inputRoute, navigate }: { route: DiagnosticRoute
       navigate({ before: data.next_before, snapshot: data.snapshot ?? route.snapshot });
     }}>查看较早记录</button></div>}
     <details className="suite-editor-help" ref={manage}><summary>采集管理{status && ` · ${PHASE[status.phase]}`}</summary>
-      {status && <><div className="query-recording-status"><div><strong>{PHASE[status.phase]}</strong><span>{status.retained_rows.toLocaleString()} 条 · 数据库 {(status.database_bytes / 1048576).toFixed(1)} MiB</span></div><div className="suite-button-row"><button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void change()}>{status.enabled ? '关闭记录' : '开启记录'}</button><button className="btn btn-secondary btn-sm" disabled={busy || !status.retained_rows} onClick={() => setConfirmClear(true)}>清空记录</button></div></div>
+      {status && <><div className="query-recording-status"><div><strong>{PHASE[status.phase]}</strong><span>{status.retained_rows.toLocaleString()} 条 · 数据库 {(status.database_bytes / 1048576).toFixed(1)} MiB</span></div><div className="suite-button-row"><button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void change()}>{status.enabled ? '关闭记录' : '开启记录'}</button><button className="btn btn-danger btn-sm" disabled={busy || !status.retained_rows} onClick={() => setConfirmClear(true)}>清空记录</button></div></div>
         {!status.enabled && <Notice>开启后会保存来源 IP 和查询域名。关闭记录会保留已有记录，仍按保留期限清理。</Notice>}
         {status.phase === 'unavailable' && <Notice tone="warning">当前 DNS 入口的记录不可用。请检查 DNS 入口、采集服务及权限。</Notice>}
-        {confirmClear && <Notice tone="warning"><p>清空全部查询记录及等待中的采集事件？</p><div className="suite-button-row"><button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => void change(true)}>确认清空记录</button><button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setConfirmClear(false)}>取消</button></div></Notice>}
+        {confirmClear && <Notice tone="warning"><p>清空全部查询记录及等待中的采集事件？</p><div className="suite-button-row"><button className="btn btn-danger btn-sm" disabled={busy} onClick={() => void change(true)}>确认清空记录</button><button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => setConfirmClear(false)}>取消</button></div></Notice>}
       </>}
       <p className="suite-note">来源为 DNS 入口看到的 IP，路由器代转时可能只显示路由器。UDP 与 TCP 查询分别计数。MosDNS 事件记录核心处理时间，报文采集记录请求与应答之间的间隔。</p>
       <p className="suite-note">最多保留 24 小时及 100,000 条，数据库上限 31 MiB，总存储预算 64 MiB。每条最多展示 4 个 A / AAAA 地址。</p>

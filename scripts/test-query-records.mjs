@@ -256,8 +256,10 @@ try {
   }
   const mobileRowCount = "document.querySelectorAll('.query-record-card').length";
   await click('管理采集');
+  assert(await evaluate("getComputedStyle(document.querySelector('.suite-editor-help > summary'), '::before').content === '\"\"'"));
   await click('关闭记录'); await wait("document.body.textContent.includes('未开启查询记录')");
   assert.equal(await evaluate(mobileRowCount), 50);
+  assert(await evaluate("[...document.querySelectorAll('button.btn-danger')].some(b=>b.textContent.trim()==='清空记录')"));
   await click('清空记录'); await click('取消');
   assert.equal(await evaluate(mobileRowCount), 50);
   await click('清空记录'); await click('确认清空记录');

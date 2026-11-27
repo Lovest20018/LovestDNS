@@ -162,6 +162,7 @@ export interface SoftwareUpdateStatus {
   schema_version: 1; supported: boolean; current_version: string; reason?: string;
   phase?: SoftwareUpdatePhase; job_id?: string | null; action?: 'check' | 'apply' | null;
   release?: SoftwareRelease | null; checked_at?: number | null; message?: string;
+  release_relation?: 'newer' | 'same' | 'older' | 'unknown' | null;
   installed_version?: string; previous_version_healthy?: boolean; healthy?: boolean;
 }
 export async function softwareUpdate(body?: { action: 'check' } | { action: 'apply'; version: string; archive_sha256: string }, signal?: AbortSignal): Promise<SoftwareUpdateStatus> {
@@ -184,6 +185,7 @@ export async function softwareUpdate(body?: { action: 'check' } | { action: 'app
     && release.url === `https://github.com/Lovest20018/LovestDNS/releases/tag/v${release.version}`);
   if (!value || value.schema_version !== 1 || typeof value.supported !== 'boolean' || typeof value.current_version !== 'string'
       || (value.reason !== undefined && typeof value.reason !== 'string')
+      || (value.release_relation != null && !['newer', 'same', 'older', 'unknown'].includes(value.release_relation))
       || (value.supported && (!releaseValid || (value.message !== undefined && typeof value.message !== 'string')
           || !['idle', 'queued', 'checking', 'ready', 'downloading', 'verifying', 'installing', 'succeeded', 'failed'].includes(value.phase)))) {
     throw new Error('软件更新状态格式无效');

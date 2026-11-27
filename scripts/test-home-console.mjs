@@ -304,8 +304,8 @@ try{
  await e("const channel=document.querySelector('.suite-update-network select'); channel.value='stable'; channel.dispatchEvent(new Event('change',{bubbles:true}))");
  await wait("document.querySelector('.suite-update-network').textContent.includes('更新网络有未保存的修改')");
 
- await wait("document.body.textContent.includes('更新设置有未保存的修改') && document.body.textContent.includes('0.1.2-dev.synthetic')");
- assert(await e("['检查更新','更新到此版本'].every(label=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===label&&b.disabled))"));
+ await wait("document.body.textContent.includes('更新设置有未保存的修改') && document.body.textContent.includes('9.9.9-rc.1')");
+ assert(await e("['检查更新','升级到 9.9.9-rc.1'].every(label=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===label&&b.disabled))"));
  await e("location.hash='#/settings?tab=service'");
  await wait("!!document.querySelector('.suite-build-details')");
  await e("history.back()");
@@ -314,7 +314,7 @@ try{
  await click('还原修改');
  await wait("document.querySelector('.suite-update-network select')?.value==='preview'");
 
- await wait("['检查更新','更新到此版本'].every(label=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===label&&!b.disabled))");
+ await wait("['检查更新','升级到 9.9.9-rc.1'].every(label=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===label&&!b.disabled))");
  assert.equal((await control({},'/fixture/home-control')).update_queued,false,'navigation and draft restoration must not queue an update');
  for(const width of [390,320]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:1000,deviceScaleFactor:1,mobile:false});

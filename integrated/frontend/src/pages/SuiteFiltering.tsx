@@ -371,11 +371,11 @@ function Subscription({ source, live, disabledBy, apply }: {
       <Interval value={interval} disabled={disabled} onChange={setInterval} />
       <button className="btn btn-secondary btn-sm" disabled={disabled || unchanged} aria-describedby={disabledBy ?? (unchanged ? status : undefined)}
         onClick={() => save(false)}>保存订阅设置</button>
-      <button className="btn btn-secondary btn-sm" disabled={disabled} aria-describedby={disabledBy} onClick={() => setConfirm(!confirm)}>移除</button>
+      <button className="btn btn-danger btn-sm" disabled={disabled} aria-describedby={disabledBy} onClick={() => setConfirm(!confirm)}>移除</button>
     </div>
     {unchanged && !disabled && <p className="suite-note" id={status}>订阅设置暂无修改。</p>}
     {confirm && <Notice tone="warning">移除此订阅会重新计算域名规则。
-      <button className="btn btn-secondary btn-sm" disabled={disabled} aria-describedby={disabledBy} onClick={() => save(true)}>确认移除</button>
+      <button className="btn btn-danger btn-sm" disabled={disabled} aria-describedby={disabledBy} onClick={() => save(true)}>确认移除</button>
     </Notice>}</details>
     <button className="btn btn-secondary btn-sm" disabled={disabled} aria-describedby={disabledBy}
       onClick={() => void apply({ action: 'refresh', id: source.id })}><RefreshCw size={13} />刷新订阅</button></div>

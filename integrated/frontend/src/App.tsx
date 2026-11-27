@@ -1,8 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Activity, Boxes, ChevronRight, FileCog, HeartPulse, KeyRound,
-  LogOut, Monitor, Moon, Network, Pause, Play, ScrollText, Shield, Sun, X,
+  Activity, ChevronRight, FileCog, HeartPulse, KeyRound,
+  LogOut, Menu, Monitor, Moon, Network, Pause, Play, RefreshCw, ScrollText, Shield, Sun, X,
 } from 'lucide-react';
 import { useFilterView } from './filterContext';
 import { FilterProvider } from './FilterProvider';
@@ -142,7 +142,7 @@ function RefreshControls() {
   return <div className="suite-instance-refresh" role="group" aria-label="实例状态刷新">
     <button className="suite-refresh" onClick={() => void refresh()} disabled={refreshing} aria-busy={refreshing}
       aria-label="刷新状态" title="刷新状态">
-      <Activity size={16} className={refreshing ? 'spin' : ''} /><span>状态刷新</span>
+      <RefreshCw size={16} className={refreshing ? 'spin' : ''} aria-hidden="true" /><span>状态刷新</span>
     </button>
     <button className="suite-refresh suite-refresh-toggle" onClick={() => setPaused(!paused)}
       aria-label={paused ? '恢复自动刷新' : '暂停自动刷新'} title={paused ? '恢复自动刷新' : '暂停自动刷新'}>
@@ -260,7 +260,7 @@ function Shell({ theme, setTheme, onLogout, onPassword, actionError }: { theme: 
       <header className="suite-topbar">
         <button ref={menuButton} aria-controls="suite-navigation" aria-expanded={mobileOpen} className="suite-mobile-menu"
           onClick={() => { if (account.current) account.current.open = false; setMobileOpen(true); }} aria-label="打开导航">
-          <Boxes size={19} />
+          <Menu size={19} aria-hidden="true" />
         </button>
         <div className="suite-breadcrumb">
           {breadcrumbTitle !== TITLES[primaryPage] && <><span>{TITLES[primaryPage]}</span><ChevronRight size={14} /></>}

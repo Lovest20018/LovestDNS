@@ -23,10 +23,10 @@ def updates(client, monkeypatch):
     return root
 
 
-def checked(root):
-    release = {'version': 'test.next', 'archive_sha256': 'a' * 64, 'archive_bytes': 1234,
+def checked(root, version='9.9.9-rc.1'):
+    release = {'version': version, 'archive_sha256': 'a' * 64, 'archive_bytes': 1234,
                'prerelease': True, 'published_at': '2026-01-01T00:00:00Z',
-               'url': 'https://github.com/Lovest20018/LovestDNS/releases/tag/vtest.next', 'notes': 'Test release'}
+               'url': f'https://github.com/Lovest20018/LovestDNS/releases/tag/v{version}', 'notes': 'Test release'}
     update.atomic_json(root / 'status.json', {'phase': 'ready', 'checked_at': time.time(), 'release': release})
     return {'action': 'apply', 'version': release['version'], 'archive_sha256': release['archive_sha256']}
 
@@ -86,6 +86,7 @@ def test_apply_is_pinned_to_fresh_check_and_blocks_config_writes_only_during_upg
     payload = checked(updates)
     changed = {**payload, 'archive_sha256': 'b' * 64}
     assert api.post('/auth/software-update', json=changed, headers={'X-CSRF-Token': csrf}).status_code == 400
+    assert api.get('/auth/software-update').get_json()['release_relation'] == 'newer'
     result = api.post('/auth/software-update', json=payload, headers={'X-CSRF-Token': csrf})
     assert result.status_code == 202
     blocked = api.put('/api/v1/file/custom_env.ini', json={'content': 'CNAUTO="no"\n'}, headers={'X-CSRF-Token': csrf})
@@ -104,7 +105,46 @@ def test_expired_check_cannot_be_applied(updates):
     status = update.read_json(updates / 'status.json')
     update.atomic_json(updates / 'status.json', {**status, 'checked_at': time.time() - 3601})
     with pytest.raises(update.UpdateError, match='重新检查'):
-        update.queue(updates, payload, 'test.old')
+        update.queue(updates, payload, '0.2.3-rc.1')
+
+
+@pytest.mark.parametrize(('version', 'relation', 'message'), [
+    ('0.2.2', 'older', '当前版本高于所选通道的最新版本'),
+    ('0.2.3-rc.1', 'same', '当前版本已是所选通道的最新版本'),
+    ('test.next', 'unknown', '暂无法比较版本'),
+])
+def test_web_update_only_accepts_a_newer_release(client, updates, monkeypatch, version, relation, message):
+    monkeypatch.setattr(server, 'VERSION', '0.2.3-rc.1')
+    csrf = provision(client)
+    payload = checked(updates, version)
+    original = update.read_json(updates / 'status.json')
+    update.atomic_json(updates / 'status.json', {**original, 'message': '发现可更新版本'})
+
+    api = client[0]
+    response = api.get('/auth/software-update')
+    assert response.status_code == 200
+    result = response.get_json()
+    assert result['release_relation'] == relation
+    assert message in result['message']
+    assert result['release']['version'] == version
+
+    response = api.post('/auth/software-update', json=payload, headers={'X-CSRF-Token': csrf})
+    assert response.status_code == 400
+    assert message in response.get_json()['error']
+    assert not (updates / 'request.json').exists()
+
+
+@pytest.mark.parametrize(('current', 'candidate', 'relation'), [
+    ('0.2.3-rc.2', '0.2.3-rc.10', 'newer'),
+    ('0.2.3-rc.10', '0.2.3-rc.2', 'older'),
+    ('0.2.3-rc.2', '0.2.3', 'newer'),
+    ('0.2.3', '0.2.3-rc.2', 'older'),
+    ('0.2.3+one', '0.2.3+two', 'same'),
+    ('0.2.3-rc.2', '0.2.3-rc.02', 'unknown'),
+    ('custom-build', '0.2.3', 'unknown'),
+])
+def test_release_relation_uses_semantic_version_precedence(current, candidate, relation):
+    assert update.release_relation(current, candidate) == relation
 
 
 def test_cross_worker_queue_admits_one_job(updates):

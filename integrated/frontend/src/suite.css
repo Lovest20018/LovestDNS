@@ -282,6 +282,7 @@ body { min-width: 0; }
   color: var(--suite-ink);
   transition-property: box-shadow;
 }
+.suite-app select { appearance: auto; padding-inline-end: 12px; }
 .suite-app .form-input:focus,.suite-app .form-select:focus,.suite-app .textarea-code:focus {
   border-color: var(--suite-accent);
   box-shadow: 0 0 0 3px var(--suite-accent-ring);
@@ -360,6 +361,8 @@ body { min-width: 0; }
 .suite-app .tab-item.active { background: var(--suite-accent-solid); color: var(--suite-accent-on-solid); box-shadow: none; }
 .suite-app .btn-primary:not(:disabled):hover { background: var(--suite-accent-solid-hover); }
 .suite-app .btn-secondary:not(:disabled):hover { background: var(--suite-panel-soft); border-color: var(--suite-muted); }
+.suite-app .btn-danger { color: var(--suite-red); border-color: var(--suite-red); background: var(--suite-panel); }
+.suite-app .btn-danger:not(:disabled):hover { background: color-mix(in srgb, var(--suite-red) 11%, var(--suite-panel)); }
 .suite-app :is(.form-input,.textarea-code)::placeholder { color: var(--suite-muted); opacity: 1; }
 .suite-status i { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--suite-muted); }
 .suite-status.is-good i { background: var(--suite-green); box-shadow: 0 0 0 4px color-mix(in srgb,var(--suite-green) 12%,transparent); }
@@ -497,8 +500,20 @@ body { min-width: 0; }
 .suite-editor-result.is-error { color: var(--suite-red); }
 .suite-editor-actions > .btn-primary { display: none; }
 .suite-editor-help { min-width: 0; }
-.suite-editor-help summary { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
-.suite-editor-help[open] summary { margin-bottom: 16px; }
+.suite-editor-help > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: 600; }
+.suite-editor-help > summary::-webkit-details-marker { display: none; }
+.suite-editor-help > summary::before {
+  content: '';
+  flex: none;
+  width: .45em;
+  height: .45em;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+.suite-editor-help > summary:hover { color: var(--suite-link); }
+.suite-editor-help[open] > summary { margin-bottom: 16px; }
+.suite-editor-help[open] > summary::before { transform: rotate(45deg); }
 .suite-editor-help .info-table,.suite-table-scroll { display: block; max-width: 100%; overflow-x: auto; }
 .suite-file-tabs .tab-item { min-height: 44px; }
 .suite-query-endpoint { grid-template-columns: minmax(0,2fr) minmax(80px,1fr) minmax(90px,1fr); }

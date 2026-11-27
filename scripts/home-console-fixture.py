@@ -27,13 +27,19 @@ updates.mkdir()
 os.environ['LOVESTDNS_UPDATE_DIR'] = str(updates)
 software_update.atomic_json(updates / 'protocol.json', {'schema_version': 1})
 update_network.save(updates, {**update_network.DEFAULT, 'channel': 'preview'}, server.VERSION)
-software_update.atomic_json(updates / 'status.json', {
-    'phase': 'ready', 'checked_at': time.time(), 'release': {
-        'version': '0.1.2-dev.synthetic', 'archive_sha256': 'a' * 64, 'archive_bytes': 1024, 'prerelease': True,
-        'notes': 'Synthetic browser fixture', 'published_at': '2026-11-18T00:00:00Z',
-        'url': 'https://github.com/Lovest20018/LovestDNS/releases/tag/v0.1.2-dev.synthetic',
-    },
-})
+
+
+def seed_update(version):
+    software_update.atomic_json(updates / 'status.json', {
+        'phase': 'ready', 'checked_at': time.time(), 'release': {
+            'version': version, 'archive_sha256': 'a' * 64, 'archive_bytes': 1024, 'prerelease': '-' in version,
+            'notes': 'Synthetic browser fixture', 'published_at': '2026-11-18T00:00:00Z',
+            'url': f'https://github.com/Lovest20018/LovestDNS/releases/tag/v{version}',
+        },
+    })
+
+
+seed_update('9.9.9-rc.1')
 
 
 @server.app.post('/fixture/home-control')

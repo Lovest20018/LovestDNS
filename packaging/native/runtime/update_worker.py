@@ -87,8 +87,9 @@ def apply(root, p, value, instance, *, opener, channel='stable'):
             or not protocol.DIGEST.fullmatch(value['archive_sha256'])):
         raise protocol.UpdateError('待更新版本或摘要无效')
     previous = installed_version(p['home'])
-    if previous != value['previous_version'] or previous == value['version']:
+    if previous != value['previous_version']:
         raise protocol.UpdateError('当前安装版本已变化，请重新检查更新')
+    protocol.require_upgrade(previous, value['version'])
     release = protocol.checked_release(value['version'], opener=opener, channel=channel)
     if release['archive_sha256'] != value['archive_sha256']:
         raise protocol.UpdateError('发行版摘要在确认后发生变化，请重新检查更新')
@@ -153,7 +154,8 @@ def run(p, instance):
         if value['action'] == 'check':
             release = protocol.checked_release(opener=transport, channel=profile['channel'])
             current = installed_version(p['home'])
-            change(root, value, 'ready', '已是最新发布版本' if release['version'] == current else '发现可更新版本',
+            relation = protocol.release_relation(current, release['version'])
+            change(root, value, 'ready', protocol.RELEASE_MESSAGES[relation],
                    release=release, checked_at=time.time(), finished_at=time.time())
         else:
             apply(root, p, value, instance, opener=transport, channel=profile['channel'])

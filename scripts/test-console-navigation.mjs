@@ -386,12 +386,14 @@ try {
   await click('保存并启用');
   await wait("document.body?.textContent.includes('联动已启用')");
   assert.equal((await gatewayConfig()).enabled, true);
+  assert(await evaluate("[...document.querySelectorAll('button.btn-danger')].some(b=>b.textContent.trim()==='断开并清除凭据')"));
   await click('断开并清除凭据');
   await wait(`location.hash === '#/settings?tab=external' && !document.querySelector('${gatewayTab}')`);
   assert.equal((await gatewayConfig()).has_token, false);
   await wait(`document.querySelector('${gatewayToggle}')?.disabled === false`);
   await screenshot('gateway-opt-in-1280-light.png');
   await go('#/diagnostics?tab=query', '主动查询');
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('select.form-select')).appearance"), 'auto');
   assert(!await evaluate(`document.querySelector('.suite-diagnostic-tabs a[href="#/diagnostics?tab=gateway"]')`));
   await go('#/gateway', '网关观测');
   await wait("location.hash==='#/diagnostics?tab=gateway'");
@@ -400,9 +402,14 @@ try {
   await go('#/system?tab=updates', '软件更新');
   await wait("location.hash==='#/settings?tab=updates'");
   await wait("document.querySelector('.suite-update-notes')?.textContent.includes('Synthetic browser fixture')");
+  await wait("document.querySelector('.suite-software-versions')?.textContent.includes('仅正式版')");
+  assert(await evaluate("document.querySelector('.suite-software-versions').textContent.includes('0.2.2')"));
+  assert(await evaluate("document.body.textContent.includes('当前版本高于所选通道的最新版本') && !document.querySelector('.suite-update-actions')"));
+  await screenshot('update-older-release-1280-light.png');
   await evaluate("document.querySelector('.suite-update-network-panel').open=true");
-  await wait("document.querySelector('.suite-update-network-panel select')?.value==='preview'");
-  await evaluate("const select=document.querySelector('.suite-update-network-panel select');select.value='stable';select.dispatchEvent(new Event('change',{bubbles:true}))");
+  await wait("document.querySelector('.suite-update-network-panel select')?.value==='stable'");
+  assert.equal(await evaluate("getComputedStyle(document.querySelector('.suite-update-network-panel select')).appearance"), 'auto');
+  await evaluate("const select=document.querySelector('.suite-update-network-panel select');select.value='preview';select.dispatchEvent(new Event('change',{bubbles:true}))");
   await evaluate("const mode=document.querySelectorAll('.suite-update-network-panel select')[1];mode.value='socks5';mode.dispatchEvent(new Event('change',{bubbles:true}))");
   await wait("document.querySelector('.suite-update-proxy-fields input')");
   await change('.suite-update-proxy-fields input[placeholder]', '192.0.2.10');
@@ -410,7 +417,7 @@ try {
   await click('保存并检查更新');
   await wait("document.body?.textContent.includes('已提交版本检查')");
   const updateSettings = await (await fetch(origin + '/fixture/navigation-state')).json();
-  assert.deepEqual(updateSettings.network, { channel: 'stable', mode: 'socks5', host: '192.0.2.10', port: 1080 });
+  assert.deepEqual(updateSettings.network, { channel: 'preview', mode: 'socks5', host: '192.0.2.10', port: 1080 });
   await nav('广告过滤');
   await wait("document.querySelector('.suite-page-heading h1')?.textContent==='拦截记录'");
   assert.equal((await (await fetch(origin + '/fixture/navigation-state')).json()).filter_refreshes, 0);
@@ -482,6 +489,7 @@ try {
   await send('Page.reload');
   await wait(`performance.timeOrigin !== ${previousAdminPage} && document.querySelector('${settingsNav}')`);
   assert.deepEqual(await settingsLinks(), ['服务信息']);
+  assert(await evaluate("!!document.querySelector('[aria-label=打开导航] svg.lucide-menu')"));
   await evaluate("document.querySelector('[aria-label=打开导航]').click()");
   await nav('系统设置');
   await wait("location.hash==='#/settings?tab=service'");

@@ -18,6 +18,15 @@ MAX_ARCHIVE = 256 * 1024 * 1024
 BUSY = {'queued', 'checking', 'downloading', 'verifying', 'installing'}
 VERSION = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,119}')
 DIGEST = re.compile(r'[a-f0-9]{64}')
+SEMVER = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+                    r'(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?'
+                    r'(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?')
+RELEASE_MESSAGES = {
+    'newer': '发现可更新版本',
+    'same': '当前版本已是所选通道的最新版本',
+    'older': '当前版本高于所选通道的最新版本',
+    'unknown': '暂无法比较版本，请在主机核对安装版本',
+}
 
 
 class UpdateError(ValueError):
@@ -26,6 +35,40 @@ class UpdateError(ValueError):
 
 class UpdateBusy(UpdateError):
     pass
+
+
+def _version_precedence(version):
+    if not isinstance(version, str) or len(version) > 120:
+        return None
+    match = SEMVER.fullmatch(version)
+    if match is None:
+        return None
+    major, minor, patch, prerelease = match.groups()
+    order = []
+    for identifier in prerelease.split('.') if prerelease else ():
+        if identifier.isdigit():
+            if len(identifier) > 1 and identifier.startswith('0'):
+                return None
+            order.append((0, int(identifier)))
+        else:
+            order.append((1, identifier))
+    return (int(major), int(minor), int(patch)), prerelease is None, tuple(order)
+
+
+def release_relation(current, candidate):
+    installed = _version_precedence(current)
+    offered = _version_precedence(candidate)
+    if installed is None or offered is None:
+        return 'unknown'
+    if offered == installed:
+        return 'same'
+    return 'newer' if offered > installed else 'older'
+
+
+def require_upgrade(current, candidate):
+    relation = release_relation(current, candidate)
+    if relation != 'newer':
+        raise UpdateError(RELEASE_MESSAGES[relation] + '。网页更新仅支持升级到较新的版本。')
 
 
 def read_json(path, default=None):
@@ -91,9 +134,14 @@ def supported(root):
 
 def status(root, current_version):
     value = read_json(Path(root) / 'status.json', {})
-    return {'schema_version': 1, 'supported': True, 'current_version': current_version,
-            'phase': 'idle', 'job_id': None, 'action': None, 'release': None,
-            'checked_at': None, 'message': '', **value, 'current_version': current_version}
+    release = value.get('release')
+    relation = release_relation(current_version, release.get('version')) if isinstance(release, dict) else None
+    if value.get('phase') == 'ready' and relation is not None:
+        # Re-evaluate checks retained from before a host-side upgrade.
+        value['message'] = RELEASE_MESSAGES[relation]
+    return {'schema_version': 1, 'supported': True, 'phase': 'idle', 'job_id': None, 'action': None,
+            'release': None, 'checked_at': None, 'message': '', **value,
+            'current_version': current_version, 'release_relation': relation}
 
 
 def queue(root, body, current_version):
@@ -116,9 +164,10 @@ def queue(root, body, current_version):
                     or not isinstance(body['archive_sha256'], str) or not DIGEST.fullmatch(body['archive_sha256'])
                     or release.get('version') != body['version']
                     or release.get('archive_sha256') != body['archive_sha256']
-                    or body['version'] == current_version or not previous.get('checked_at')
+                    or not previous.get('checked_at')
                     or time.time() - previous['checked_at'] > 3600):
                 raise UpdateError('请先重新检查更新，再确认已校验的新版本')
+            require_upgrade(current_version, body['version'])
         job = {'job_id': secrets.token_hex(16), 'action': action, 'created_at': time.time(),
                'previous_version': current_version}
         if action == 'apply':
