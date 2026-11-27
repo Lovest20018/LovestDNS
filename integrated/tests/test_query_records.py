@@ -1,5 +1,6 @@
 import ipaddress
 import json
+import os
 import queue
 import sqlite3
 import struct
@@ -334,6 +335,39 @@ def test_source_devices_are_normalized_persistent_and_instance_scoped(client, mo
         assert reopened.get(path, headers=AUTH).get_json()['data'] == second
     assert api.put(path, json={**body, 'name': '改名'}, headers=csrf).get_json()['data']['devices']['2001:db8::8'] == '改名'
     assert api.put(path, json={**body, 'name': ''}, headers=csrf).get_json()['data']['devices'] == {'192.0.2.8': '客厅电视'}
+
+
+def test_source_devices_database_initializes_once_per_inode(client, sqlite_trace):
+    api, _, state = client
+    route = '/api/v1/source-devices'
+    assert api.put(route, headers=AUTH, json={'ip': '192.0.2.3', 'name': 'test device'}).status_code == 200
+    path = state / 'source-devices.sqlite'
+    if os.name == 'posix':
+        assert path.stat().st_mode & 0o777 == 0o600
+    sqlite_trace.clear()
+    assert api.get(route, headers=AUTH).get_json()['data']['devices'] == {'192.0.2.3': 'test device'}
+    assert any(sql == 'SELECT ip, name FROM devices' for sql in sqlite_trace)
+    assert all(sql.startswith('SELECT ') for sql in sqlite_trace)
+
+    replacement = state / 'replacement.sqlite'
+    replacement.touch()
+    replacement.replace(path)
+    assert api.get(route, headers=AUTH).get_json()['data']['devices'] == {}
+
+
+def test_source_devices_database_rejects_symlink_after_initialization(client, file_symlink):
+    api, _, state = client
+    route = '/api/v1/source-devices'
+    body = {'ip': '192.0.2.3', 'name': 'test device'}
+    assert api.put(route, headers=AUTH, json=body).status_code == 200
+    path = state / 'source-devices.sqlite'
+    target = state / 'other.sqlite'
+    path.rename(target)
+    file_symlink(path, target)
+    assert api.get(route, headers=AUTH).status_code == 500
+    assert api.put(route, headers=AUTH, json={**body, 'name': 'changed'}).status_code == 500
+    with sqlite3.connect(target) as db:
+        assert db.execute('SELECT name FROM devices').fetchone() == ('test device',)
 
 
 def test_live_records_can_keep_snapshot_without_a_fixed_time_window(tmp_path):

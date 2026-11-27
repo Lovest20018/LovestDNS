@@ -1,11 +1,15 @@
 from contextlib import nullcontext
 import hashlib
 import importlib.util
+from io import BytesIO
 import json
+import os
 from pathlib import Path, PurePosixPath
-import sys
 import shutil
+import socket
 import subprocess
+import sys
+import tarfile
 from types import SimpleNamespace
 
 import pytest
@@ -36,6 +40,162 @@ def test_native_payload_rejects_tamper_and_unlisted_files(tmp_path):
     (path / 'unexpected').write_text('not declared')
     with pytest.raises(ValueError, match='unexpected'):
         install.verify_package(path)
+
+
+def upgrade_archive(tmp_path, kind=None):
+    package_dir = package(tmp_path)
+    archive_path = tmp_path / 'package.tar.gz'
+    root = 'lovestdns-test.1' if kind != 'root-name' else 'other'
+
+    def add_member(archive, name, content=b'', *, mode=0o644, member_type=tarfile.REGTYPE):
+        member = tarfile.TarInfo(name)
+        member.size = len(content)
+        member.mode = mode
+        member.type = member_type
+        archive.addfile(member, BytesIO(content))
+
+    with tarfile.open(archive_path, 'w:gz') as archive:
+        for file in sorted(package_dir.iterdir()):
+            add_member(archive, f'{root}/{file.name}', file.read_bytes())
+        if kind == 'members':
+            for index in range(4095):
+                add_member(archive, f'{root}/file-{index}')
+        elif kind == 'setuid':
+            add_member(archive, f'{root}/program', mode=0o4755)
+        elif kind == 'symlink':
+            add_member(archive, f'{root}/link', member_type=tarfile.SYMTYPE)
+        elif kind in {'parent', 'absolute', 'backslash', 'colon', 'duplicate', 'second-root'}:
+            names = {'parent': f'{root}/child/../payload', 'absolute': f'/{root}/extra',
+                     'backslash': f'{root}/a\\b', 'colon': f'{root}/a:b', 'duplicate': f'{root}//./payload',
+                     'second-root': 'lovestdns-second/other'}
+            add_member(archive, names[kind])
+    return archive_path
+
+
+def run_upgrade(monkeypatch, archive, digest):
+    monkeypatch.setattr(install, 'os', SimpleNamespace(geteuid=lambda: 0, fstat=os.fstat))
+    monkeypatch.setattr(sys, 'argv', ['install.py', 'upgrade', str(archive), '--sha256', digest])
+    install.main()
+
+
+@pytest.mark.parametrize('kind,error', [
+    ('archive-size', 'package exceeds its size limit'), ('expanded-size', 'Extracted package exceeds'),
+    ('members', 'Too many native package entries'), ('setuid', 'Unsafe native package entry'),
+    ('parent', 'Unsafe native package entry'), ('absolute', 'Unsafe native package entry'),
+    ('backslash', 'Unsafe native package entry'), ('colon', 'Unsafe native package entry'),
+    ('duplicate', 'Unsafe native package entry'), ('symlink', 'Unsafe native package entry'),
+    ('second-root', 'Expected one native package directory'), ('root-name', 'Expected one native package directory'),
+    ('digest', 'SHA-256 differs'),
+])
+def test_upgrade_rejects_invalid_archive_before_extraction(tmp_path, monkeypatch, kind, error):
+    archive = upgrade_archive(tmp_path, kind)
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    if kind == 'archive-size':
+        monkeypatch.setattr(install, 'MAX_ARCHIVE', archive.stat().st_size - 1)
+    elif kind == 'expanded-size':
+        monkeypatch.setattr(install, 'MAX_EXTRACTED', 1)
+    elif kind == 'digest':
+        digest = '0' * 64
+    monkeypatch.setattr(tarfile.TarFile, 'extractall', lambda *_args, **_kwargs: pytest.fail('Extracted an invalid archive'))
+    monkeypatch.setattr(install, 'install', lambda *_: pytest.fail('Started installation from an invalid archive'))
+    with pytest.raises(ValueError, match=error):
+        run_upgrade(monkeypatch, archive, digest)
+
+
+@pytest.mark.parametrize('with_data_filter', [True, False])
+def test_upgrade_streams_checksums_and_uses_supported_extraction_filter(tmp_path, monkeypatch, with_data_filter):
+    archive = upgrade_archive(tmp_path)
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    read_bytes, extract = Path.read_bytes, tarfile.TarFile.extractall
+    installed, filters = [], []
+
+    def forbid_whole_file_reads(path):
+        assert path != archive and path.name != 'payload'
+        return read_bytes(path)
+
+    def observe_extraction(archive, *args, **kwargs):
+        filters.append(kwargs.get('filter'))
+        return extract(archive, *args, **kwargs)
+
+    def receive(args, path):
+        assert args.sha256 == digest
+        installed.append(install.verify_package(path)['version'])
+
+    if not with_data_filter:
+        monkeypatch.delattr(tarfile, 'data_filter', raising=False)
+    monkeypatch.setattr(Path, 'read_bytes', forbid_whole_file_reads)
+    monkeypatch.setattr(tarfile.TarFile, 'extractall', observe_extraction)
+    monkeypatch.setattr(install, 'install', receive)
+    run_upgrade(monkeypatch, archive, digest)
+    assert installed == ['test.1']
+    assert filters == ['data' if with_data_filter and hasattr(tarfile, 'data_filter') else None]
+
+
+def test_atomic_uses_private_unique_files_and_cleans_after_failed_replace(tmp_path, monkeypatch):
+    path = tmp_path / 'service.env'
+    path.write_text('original')
+    seen = []
+    replace = os.replace
+
+    def track(source, target):
+        temporary = Path(source)
+        assert temporary.parent == path.parent
+        if os.name == 'posix':
+            assert temporary.stat().st_mode & 0o777 == 0o640
+        seen.append(temporary)
+        if len(seen) == 1:
+            raise OSError('injected replace failure')
+        replace(source, target)
+
+    monkeypatch.setattr(os, 'replace', track)
+    with pytest.raises(OSError, match='injected'):
+        install.atomic(path, 'failed', 0o640)
+    assert path.read_text() == 'original'
+    assert list(tmp_path.iterdir()) == [path]
+    install.atomic(path, 'saved', 0o640)
+    assert path.read_text() == 'saved' and seen[0] != seen[1]
+
+
+def test_atomic_refuses_symbolic_links(tmp_path):
+    target = tmp_path / 'target'
+    target.write_text('original')
+    path = tmp_path / 'service.env'
+    try:
+        path.symlink_to(target)
+    except OSError:
+        if os.name == 'nt':
+            pytest.skip('file symlinks unavailable')
+        raise
+    with pytest.raises(ValueError, match='symbolic-link'):
+        install.atomic(path, 'changed')
+    assert path.is_symlink() and target.read_text() == 'original'
+
+
+def test_preflight_enables_reuse_only_for_tcp(monkeypatch):
+    probes = []
+
+    class Socket:
+        def __init__(self, family, kind):
+            self.kind = kind
+            self.options = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def setsockopt(self, level, option, value):
+            self.options.append((level, option, value))
+
+        def bind(self, address):
+            probes.append((self.kind, address, self.options))
+
+    monkeypatch.setattr(install.socket, 'socket', Socket)
+    install.preflight_ports({**install.DEFAULTS, 'CNAUTO': 'no'})
+    reuse = [(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)]
+    assert probes == [(socket.SOCK_STREAM, ('127.0.0.1', 8123), reuse),
+                      (socket.SOCK_STREAM, ('0.0.0.0', 53), reuse), (socket.SOCK_DGRAM, ('0.0.0.0', 53), [])]
 
 
 def test_native_health_uses_private_collector_and_dns_without_token_api(tmp_path, monkeypatch):
@@ -109,6 +269,89 @@ def test_install_receipts_live_outside_packages_and_survive_release_selection(tm
     assert json.loads((tmp_path / 'receipts/test.2.json').read_text()) == receipt2
 
 
+def resolve_selected_release(monkeypatch, current, selected):
+    # Keep current's symlink semantics in tests without Windows symlink privileges.
+    resolve = Path.resolve
+
+    def resolve_link(path, *args, **kwargs):
+        if path == current and selected:
+            path = selected[-1]
+        return resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'resolve', resolve_link)
+
+
+@pytest.mark.parametrize('failure', ['copy', 'venv', 'self-check', 'receipt', 'readiness'])
+def test_failed_install_cleans_unselected_release_and_keeps_old(tmp_path, monkeypatch, failure):
+    package_dir = package(tmp_path)
+    p = {key: tmp_path / key for key in ('home', 'storage', 'config', 'unit', 'run', 'ctl')}
+    p['name'] = 'lovestdns-test'
+    old = p['home'] / 'releases/old'
+    old.mkdir(parents=True)
+    (old / 'manifest.json').write_text(json.dumps({'version': 'old'}))
+    (old / 'payload').write_text('active data')
+    install.installation_receipt(p, old)
+    receipt = p['home'] / 'receipts/old.json'
+    original_receipt = receipt.read_bytes()
+    install.write_env(p['config'], {**install.DEFAULTS, 'WEB_UI_TOKEN': 'local-test-token'})
+    p['unit'].write_text('old service unit')
+    current = p['home'] / 'current'
+    shutil.copytree(old, current)
+    selected, commands = [old], []
+    resolve_selected_release(monkeypatch, current, selected)
+    copytree, write_receipt = shutil.copytree, install.installation_receipt
+
+    def copy(source, target, *args, **kwargs):
+        if source == package_dir and failure == 'copy':
+            (target / 'partial').touch()
+            raise OSError('injected copy failure')
+        return copytree(source, target, *args, **kwargs)
+
+    def command(argv, **_):
+        commands.append(argv)
+        if (failure == 'venv' and argv[1:3] == ['-m', 'venv']
+                or failure == 'self-check' and Path(argv[0]).name == 'redis-server'):
+            raise RuntimeError(f'injected {failure} failure')
+
+    def record_receipt(*args):
+        write_receipt(*args)
+        if failure == 'receipt':
+            raise OSError('injected receipt failure')
+
+    def switch(link, release):
+        assert link == current
+        selected.append(release)
+
+    def healthy(_):
+        if selected[-1] != old:
+            raise RuntimeError('injected readiness failure')
+        return {'dns_responded': True}
+
+    for name, substitute in {
+        'paths': lambda _: p, 'dependencies': lambda: None, 'install_lock': lambda _: nullcontext(),
+        'is_active': lambda _: True, 'command': command, 'switch': switch, 'healthy': healthy,
+        'installation_receipt': record_receipt, 'configure_online_updater': lambda *_: None,
+    }.items():
+        monkeypatch.setattr(install, name, substitute)
+    monkeypatch.setattr(shutil, 'copytree', copy)
+    monkeypatch.setattr(shutil, 'disk_usage', lambda _: SimpleNamespace(free=1024 ** 3))
+
+    args = SimpleNamespace(instance='test', config=None, import_data=None)
+    with pytest.raises((OSError, RuntimeError), match=f'injected {failure}'):
+        install.install(args, package_dir)
+    assert current.resolve() == old
+    assert list(old.parent.iterdir()) == [old]
+    assert list(receipt.parent.iterdir()) == [receipt]
+    assert receipt.read_bytes() == original_receipt
+    assert (old / 'payload').read_text() == 'active data'
+    assert p['unit'].read_text() == 'old service unit'
+    if failure == 'readiness':
+        assert selected == [old, old.with_name('test.1'), old]
+    else:
+        assert selected == [old]
+        assert all(argv[0] != 'systemctl' for argv in commands)
+
+
 @pytest.mark.parametrize('failure', ['readiness', 'updater'])
 def test_failed_first_install_can_retry_same_version(tmp_path, monkeypatch, failure):
     package_dir = package(tmp_path)
@@ -124,6 +367,7 @@ def test_failed_first_install_can_retry_same_version(tmp_path, monkeypatch, fail
     args = SimpleNamespace(instance='test', config=None, import_data=source)
     calls, selected = [], []
     active = False
+    resolve_selected_release(monkeypatch, paths['home'] / 'current', selected)
 
     def command(argv, **_):
         nonlocal active
@@ -158,6 +402,7 @@ def test_failed_first_install_can_retry_same_version(tmp_path, monkeypatch, fail
         install.install(args, package_dir)
     assert not active and not paths['ctl'].exists()
     assert (paths['home'] / 'current/manifest.json').is_file()
+    assert selected[0].is_dir() and (paths['home'] / 'receipts/test.1.json').is_file()
     if failure == 'updater':
         assert ['systemctl', 'disable', '--now', 'lovestdns-test-update.path'] in calls
 

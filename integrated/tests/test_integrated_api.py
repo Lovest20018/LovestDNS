@@ -171,8 +171,8 @@ def test_external_reversion_after_save_keeps_unconfirmed_candidate(client, monke
     target.write_bytes(original)
     write = server._original_write
 
-    def write_then_revert(filename, content):
-        result = write(filename, content)
+    def write_then_revert(*args):
+        result = write(*args)
         assert result[0]
         target.write_bytes(original)
         return result

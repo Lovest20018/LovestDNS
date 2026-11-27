@@ -11,6 +11,31 @@ from runtime.query_recorder import Recorder
 from test_integrated_api import client
 
 
+def test_filter_model_cache_is_bounded_and_returns_independent_models(tmp_path, monkeypatch):
+    store = dns_filter.FilterStore(tmp_path / 'state', tmp_path / 'run')
+    revisions = [f'{index:064x}' for index in range(9)]
+    for index, revision in enumerate(revisions):
+        model = {'sources': [{'parse': {'valid': index}}], 'allow': {}}
+        (store.root / (revision + '.model')).write_text(json.dumps(model))
+    original_read = dns_filter.read
+    reads = []
+
+    def track_read(path, limit):
+        reads.append(path.stem)
+        return original_read(path, limit)
+
+    monkeypatch.setattr(dns_filter, 'read', track_read)
+    model = store.model(revisions[0])
+    model['sources'][0]['parse']['valid'] = 99
+    model['allow']['example.test'] = None
+    assert store.model(revisions[0]) == {'sources': [{'parse': {'valid': 0}}], 'allow': {}}
+    assert reads == [revisions[0]]
+    for revision in revisions[1:]:
+        store.model(revision)
+    assert store.model(revisions[0])['sources'][0]['parse']['valid'] == 0
+    assert reads == [*revisions, revisions[0]]
+
+
 def test_supported_rule_boundaries_and_unsupported_semantics():
     text = ('\ufeff! comment ' + 'x' * 550 + '\r\nADS.example.test. # local\r\nads.example.test\r\n'
             '||track.example.test^\r\n@@||allow.track.example.test^\r\n'

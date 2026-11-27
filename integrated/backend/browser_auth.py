@@ -2,6 +2,7 @@
 from contextlib import closing, contextmanager
 import hashlib
 import hmac
+import ipaddress
 import os
 from pathlib import Path
 import secrets
@@ -10,27 +11,53 @@ import time
 
 from flask import jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
+from state_database import create_database_inode, database_inode
 
 COOKIE = "lovestdns_session"
 SESSION_SECONDS = 7 * 86400
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+ATTEMPT_WINDOW = 300
+MAX_ATTEMPT_ROWS = 4096
+_schema_inodes = {}
+_admin_inodes = {}
+
+
+def _database_path(root):
+    path = Path(root).resolve() / "browser-auth.sqlite"
+    # No credentials or sessions live in the shared DNS data directory.
+    if path.is_symlink():
+        raise ValueError("Browser authentication database must not be a symlink")
+    return path
+
+
+def _prepare_database_inode(path):
+    inode = database_inode(path)
+    if inode is None:
+        _schema_inodes.pop(path, None)
+        _admin_inodes.pop(path, None)
+        inode = create_database_inode(path)
+    return inode
+
+
+@contextmanager
+def _open_database(path, inode):
+    with closing(sqlite3.connect(path, timeout=10)) as db, db:
+        db.row_factory = sqlite3.Row
+        if inode is None or _schema_inodes.get(path) != inode:
+            path.chmod(0o600)
+            db.execute("CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY CHECK(id=1), password_hash TEXT NOT NULL, initial INTEGER NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires REAL NOT NULL, remembered INTEGER NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS attempts (address TEXT PRIMARY KEY, started REAL NOT NULL, count INTEGER NOT NULL)")
+            db.execute("CREATE TABLE IF NOT EXISTS settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            if inode is not None and database_inode(path) == inode:
+                _schema_inodes[path] = inode
+        yield db
 
 
 @contextmanager
 def database(root):
-    root = Path(root)
-    root.mkdir(parents=True, exist_ok=True, mode=0o700)
-    path = root / "browser-auth.sqlite"
-    # No credentials or sessions live in the shared DNS data directory.
-    if path.is_symlink():
-        raise ValueError("Browser authentication database must not be a symlink")
-    with closing(sqlite3.connect(path, timeout=10)) as db, db:
-        path.chmod(0o600)
-        db.row_factory = sqlite3.Row
-        db.execute("CREATE TABLE IF NOT EXISTS admin (id INTEGER PRIMARY KEY CHECK(id=1), password_hash TEXT NOT NULL, initial INTEGER NOT NULL)")
-        db.execute("CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, csrf TEXT NOT NULL, expires REAL NOT NULL, remembered INTEGER NOT NULL)")
-        db.execute("CREATE TABLE IF NOT EXISTS attempts (address TEXT PRIMARY KEY, started REAL NOT NULL, count INTEGER NOT NULL)")
-        db.execute("CREATE TABLE IF NOT EXISTS settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    path = _database_path(root)
+    with _open_database(path, _prepare_database_inode(path)) as db:
         yield db
 
 
@@ -48,18 +75,26 @@ def set_external_api(root, enabled):
 
 def ensure_admin(root):
     """Create an unguessable initial password once; only the host can read it."""
-    with database(root) as db:
-        db.execute("BEGIN IMMEDIATE")
-        if not db.execute("SELECT 1 FROM admin").fetchone():
-            password = secrets.token_urlsafe(18)
-            path = Path(root) / "admin-password.initial"
-            # Exclusive creation also refuses symbolic links and stale files.
-            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(descriptor, "w") as output:
-                output.write(password + "\n")
-                output.flush()
-                os.fsync(output.fileno())
-            db.execute("INSERT INTO admin VALUES(1, ?, 1)", (generate_password_hash(password),))
+    path = _database_path(root)
+    inode = _prepare_database_inode(path)
+    if inode is not None and _admin_inodes.get(path) == inode:
+        return
+    _admin_inodes.pop(path, None)
+    with _open_database(path, inode) as db:
+        if db.execute("SELECT 1 FROM admin").fetchone() is None:
+            db.execute("BEGIN IMMEDIATE")
+            if db.execute("SELECT 1 FROM admin").fetchone() is None:
+                password = secrets.token_urlsafe(18)
+                initial = path.with_name("admin-password.initial")
+                # Exclusive creation also refuses symbolic links and stale files.
+                descriptor = os.open(initial, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                with os.fdopen(descriptor, "w") as output:
+                    output.write(password + "\n")
+                    output.flush()
+                    os.fsync(output.fileno())
+                db.execute("INSERT INTO admin VALUES(1, ?, 1)", (generate_password_hash(password),))
+    if inode is not None and database_inode(path) == inode:
+        _admin_inodes[path] = inode
 
 
 def session_digest(value):
@@ -106,6 +141,21 @@ def create_session(db, remembered):
     db.execute("INSERT INTO sessions VALUES(?, ?, ?, ?)",
                (session_digest(value), csrf, now + (SESSION_SECONDS if remembered else 12 * 3600), int(remembered)))
     return value, csrf
+
+
+def attempt_address(address):
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return address
+    if ip.version == 6:
+        return str(ipaddress.IPv6Network((int(ip), 64), strict=False))
+    return address
+
+
+def attempt_limit_reached(db, address, now):
+    return db.execute("SELECT 1 FROM attempts WHERE address=? AND started>=? AND count>=5",
+                      (address, now - ATTEMPT_WINDOW)).fetchone() is not None
 
 
 def set_cookie(response, value, remembered):
@@ -169,16 +219,30 @@ def register(server):
         if not isinstance(body, dict) or not isinstance(body.get("password"), str) or len(body["password"]) > 256:
             return failure("请输入管理员密码", 400)
         ensure_admin(server.STATE_DIR)
-        address, now = request.remote_addr or "unknown", time.time()
+        address = attempt_address(request.remote_addr or "unknown")
+        throttled = "尝试次数过多，请在 5 分钟后重试"
+        credentials = "SELECT password_hash, initial FROM admin WHERE id=1"
+        with database(server.STATE_DIR) as db:
+            if attempt_limit_reached(db, address, time.time()):
+                return failure(throttled, 429)
+            admin = db.execute(credentials).fetchone()
+        if admin is None:
+            return failure("管理员密码不正确", 401)
+        valid = check_password_hash(admin["password_hash"], body["password"])
         with database(server.STATE_DIR) as db:
             db.execute("BEGIN IMMEDIATE")
-            db.execute("DELETE FROM attempts WHERE started<?", (now - 300,))
-            attempt = db.execute("SELECT count FROM attempts WHERE address=?", (address,)).fetchone()
-            if attempt and attempt["count"] >= 5:
-                return failure("尝试次数过多，请在 5 分钟后重试", 429)
-            admin = db.execute("SELECT * FROM admin WHERE id=1").fetchone()
-            if not check_password_hash(admin["password_hash"], body["password"]):
+            now = time.time()
+            # A concurrent login or password reset may have changed these rows during verification.
+            if attempt_limit_reached(db, address, now):
+                return failure(throttled, 429)
+            if db.execute(credentials).fetchone() != admin:
+                return failure("管理员密码不正确", 401)
+            db.execute("DELETE FROM attempts WHERE started<?", (now - ATTEMPT_WINDOW,))
+            if not valid:
                 db.execute("INSERT INTO attempts VALUES(?, ?, 1) ON CONFLICT(address) DO UPDATE SET count=count+1", (address, now))
+                db.execute("""DELETE FROM attempts WHERE address IN (
+                    SELECT address FROM attempts ORDER BY started DESC, rowid DESC LIMIT -1 OFFSET ?)""",
+                           (MAX_ATTEMPT_ROWS,))
                 return failure("管理员密码不正确", 401)
             db.execute("DELETE FROM attempts WHERE address=?", (address,))
             previous = request.cookies.get(COOKIE, "")
@@ -186,8 +250,8 @@ def register(server):
                 db.execute("DELETE FROM sessions WHERE id=?", (session_digest(previous),))
             remembered = body.get("remember") is True
             value, csrf = create_session(db, remembered)
-            return set_cookie(jsonify({"authenticated": True, "csrf_token": csrf,
-                                       "must_change_password": bool(admin["initial"])}), value, remembered)
+        return set_cookie(jsonify({"authenticated": True, "csrf_token": csrf,
+                                   "must_change_password": bool(admin["initial"])}), value, remembered)
 
     @app.post("/auth/logout")
     def logout():

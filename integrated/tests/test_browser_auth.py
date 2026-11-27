@@ -1,7 +1,12 @@
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
+from pathlib import Path
 import sqlite3
+import threading
 import time
 
 import pytest
+import browser_auth
 import server
 from browser_auth import COOKIE, database, reset_password
 from test_integrated_api import client, AUTH
@@ -138,6 +143,152 @@ def test_login_throttling_is_shared_and_expires(client, monkeypatch):
     with database(state) as db:
         db.execute("UPDATE attempts SET started=?", (time.time() - 301,))
     assert api.post("/auth/login", json={"password": PASSWORD}).status_code == 200
+
+
+def test_session_reads_existing_admin_and_session_without_writes(client, monkeypatch, sqlite_trace):
+    api, _, state = client
+    reset_password(state, PASSWORD)
+    path = state / "browser-auth.sqlite"
+    chmod = Path.chmod
+
+    def no_auth_chmod(file, *args, **kwargs):
+        assert file != path
+        return chmod(file, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "chmod", no_auth_chmod)
+    with closing(sqlite3.connect(path)) as writer:
+        writer.execute("BEGIN IMMEDIATE")
+        sqlite_trace.clear()
+        assert api.get("/auth/session").get_json()["authenticated"] is False
+        assert sqlite_trace == ["SELECT 1 FROM admin"]
+        sqlite_trace.clear()
+        assert api.get("/auth/session").status_code == 200
+        assert sqlite_trace == []
+
+    assert api.post("/auth/login", json={"password": PASSWORD}).status_code == 200
+    with closing(sqlite3.connect(path)) as writer:
+        writer.execute("BEGIN IMMEDIATE")
+        sqlite_trace.clear()
+        assert api.get("/auth/session").get_json()["authenticated"] is True
+        assert len(sqlite_trace) == 1 and sqlite_trace[0].startswith("SELECT sessions.*")
+
+
+@pytest.mark.parametrize("replacement", [False, True])
+def test_auth_database_rebuild_invalidates_schema_and_admin_caches(client, replacement):
+    api, _, state = client
+    reset_password(state, PASSWORD)
+    assert api.get("/auth/session").get_json()["initial_password_file"] is None
+    path = state / "browser-auth.sqlite"
+    if replacement:
+        empty = state / "replacement.sqlite"
+        empty.touch()
+        empty.replace(path)
+    else:
+        path.unlink()
+
+    initial = state / "admin-password.initial"
+    assert api.get("/auth/session").get_json()["initial_password_file"] == str(initial)
+    assert api.post("/auth/login", json={"password": initial.read_text().strip()}).get_json()["must_change_password"]
+
+
+def test_auth_database_rejects_symlink_even_after_schema_cache_is_warm(client, file_symlink):
+    _, _, state = client
+    path = state / "browser-auth.sqlite"
+    target = state / "other.sqlite"
+    path.rename(target)
+    file_symlink(path, target)
+    with pytest.raises(ValueError, match="symlink"):
+        with database(state):
+            pytest.fail("Authentication opened a symlink")
+
+
+def test_login_throttling_groups_ipv6_addresses_by_network(client, monkeypatch):
+    api, _, state = client
+    reset_password(state, PASSWORD)
+    for index in range(1, 6):
+        response = api.post("/auth/login", json={"password": "incorrect"},
+                            environ_overrides={"REMOTE_ADDR": f"2001:db8:1:2::{index}"})
+        assert response.status_code == 401
+    with database(state) as db:
+        assert [tuple(row) for row in db.execute("SELECT address, count FROM attempts")] == [("2001:db8:1:2::/64", 5)]
+    for address in ("2001:db8:1:3::1", "192.0.2.4"):
+        assert api.post("/auth/login", json={"password": PASSWORD},
+                        environ_overrides={"REMOTE_ADDR": address}).status_code == 200
+    monkeypatch.setattr(browser_auth, "check_password_hash", lambda *_: pytest.fail("Rate limited login hashed a password"))
+    assert api.post("/auth/login", json={"password": PASSWORD},
+                    environ_overrides={"REMOTE_ADDR": "2001:0db8:0001:0002::a"}).status_code == 429
+
+
+def test_failed_login_evicts_oldest_attempt_above_database_limit(client):
+    api, _, state = client
+    reset_password(state, PASSWORD)
+    now = time.time()
+    with database(state) as db:
+        db.executemany("INSERT INTO attempts VALUES (?, ?, 1)",
+                       ((f"client-{index}", now - 100 + index / 100) for index in range(4096)))
+    assert api.post("/auth/login", json={"password": "incorrect"},
+                    environ_overrides={"REMOTE_ADDR": "non-ip-peer"}).status_code == 401
+    with database(state) as db:
+        assert db.execute("SELECT COUNT(*) FROM attempts").fetchone()[0] == 4096
+        assert db.execute("SELECT 1 FROM attempts WHERE address='client-0'").fetchone() is None
+        for address in ("client-1", "non-ip-peer"):
+            assert db.execute("SELECT count FROM attempts WHERE address=?", (address,)).fetchone()[0] == 1
+
+
+def login_status(password):
+    with server.app.test_client() as api:
+        return api.post("/auth/login", json={"password": password}).status_code
+
+
+@pytest.mark.parametrize("change,expected", [("attempt", 429), ("password", 401)])
+def test_login_rechecks_state_after_unlocked_password_verification(client, monkeypatch, change, expected):
+    _, _, state = client
+    reset_password(state, PASSWORD)
+    if change == "attempt":
+        with database(state) as db:
+            db.execute("INSERT INTO attempts VALUES ('127.0.0.1', ?, 4)", (time.time(),))
+
+    started, release = threading.Event(), threading.Event()
+    verify = browser_auth.check_password_hash
+
+    def blocking_check(hash_value, password):
+        if password == PASSWORD:
+            started.set()
+            assert release.wait(6)
+        return verify(hash_value, password)
+
+    monkeypatch.setattr(browser_auth, "check_password_hash", blocking_check)
+    with ThreadPoolExecutor(2) as workers:
+        pending = workers.submit(login_status, PASSWORD)
+        try:
+            assert started.wait(3)
+            if change == "attempt":
+                assert workers.submit(login_status, "incorrect").result(timeout=3) == 401
+            else:
+                workers.submit(reset_password, state, NEXT_PASSWORD).result(timeout=3)
+        finally:
+            release.set()
+        assert pending.result(timeout=3) == expected
+    with database(state) as db:
+        assert db.execute("SELECT COUNT(*) FROM sessions").fetchone()[0] == 0
+    if change == "password":
+        assert login_status(NEXT_PASSWORD) == 200
+
+
+def test_concurrent_failed_logins_commit_at_most_five_attempts(client, monkeypatch):
+    _, _, state = client
+    reset_password(state, PASSWORD)
+    verifying = threading.Barrier(6, timeout=5)
+
+    def reject_together(*_):
+        verifying.wait()
+        return False
+
+    monkeypatch.setattr(browser_auth, "check_password_hash", reject_together)
+    with ThreadPoolExecutor(6) as workers:
+        assert sorted(workers.map(login_status, ["incorrect"] * 6)) == [401] * 5 + [429]
+    with database(state) as db:
+        assert [tuple(row) for row in db.execute("SELECT address, count FROM attempts")] == [("127.0.0.1", 5)]
 
 
 def test_reset_command_supports_unicode_and_revokes_sessions(client):

@@ -19,6 +19,7 @@ class Manager:
         self.store = store
         self.dns_filter = dns_filter
         self.wakeup = threading.Event()
+        self.idle_wait = 60
         self.worker = None
         self.phase = "starting"
         self.pending_result = None
@@ -93,9 +94,9 @@ class Manager:
 
     def run(self):
         while True:
-            self.step()
-            self.wakeup.wait(1)
             self.wakeup.clear()
+            self.step()
+            self.wakeup.wait(self.idle_wait if self.pending_result is None and not self.degraded else 1)
 
     def step(self):
         # Result persistence is a separate phase. Retry it without executing the

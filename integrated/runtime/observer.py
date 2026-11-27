@@ -221,7 +221,15 @@ def persistence_status(redis, data_dir):
 class Collector:
     def __init__(self):
         self.snapshot = None
+        self.snapshot_bytes = b'{"error": "Collector starting"}\n'
         self.lock = threading.Lock()
+
+    def _publish(self, sample):
+        snapshot = {key: value for key, value in sample.items() if not key.startswith('_')}
+        payload = json.dumps(snapshot, allow_nan=False).encode() + b"\n"
+        with self.lock:
+            self.snapshot = snapshot
+            self.snapshot_bytes = payload
 
     def run(self):
         previous = None
@@ -229,12 +237,11 @@ class Collector:
         while True:
             try:
                 sample = collect(previous)
+                self._publish(sample)
                 previous = sample
             except Exception as exc:
-                sample = {"schema_version": 1, "sampled_at": time.time(), "error": str(exc)[:200]}
+                self._publish({"schema_version": 1, "sampled_at": time.time(), "error": str(exc)[:200]})
                 previous = None
-            with self.lock:
-                self.snapshot = {key: value for key, value in sample.items() if not key.startswith('_')}
             deadline += INTERVAL
             now = time.monotonic()
             if deadline < now:
@@ -243,23 +250,56 @@ class Collector:
 
 
 def main():
+    if not hasattr(socket, 'AF_UNIX'):
+        raise OSError('Collector requires Unix sockets')
     collector = Collector()
     threading.Thread(target=collector.run, daemon=True).start()
 
     class Handler(socketserver.StreamRequestHandler):
         def handle(self):
-            self.request.settimeout(3)
-            if self.rfile.readline(32) != b"snapshot\n":
-                self.wfile.write(b'{"error":"Unsupported operation"}\n')
+            try:
+                self.request.settimeout(3)
+                if self.rfile.readline(32) != b"snapshot\n":
+                    self.wfile.write(b'{"error":"Unsupported operation"}\n')
+                    return
+                with collector.lock:
+                    payload = collector.snapshot_bytes
+                self.wfile.write(payload)
+            except OSError:
+                pass
+
+    class Server(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+        daemon_threads = True
+
+        def __init__(self, *args):
+            self.slots = threading.BoundedSemaphore(8)
+            super().__init__(*args)
+
+        def process_request(self, request, address):
+            if not self.slots.acquire(blocking=False):
+                try:
+                    request.setblocking(False)
+                    request.sendall(b'{"error":"Collector busy"}\n')
+                except OSError:
+                    pass
+                finally:
+                    self.shutdown_request(request)
                 return
-            with collector.lock:
-                payload = collector.snapshot or {"error": "Collector starting"}
-            self.wfile.write(json.dumps(payload, allow_nan=False).encode() + b"\n")
+            try:
+                super().process_request(request, address)
+            except BaseException:
+                self.slots.release()
+                raise
+
+        def process_request_thread(self, request, address):
+            try:
+                super().process_request_thread(request, address)
+            finally:
+                self.slots.release()
 
     socket_path = RUN_DIR / "observer.sock"
     socket_path.unlink(missing_ok=True)
-    # Sequential local requests are bounded; collector is independent of web workers.
-    server = socketserver.UnixStreamServer(str(socket_path), Handler)
+    server = Server(str(socket_path), Handler)
     os.chmod(socket_path, 0o600)
     server.serve_forever()
 

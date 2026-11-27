@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 import threading
 
+import pytest
 import server
 from test_integrated_api import client, AUTH
 
@@ -37,6 +38,36 @@ def test_create_headers_legacy_and_restore_conflict(client):
     assert api.post(f'/api/v1/history/custom_env.ini/{rev}/restore', headers={**AUTH, 'If-Match': etag}).status_code == 412
     assert (data / 'custom_env.ini').read_text() == 'VALUE="second"\n'
     assert api.put(route, headers=AUTH, json=content).status_code == 200  # backwards compatibility
+
+
+@pytest.mark.parametrize('host_edit', [False, True])
+def test_save_reuses_original_bytes_and_refreshes_backup_after_host_edit(client, monkeypatch, host_edit):
+    api, data, _ = client
+    target = data / 'custom_env.ini'
+    original, external = b'VALUE="old"\n', b'VALUE="host changed this"\n'
+    target.write_bytes(original)
+    reads = []
+    read, prepare = server._configuration_bytes, server.history.prepare_write
+
+    def track_read(filename, path):
+        content = read(filename, path)
+        reads.append(content)
+        return content
+
+    def prepare_with_host_edit(*args):
+        prepare(*args)
+        if host_edit:
+            target.write_bytes(external)
+
+    monkeypatch.setattr(server, '_configuration_bytes', track_read)
+    monkeypatch.setattr(server.history, 'prepare_write', prepare_with_host_edit)
+    candidate = 'VALUE="测试"\n'
+    response = api.put('/api/v1/file/custom_env.ini', headers=AUTH, json={'content': candidate})
+    assert response.status_code == 200
+    payload = candidate.encode('utf-8')
+    assert target.read_bytes() == payload
+    assert target.with_suffix('.ini.bak').read_bytes() == (external if host_edit else original)
+    assert reads == ([original, external, payload] if host_edit else [original, payload])
 
 
 def test_status_admin_only_and_not_verified(client, monkeypatch):

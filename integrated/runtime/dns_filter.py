@@ -1,4 +1,5 @@
 """Manage private, immutable DNS filter revisions and verify their activation."""
+from collections import OrderedDict
 import copy
 import ipaddress
 import json
@@ -26,6 +27,8 @@ MAX_ALLOW = 2048
 
 
 def core_call(run, op, timeout=.35, **data):
+    if not hasattr(socket, 'AF_UNIX'):
+        raise OSError('filter control requires Unix sockets')
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
         sock.settimeout(timeout)
         sock.connect(str(Path(run) / 'dns-filter.sock'))
@@ -91,21 +94,13 @@ def read(path, limit):
     return value
 
 
-def durable(path, value):
-    atomic_file(path, value)
-    if os.name == 'posix':
-        fd = os.open(path.parent, os.O_DIRECTORY)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-
-
 class FilterStore:
     def __init__(self, state, run):
         self.root = Path(state) / 'dns-filter'
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.run = Path(run)
+        self._models = OrderedDict()
+        self._models_lock = threading.Lock()
 
     def revision(self, name='active'):
         try:
@@ -121,7 +116,14 @@ class FilterStore:
             return {'enabled': False, 'local_rules': '', 'sources': [], 'allow': {}, 'rules': 0}
         if not REVISION.fullmatch(revision):
             raise ValueError('过滤配置版本无效')
-        return json.loads(read(self.root / (revision + '.model'), 256 * 1024))
+        with self._models_lock:
+            if revision not in self._models:
+                self._models[revision] = json.loads(read(self.root / (revision + '.model'), 256 * 1024))
+            self._models.move_to_end(revision)
+            model = self._models[revision]
+            if len(self._models) > 8:
+                self._models.popitem(last=False)
+        return copy.deepcopy(model)
 
     def list_text(self, key):
         if not REVISION.fullmatch(key):
@@ -136,7 +138,7 @@ class FilterStore:
         key = digest(data)
         path = self.root / (key + '.list')
         if not path.exists():
-            durable(path, data)
+            atomic_file(path, data)
         return key
 
     def apply(self, old, model, *, allow_only=False):
@@ -155,13 +157,13 @@ class FilterStore:
         with maintenance_lock(self.root.parent, timeout=5):
             if self.revision() != old:
                 raise ValueError('过滤配置已变化，请刷新后重试')
-            durable(self.root / (new + '.policy'), policy)
-            durable(self.root / (new + '.model'), encoded(meta))
+            atomic_file(self.root / (new + '.policy'), policy)
+            atomic_file(self.root / (new + '.model'), encoded(meta))
             try:
                 activate_core(self.run, new)
                 if new != old:
-                    durable(self.root / 'previous', old.encode())
-                durable(self.root / 'active', new.encode())
+                    atomic_file(self.root / 'previous', old.encode())
+                atomic_file(self.root / 'active', new.encode())
             except (OSError, ValueError, KeyError) as exc:
                 try:
                     committed = self.revision()
@@ -234,6 +236,8 @@ class FilterManager:
         self.store = FilterStore(state, run)
         self.download = downloader
         self.lock = threading.Lock()
+        self.wakeup = threading.Event()
+        self.poll_interval = 10.0
         self.jobs = {}
         self.work = None
         self.draft = None
@@ -304,15 +308,20 @@ class FilterManager:
             for key in list(self.jobs)[:-8]:
                 del self.jobs[key]
             self.work = job, data
+            self.wakeup.set()
             return {'id': job}
 
     def run(self):
         while True:
+            self.wakeup.clear()
             try:
                 self.step()
             except (OSError, ValueError, RuntimeError, KeyError):
                 pass
-            time.sleep(.35)
+            with self.lock:
+                pending = self.work is not None
+            if not pending:
+                self.wakeup.wait(self.poll_interval)
 
     def step(self):
         with self.lock:

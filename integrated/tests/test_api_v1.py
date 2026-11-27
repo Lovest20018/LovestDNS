@@ -1,8 +1,9 @@
 import json
+import os
 import time
 import pytest
 import server
-from api_v1 import metric_values
+from api_v1 import instance_identity, metric_values
 from api_schema import openapi_document
 from test_integrated_api import client, AUTH
 
@@ -26,6 +27,37 @@ def test_instance_is_stable_across_requests_and_state_isolation(client, monkeypa
     from browser_auth import set_external_api
     set_external_api(server.STATE_DIR, True)
     assert api.get("/api/v1/instance", headers=READ).get_json()["data"]["id"] != identity
+
+
+@pytest.mark.parametrize("replacement", [False, True])
+def test_instance_identity_cache_is_invalidated_by_a_missing_or_replaced_database(tmp_path, sqlite_trace, replacement):
+    state = tmp_path / "state"
+    path = state / "instance.sqlite"
+    original = instance_identity(state)
+    if os.name == "posix":
+        assert path.stat().st_mode & 0o777 == 0o600
+    sqlite_trace.clear()
+    assert instance_identity(str(state)) == original
+    assert sqlite_trace == []
+
+    if replacement:
+        other = tmp_path / "other"
+        expected = instance_identity(other)
+        (other / path.name).replace(path)
+        assert instance_identity(state) == expected
+    else:
+        path.unlink()
+        assert instance_identity(state) != original
+
+
+def test_instance_identity_rejects_an_inode_cached_at_a_symlink_path(tmp_path, file_symlink):
+    instance_identity(tmp_path)
+    path = tmp_path / "instance.sqlite"
+    target = tmp_path / "other.sqlite"
+    path.rename(target)
+    file_symlink(path, target)
+    with pytest.raises(ValueError, match="symlink"):
+        instance_identity(tmp_path)
 
 
 @pytest.mark.parametrize("path,method", [("/status", "get"), ("/env", "get"), ("/file/custom_env.ini", "get"),

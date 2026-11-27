@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 import time
 from pathlib import Path
@@ -11,6 +12,40 @@ from runtime.locking import MaintenanceBusy, maintenance_lock
 from runtime.manager import Manager
 from runtime.tasks import TaskStore
 from test_configuration import template
+
+
+def test_atomic_maintenance_write_cleans_failed_temporary_file(tmp_path, monkeypatch):
+    path = tmp_path / 'settings.json'
+    path.write_bytes(b'original')
+    names = []
+    real_replace = os.replace
+
+    def replace(source, target):
+        names.append(Path(source))
+        assert names[-1].parent == path.parent
+        if len(names) == 1:
+            raise OSError('injected replace failure')
+        real_replace(source, target)
+
+    monkeypatch.setattr(maintenance.os, 'replace', replace)
+    with pytest.raises(OSError, match='injected'):
+        maintenance.atomic_file(path, b'failed')
+    assert path.read_bytes() == b'original'
+    assert list(tmp_path.iterdir()) == [path]
+    maintenance.atomic_file(path, b'saved')
+    assert path.read_bytes() == b'saved' and names[0] != names[1]
+    if os.name == 'posix':
+        assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_atomic_maintenance_write_refuses_symlink(tmp_path, file_symlink):
+    target = tmp_path / 'target'
+    target.write_bytes(b'saved')
+    link = tmp_path / 'settings.json'
+    file_symlink(link, target)
+    with pytest.raises(ValueError, match='symbolic-link'):
+        maintenance.atomic_file(link, b'changed')
+    assert link.is_symlink() and target.read_bytes() == b'saved'
 
 
 class FakeCore(CoreActions):

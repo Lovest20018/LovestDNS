@@ -19,6 +19,7 @@ from runtime.locking import MaintenanceBusy, maintenance_lock
 from runtime.tasks import validate_submission
 from runtime.admission import CapacityBusy, slots
 from installation import read_object, recorded, installation_summary, provenance_summary
+from state_database import create_database_inode, database_inode
 
 app = base.app
 if os.environ.get("SUITE_DIST_DIR"):
@@ -53,21 +54,34 @@ def safe_path(filename):
 base._safe_path = safe_path
 
 
-def _original_write(filename, content):
+def _configuration_stamp(path):
+    try:
+        info = Path(path).stat()
+    except FileNotFoundError:
+        return None
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def _original_write(filename, payload, before, stamp):
     """Write exact UTF-8 bytes while retaining the upstream inotify contract."""
     path = base._safe_path(filename)
     if path is None:
         return False, "File not allowed"
-    payload = content.encode("utf-8")
     if len(payload) > base.FILE_SIZE_LIMITS.get(filename, base.FILE_SIZE_LIMITS["_default"]):
         return False, "Content exceeds size limit"
-    before = _configuration_bytes(filename, path)
+    # A host-side edit can occur while the recovery intent is committed.
+    if _configuration_stamp(path) != stamp:
+        before = _configuration_bytes(filename, path)
     try:
         with base.WRITE_LOCKS[filename]:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             if before is not None:
                 try:
-                    shutil.copyfile(path, str(path) + ".bak")
+                    backup = Path(str(path) + ".bak")
+                    if backup.is_symlink() or (backup.exists() and (not backup.is_file() or backup.samefile(path))):
+                        shutil.copyfile(path, backup)
+                    else:
+                        backup.write_bytes(before)
                 except OSError:
                     pass  # The durable intent is the authoritative backup.
             try:
@@ -97,15 +111,17 @@ def _write_with_history(filename, content):
         path = base._safe_path(filename)
         if path is None:
             return False, "File not allowed"
+        stamp = _configuration_stamp(path)
         before = _configuration_bytes(filename, path)
         history.complete_write(filename, before)
         check_revision(expected_revision(), before)
-        history.prepare_write(filename, before, content.encode("utf-8"))
+        payload = content.encode("utf-8")
+        history.prepare_write(filename, before, payload)
         prepared = True
-        success, error = _original_write(filename, content)
+        success, error = _original_write(filename, payload, before, stamp)
         current = _configuration_bytes(filename, path)
         history.complete_write(filename, current)
-        if (success and current != content.encode('utf-8')) or (not success and current != before):
+        if (success and current != payload) or (not success and current != before):
             raise SaveUnconfirmed("保存结果待核对：磁盘内容发生变化，候选文件和原版本已保留在历史中，请重新读取并合并")
         if success:
             g.saved_revision = file_revision(current)
@@ -220,8 +236,6 @@ def reload_info(filename, env=None):
     note = "根据核心启动配置判断监听条件；不代表配置已加载"
     if not enabled:
         note = "核心未准备好或启动配置不满足监听条件；请检查后重启"
-    if filename == "custom_env.ini":
-        note += "；初始化变量需重启重新生成模板"
     return {"auto_reload": True, "requires_reload": False, "requires_restart": False,
             "watched_now": bool(enabled), "condition": note, "verified": False}
 
@@ -299,13 +313,27 @@ def query_records_summary():
     return _query_records_params('analytics', {'hours'}, {'hours'}, hours=1)
 
 
+_source_device_inodes = {}
+
+
 def _source_devices(ip=None, name=None):
     from api_v1 import instance_identity
 
-    instance = instance_identity(STATE_DIR)
-    STATE_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
-    with closing(sqlite3.connect(STATE_DIR / 'source-devices.sqlite', timeout=5)) as db, db:
-        db.execute('CREATE TABLE IF NOT EXISTS devices (ip TEXT PRIMARY KEY, name TEXT NOT NULL)')
+    root = STATE_DIR.resolve()
+    path = root / 'source-devices.sqlite'
+    if path.is_symlink():
+        raise ValueError('Source devices database must not be a symlink')
+    instance = instance_identity(root)
+    inode = database_inode(path)
+    if inode is None:
+        _source_device_inodes.pop(path, None)
+        inode = create_database_inode(path)
+    with closing(sqlite3.connect(path, timeout=5)) as db, db:
+        if inode is None or _source_device_inodes.get(path) != inode:
+            path.chmod(0o600)
+            db.execute('CREATE TABLE IF NOT EXISTS devices (ip TEXT PRIMARY KEY, name TEXT NOT NULL)')
+            if inode is not None and database_inode(path) == inode:
+                _source_device_inodes[path] = inode
         if ip is not None:
             if name:
                 db.execute('INSERT INTO devices VALUES (?, ?) ON CONFLICT(ip) DO UPDATE SET name=excluded.name', (ip, name))

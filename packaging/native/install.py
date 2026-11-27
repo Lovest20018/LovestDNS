@@ -7,7 +7,7 @@ import importlib.util
 import ipaddress
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import platform
 import re
 import secrets
@@ -21,6 +21,9 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+
+MAX_ARCHIVE = 256 * 1024 * 1024
+MAX_EXTRACTED = 768 * 1024 * 1024
 
 DNS_KEYS = {'TZ', 'CNAUTO', 'CNFALL', 'CN_TRACKER', 'USE_HOSTS', 'IPV6', 'SOCKS5', 'SERVER_IP',
             'CUSTOM_FORWARD', 'CUSTOM_FORWARD_TTL', 'AUTO_FORWARD', 'AUTO_FORWARD_CHECK', 'USE_MARK_DATA',
@@ -78,15 +81,25 @@ def write_env(path, values):
 
 def atomic(path, text, mode=0o600):
     path = Path(path)
-    temporary = path.with_name(path.name + '.new')
-    if temporary.is_symlink() or path.is_symlink():
+    if path.is_symlink():
         raise ValueError('Refusing symbolic-link configuration files')
-    with temporary.open('w') as output:
-        output.write(text)
-        output.flush()
-        os.fsync(output.fileno())
-    temporary.chmod(mode)
-    os.replace(temporary, path)
+    descriptor, name = tempfile.mkstemp(prefix=f'.{path.name}-', dir=path.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(descriptor, 'w') as output:
+            output.write(text)
+            output.flush()
+            temporary.chmod(mode)
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+        if os.name == 'posix':
+            directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def validate_config(config):
@@ -112,20 +125,57 @@ def verify_package(package):
     if manifest.get('product') != 'LovestDNS' or manifest.get('deployment') != 'native' or manifest.get('architecture') != 'amd64':
         raise ValueError('Unsupported package identity')
     version = manifest['version']
-    if not re.fullmatch(r'[A-Za-z0-9_.-]+', version):
+    if version in {'.', '..'} or not re.fullmatch(r'[A-Za-z0-9_.-]+', version):
         raise ValueError('Invalid package version')
     for name, digest in manifest['files'].items():
         path = package / name
         if path.is_symlink() or not path.is_file() or package not in path.resolve().parents:
             raise ValueError('Unsafe or missing package file')
-        if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
-            raise ValueError(f'Package checksum differs: {name}')
+        with path.open('rb') as source:
+            if hashlib.file_digest(source, 'sha256').hexdigest() != digest:
+                raise ValueError(f'Package checksum differs: {name}')
     if any(p.is_symlink() for p in package.rglob('*')):
         raise ValueError('Package contains symbolic links')
     actual = {p.relative_to(package).as_posix() for p in package.rglob('*') if p.is_file() and p != package / 'manifest.json'}
     if actual != set(manifest['files']):
         raise ValueError('Package contains unexpected files')
     return manifest
+
+
+def unpack_upgrade(package, digest, directory):
+    with package.open('rb') as source:
+        if os.fstat(source.fileno()).st_size > MAX_ARCHIVE:
+            raise ValueError('Native package exceeds its size limit')
+        if not re.fullmatch(r'[a-f0-9]{64}', digest) or hashlib.file_digest(source, 'sha256').hexdigest() != digest:
+            raise ValueError('Upgrade archive SHA-256 differs')
+        source.seek(0)
+        with tarfile.open(fileobj=source) as archive:
+            members, seen, roots, size = [], set(), set(), 0
+            for member in archive:
+                if len(members) >= 4096:
+                    raise ValueError('Too many native package entries')
+                path = PurePosixPath(member.name)
+                canonical = path.as_posix()
+                if (not path.parts or path.is_absolute() or '..' in path.parts or '\\' in member.name or ':' in member.name
+                        or canonical in seen or not (member.isfile() or member.isdir()) or member.mode & 0o7000
+                        or member.size < 0):
+                    raise ValueError('Unsafe native package entry: ' + member.name)
+                members.append(member)
+                seen.add(canonical)
+                roots.add(path.parts[0])
+                size += member.size
+                if size > MAX_EXTRACTED:
+                    raise ValueError('Extracted package exceeds its size limit')
+            if len(roots) != 1 or not re.fullmatch(r'lovestdns-[A-Za-z0-9_.-]+', next(iter(roots))):
+                raise ValueError('Expected one native package directory')
+            if callable(getattr(tarfile, 'data_filter', None)):
+                archive.extractall(directory, members=members, filter='data')
+            else:
+                archive.extractall(directory, members=members)
+    root = directory / roots.pop()
+    if not (root / 'manifest.json').is_file():
+        raise ValueError('Expected one native package')
+    return root
 
 
 def service_unit(p, config):
@@ -250,7 +300,11 @@ def switch(link, target):
     if temporary.exists() or temporary.is_symlink():
         raise ValueError('A pending release link already exists')
     temporary.symlink_to(target, target_is_directory=True)
-    os.replace(temporary, link)
+    try:
+        os.replace(temporary, link)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 def preflight_ports(config):
@@ -263,6 +317,8 @@ def preflight_ports(config):
     for address, port, kind in ports:
         with socket.socket(socket.AF_INET6 if ':' in address else socket.AF_INET, kind) as probe:
             try:
+                if kind == socket.SOCK_STREAM:
+                    probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 probe.bind((address, port))
             except OSError as exc:
                 raise ValueError(f'Port unavailable: {address}:{port}; no existing service was stopped') from exc
@@ -381,7 +437,7 @@ def install(args, package):
                               and not (p['home'] / 'rollback.json').exists())
         old = None if incomplete_install else previous
         release = p['home'] / 'releases' / manifest['version']
-        if release.exists():
+        if release.exists() or release.is_symlink():
             if old and json.loads((old / 'manifest.json').read_text())['version'] == manifest['version']:
                 raise ValueError('This version is already active; use the installed control command')
             # Retrying after a failed upgrade or explicit rollback must not
@@ -399,20 +455,24 @@ def install(args, package):
         validate_config(values)
         if not was_active:
             preflight_ports(values)
-        shutil.copytree(package, release)
-        # Build the new venv before stopping an existing DNS service.
-        command([sys.executable, '-m', 'venv', str(release / 'venv')])
-        command([str(release / 'venv/bin/python'), '-m', 'pip', 'install', '--no-index', '--find-links', str(release / 'wheels'),
-                 '-r', str(release / 'requirements.lock.txt')])
-        for name, arguments in (('redis-server', ['--version']), ('unbound', ['-V']), ('mosdns', ['version']), ('dnscrypt-proxy', ['-version'])):
-            command([str(release / 'core' / name), *arguments], capture=True)
-        filter_binary = release / 'components/mosdns-filter'
-        if filter_binary.is_file():
-            command([str(filter_binary), 'version'], capture=True)
-        installation_receipt(p, release, getattr(args, 'sha256', None))
         backup = None
         changed = False
+        prepared = False
+        # Reserve the path exclusively so cleanup owns even a partially copied release.
+        release.mkdir(parents=True)
         try:
+            shutil.copytree(package, release, dirs_exist_ok=True)
+            # Build the new venv before stopping an existing DNS service.
+            command([sys.executable, '-m', 'venv', str(release / 'venv')])
+            command([str(release / 'venv/bin/python'), '-m', 'pip', 'install', '--no-index', '--find-links', str(release / 'wheels'),
+                     '-r', str(release / 'requirements.lock.txt')])
+            for name, arguments in (('redis-server', ['--version']), ('unbound', ['-V']), ('mosdns', ['version']), ('dnscrypt-proxy', ['-version'])):
+                command([str(release / 'core' / name), *arguments], capture=True)
+            filter_binary = release / 'components/mosdns-filter'
+            if filter_binary.is_file():
+                command([str(filter_binary), 'version'], capture=True)
+            installation_receipt(p, release, getattr(args, 'sha256', None))
+            prepared = True
             if old:
                 size = sum(f.stat().st_size for name in ('data', 'state')
                            for f in (p['storage'] / name).rglob('*') if f.is_file())
@@ -453,19 +513,27 @@ def install(args, package):
             print(json.dumps({'installed': manifest['version'], 'service': p['name'], 'config_file': str(p['config']),
                               'control': str(p['ctl']), 'rollback_backup': str(backup) if backup else None, **result}))
         except BaseException:
-            if old:
-                if backup and changed:
-                    command(['systemctl', 'stop', p['name'] + '.service'], check=False, capture=True)
-                    restore(p, backup)
-                if was_active:
-                    command(['systemctl', 'start', p['name'] + '.service'])
-                    healthy(p)
-                print('Previous release and its data/configuration restored.', file=sys.stderr)
-            else:
-                path_unit = p['unit'].with_name(p['name'] + '-update.path')
-                if path_unit.exists():
-                    command(['systemctl', 'disable', '--now', path_unit.name], check=False, capture=True)
-                command(['systemctl', 'disable', '--now', p['name'] + '.service'], check=False, capture=True)
+            try:
+                if prepared and old:
+                    if backup and changed:
+                        command(['systemctl', 'stop', p['name'] + '.service'], check=False, capture=True)
+                        restore(p, backup)
+                    if was_active:
+                        command(['systemctl', 'start', p['name'] + '.service'])
+                        healthy(p)
+                    print('Previous release and its data/configuration restored.', file=sys.stderr)
+                elif prepared:
+                    path_unit = p['unit'].with_name(p['name'] + '-update.path')
+                    if path_unit.exists():
+                        command(['systemctl', 'disable', '--now', path_unit.name], check=False, capture=True)
+                    command(['systemctl', 'disable', '--now', p['name'] + '.service'], check=False, capture=True)
+            finally:
+                try:
+                    if release.resolve() not in (previous, current.resolve()):
+                        shutil.rmtree(release)
+                        (p['home'] / 'receipts' / (release.name + '.json')).unlink(missing_ok=True)
+                except (OSError, RuntimeError) as exc:
+                    print(f'Could not clean failed release {release}: {exc}', file=sys.stderr)
             raise
 
 
@@ -551,20 +619,8 @@ def main():
     if args.action == 'install':
         install(args, Path(__file__).resolve().parent)
     elif args.action == 'upgrade':
-        if not re.fullmatch(r'[a-f0-9]{64}', args.sha256) or hashlib.sha256(args.archive.read_bytes()).hexdigest() != args.sha256:
-            raise ValueError('Upgrade archive SHA-256 differs')
         with tempfile.TemporaryDirectory(prefix='lovestdns-upgrade-') as directory:
-            root = Path(directory)
-            with tarfile.open(args.archive) as archive:
-                for member in archive.getmembers():
-                    path = root / member.name
-                    if member.issym() or member.islnk() or not (member.isfile() or member.isdir()) or root not in path.resolve().parents:
-                        raise ValueError('Unsafe archive entry')
-                archive.extractall(root)
-            packages = list(root.glob('*/manifest.json'))
-            if len(packages) != 1:
-                raise ValueError('Expected one native package')
-            install(args, packages[0].parent)
+            install(args, unpack_upgrade(args.archive, args.sha256, Path(directory)))
     elif args.action == 'health':
         print(json.dumps(healthy(p, timeout=10)))
     elif args.action == 'rollback':

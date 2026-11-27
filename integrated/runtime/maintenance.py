@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import socket
 import struct
+import tempfile
 import time
 import xmlrpc.client
 
@@ -21,12 +22,23 @@ class ActionFailed(RuntimeError):
 
 def atomic_file(path, data):
     path = Path(path)
-    temporary = path.with_name(path.name + ".suite-new")
-    with temporary.open("wb") as stream:
-        stream.write(data)
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(temporary, path)
+    if path.is_symlink():
+        raise ValueError("Refusing symbolic-link configuration files")
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        if os.name == "posix":
+            directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
 
 
 class CoreActions:

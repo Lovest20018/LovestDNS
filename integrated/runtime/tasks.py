@@ -40,17 +40,17 @@ class TaskStore:
             version = db.execute("PRAGMA user_version").fetchone()[0]
             if version not in {0, 1, 2}:
                 raise ValueError("不支持的任务记录版本")
-            db.execute("""CREATE TABLE IF NOT EXISTS tasks (
-                id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, action TEXT NOT NULL,
-                expected_sha256 TEXT, state TEXT NOT NULL, created REAL NOT NULL,
-                updated REAL NOT NULL, result TEXT)""")
-            db.execute("""CREATE TABLE IF NOT EXISTS submissions (
-                request_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, created REAL NOT NULL)""")
-            db.execute("CREATE INDEX IF NOT EXISTS submissions_task ON submissions(task_id)")
             if version < 2:
+                db.execute("""CREATE TABLE IF NOT EXISTS tasks (
+                    id TEXT PRIMARY KEY, request_id TEXT UNIQUE NOT NULL, action TEXT NOT NULL,
+                    expected_sha256 TEXT, state TEXT NOT NULL, created REAL NOT NULL,
+                    updated REAL NOT NULL, result TEXT)""")
+                db.execute("""CREATE TABLE IF NOT EXISTS submissions (
+                    request_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, created REAL NOT NULL)""")
+                db.execute("CREATE INDEX IF NOT EXISTS submissions_task ON submissions(task_id)")
                 db.execute("INSERT OR IGNORE INTO submissions SELECT request_id,id,created FROM tasks")
-            db.execute("PRAGMA user_version=2")
-            db.commit()
+                db.execute("PRAGMA user_version=2")
+                db.commit()
             with db:
                 yield db
         finally:
@@ -115,6 +115,8 @@ class TaskStore:
 
     def claim(self):
         with self.connect() as db:
+            if db.execute("SELECT 1 FROM tasks WHERE state='queued' LIMIT 1").fetchone() is None:
+                return None
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT * FROM tasks WHERE state='queued' ORDER BY created LIMIT 1").fetchone()
             if row:

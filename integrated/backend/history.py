@@ -18,13 +18,14 @@ class History:
             version = db.execute("PRAGMA user_version").fetchone()[0]
             if version not in (0, 1):
                 raise ValueError("Unsupported history schema; restore a compatible state backup")
-            db.execute("""CREATE TABLE IF NOT EXISTS revisions (
-                id INTEGER PRIMARY KEY, filename TEXT NOT NULL, created REAL NOT NULL,
-                sha256 TEXT NOT NULL, content BLOB NOT NULL, reason TEXT NOT NULL)""")
-            db.execute("""CREATE TABLE IF NOT EXISTS write_intents (
-                filename TEXT PRIMARY KEY, original BLOB, candidate BLOB NOT NULL)""")
-            db.execute("PRAGMA user_version=1")
-            db.commit()
+            if version == 0:
+                db.execute("""CREATE TABLE IF NOT EXISTS revisions (
+                    id INTEGER PRIMARY KEY, filename TEXT NOT NULL, created REAL NOT NULL,
+                    sha256 TEXT NOT NULL, content BLOB NOT NULL, reason TEXT NOT NULL)""")
+                db.execute("""CREATE TABLE IF NOT EXISTS write_intents (
+                    filename TEXT PRIMARY KEY, original BLOB, candidate BLOB NOT NULL)""")
+                db.execute("PRAGMA user_version=1")
+                db.commit()
             with db:
                 yield db
         finally:

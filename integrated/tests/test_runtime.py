@@ -1,10 +1,100 @@
+from contextlib import ExitStack
 import json
 from pathlib import Path
+import socket
+import socketserver
+import threading
 
 import pytest
 from runtime import observer, resources, entrypoint, component
 
 
+@pytest.mark.parametrize('nonfinite', [False, True])
+def test_collector_publishes_serialized_snapshot(monkeypatch, nonfinite):
+    sample = {'schema_version': 1, 'records': [float('nan') if nonfinite else 7], '_internal': 'private'}
+    monkeypatch.setattr(observer, 'collect', lambda _: sample)
+
+    def stop(_):
+        raise StopIteration
+
+    monkeypatch.setattr(observer.time, 'sleep', stop)
+    collector = observer.Collector()
+    assert json.loads(collector.snapshot_bytes) == {'error': 'Collector starting'}
+    with pytest.raises(StopIteration):
+        collector.run()
+    assert collector.snapshot_bytes == json.dumps(collector.snapshot, allow_nan=False).encode() + b'\n'
+    assert collector.snapshot['schema_version'] == 1
+    if nonfinite:
+        assert 'error' in collector.snapshot
+    else:
+        assert collector.snapshot == {'schema_version': 1, 'records': [7]}
+
+
+@pytest.mark.skipif(not hasattr(socket, 'AF_UNIX'), reason='Unix sockets unavailable')
+def test_observer_serves_fast_clients_during_slow_reads_and_bounds_workers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(observer, 'RUN_DIR', Path('.'))
+    sample = {'schema_version': 1, 'sampled_at': 100, 'ready': True}
+    published = threading.Event()
+
+    def collect_once(collector):
+        collector._publish(sample)
+        published.set()
+
+    monkeypatch.setattr(observer.Collector, 'run', collect_once)
+    servers = []
+    serve = socketserver.BaseServer.serve_forever
+    monkeypatch.setattr(socketserver.BaseServer, 'serve_forever', servers.append)
+    observer.main()
+    assert published.wait(2)
+    server, = servers
+    handler = server.RequestHandlerClass
+    handle = handler.handle
+    slow_reads = threading.Semaphore(0)
+    finished = threading.Event()
+    request_thread = server.process_request_thread
+
+    def observe_reads(request_handler):
+        slow_reads.release()
+        handle(request_handler)
+
+    def observe_completion(*args):
+        request_thread(*args)
+        finished.set()
+
+    monkeypatch.setattr(handler, 'handle', observe_reads)
+    monkeypatch.setattr(server, 'process_request_thread', observe_completion)
+    worker = threading.Thread(target=serve, args=(server, .01), daemon=True)
+    worker.start()
+    try:
+        with ExitStack() as clients:
+            def connect():
+                connection = clients.enter_context(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM))
+                connection.settimeout(1)
+                connection.connect('observer.sock')
+                return connection
+
+            slow = connect()
+            slow.sendall(b'snap')
+            assert slow_reads.acquire(timeout=1)
+            with connect() as fast:
+                fast.sendall(b'snapshot\n')
+                with fast.makefile('rb') as output:
+                    assert json.loads(output.readline()) == sample
+                    assert output.read() == b''
+            assert slow_reads.acquire(timeout=1)
+            assert finished.wait(1)
+
+            for _ in range(7):
+                connect().sendall(b'snap')
+                assert slow_reads.acquire(timeout=1)
+            with connect().makefile('rb') as output:
+                assert output.readline() == b'{"error":"Collector busy"}\n'
+                assert output.read() == b''
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(2)
 def test_rate_requires_same_process_and_monotonic_counters():
     first = {"total.num.queries": 10, "total.num.cachehits": 5, "total.num.cachemiss": 5, "time.up": 10}
     last = {"total.num.queries": 20, "total.num.cachehits": 13, "total.num.cachemiss": 7, "time.up": 15}

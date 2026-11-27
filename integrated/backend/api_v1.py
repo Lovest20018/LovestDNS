@@ -4,6 +4,7 @@ from contextlib import closing
 import logging
 import math
 import os
+from pathlib import Path
 import re
 import sqlite3
 import time
@@ -12,6 +13,7 @@ import uuid
 from flask import Blueprint, g, jsonify, request
 from werkzeug.exceptions import HTTPException
 from browser_auth import current_session, csrf_valid, external_api_enabled, WRITE_METHODS
+from state_database import create_database_inode, database_inode
 
 
 # Only these operations are exposed to the external observer credential.
@@ -58,15 +60,34 @@ OPERATIONS = [
 ]
 
 
+_instance_identities = {}
+
+
 def instance_identity(root):
     """Persist once, safely shared by multiple Gunicorn workers."""
-    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    root = Path(root).resolve()
+    path = root / "instance.sqlite"
+    if path.is_symlink():
+        raise ValueError("Instance database must not be a symlink")
+    inode = database_inode(path)
+    cached = _instance_identities.get(root)
+    if inode is not None and cached is not None and cached[0] == inode:
+        return cached[1]
+    _instance_identities.pop(root, None)
+    if inode is None:
+        inode = create_database_inode(path)
     # sqlite's transaction context commits/rolls back but does not close the
     # connection. Close explicitly across repeated requests and Web restarts.
-    with closing(sqlite3.connect(root / "instance.sqlite", timeout=5)) as db, db:
+    with closing(sqlite3.connect(path, timeout=5)) as db, db:
+        path.chmod(0o600)
         db.execute("CREATE TABLE IF NOT EXISTS identity (singleton INTEGER PRIMARY KEY CHECK(singleton=1), value TEXT NOT NULL)")
-        db.execute("INSERT OR IGNORE INTO identity VALUES(1, ?)", (str(uuid.uuid4()),))
-        return db.execute("SELECT value FROM identity WHERE singleton=1").fetchone()[0]
+        row = db.execute("SELECT value FROM identity WHERE singleton=1").fetchone()
+        if row is None:
+            db.execute("INSERT OR IGNORE INTO identity VALUES(1, ?)", (str(uuid.uuid4()),))
+            row = db.execute("SELECT value FROM identity WHERE singleton=1").fetchone()
+    if inode is not None and database_inode(path) == inode:
+        _instance_identities[root] = inode, row[0]
+    return row[0]
 
 
 def metric_values(sample):
