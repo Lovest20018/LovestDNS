@@ -28,7 +28,7 @@
       ".env.native.example": "9cb7372c3c951abf16aa9dda8832b17012bf9dda16c5c88afa0c379aba21cd55",
       ".gitattributes": "177659f43ce6803667749ede10c030e17a8982f00ac44809abfe302e70bd5c59",
       ".github/workflows/integrated-check.yml": "014a3543e467aebd4830084c7e58a074b23cca5bc843b8bba3510321e2b6379b",
-      ".github/workflows/native-package.yml": "bdee828b0db34164e7d8c4859263aee6d7b22b49f766bd8c348eed7fa00df3c8",
+      ".github/workflows/native-package.yml": "acf9124917c80d947add322f5ced3e048cbc4b14af9f655fe2d2bd2ea0e0e038",
       ".gitignore": "6ec921a06fdc52158d3915a1ba7823345875ac45e970c0bd05504c6f54056760",
       "docker-compose-web.yaml": "0409bc4340124407c7a72fdb01a352f8ef74347e5470af9ae1d21e020d5d7214",
       "docker-compose.integrated.yaml": "b40f095e7fe8119b627abd161e1b4d62a8649a27e854978c67ec7813d8e845fb",
@@ -200,7 +200,7 @@
       "integrated/tests/test_software_update.py": "88ea1ca53a5846ee5164b369208befbb16a04848f6a1bd202d54601891e9b4c5",
       "integrated/tests/test_update_network.py": "10cefa1779dcac228313007ea9d0e9786a7d9b58a82abc925db092ac3548cf63",
       "integrated/tests/test_update_proxy_transport.py": "efd9d665ff975712e63a47b364fdb578841590104d2b327cfbb37fa39c00a66d",
-      "packaging/components.lock.json": "91cde7bb9c2457740b695330dfd8450e9222f9de01e445fb90af8471e8151dbd",
+      "packaging/components.lock.json": "39ea46b9abc1898c69b0fa1b3911f332a74bee2dd79f596783fc313338bfc9ba",
       "packaging/components/Dockerfile": "bf2ee53c1bf23d16bbd8e4495e10ac13d901c1e76ff656be25fd765860b11d52",
       "packaging/components/README.md": "4c83908faf7d89306f3623d56383eaba11534375d5c3f1014313100d5c16a1a8",
       "packaging/components/bundle.py": "a81a174e9559bc05cb2da2cf1586efe338b9a0faa2b96b4d97471ee2d714707f",
@@ -410,7 +410,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "65751b1d27a5ac910dbdb47f11008c01973a4d3d6a65cd225490a6362ba3b2bb"
+    "sha256": "8c5f27d1300c5172442df8898da5bb7b6151b95e2509276fd87a7372a2a06de8"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

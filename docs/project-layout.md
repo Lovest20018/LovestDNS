@@ -19,7 +19,7 @@ LovestDNS 从原 `Lovest20018/PaoPaoDNS` fork 继续发布，更名后的地址�
 ## 发布产物与工作流
 
 - `.github/workflows/integrated-check.yml`：推送 main、PR 或手工触发时验证；构建容器用于隔离验收，不发布镜像。
-- `.github/workflows/native-package.yml`：手工构建原生包并保存 Actions artifact；不会自动安装到服务器或发布到 Releases。
+- `.github/workflows/native-package.yml` 手工构建原生包并保存 Actions artifact。可勾选 `reviewed_dnscrypt`，按源码锁构建并打入已审核的 DNSCrypt combined 变体。
 - GitHub Release 使用 `v<版本>` 标签，包含 `lovestdns-native-debian-amd64.tar.gz` 和同名 `.sha256`。候选版本标记为 prerelease；不得把未验收的新构建覆盖为旧候选。
 - `.build/` 和本地 `releases/` 产物不推送 Git，例外仅为原有冻结源码 ZIP。真实配置、密码、Token、数据、RDB、状态、历史、日志和截图不纳入源代码发布。
 
