@@ -62,7 +62,7 @@
       "integrated/frontend/src/api.ts": "f6619e843068fc70a9d5adc4db4668a33cc1a276b00dd5cde506202007a077c7",
       "integrated/frontend/src/components/BlockedQueries.css": "dd84e706796b4b51f97a067fec85182ca151af5b96b9feadd77b242097b26115",
       "integrated/frontend/src/components/BlockedQueries.tsx": "f65220091ef33381f5216877b478884d047e173e313eb1e22a5ba2bdee3b7cbf",
-      "integrated/frontend/src/components/BrowserLogin.tsx": "4abb8d0f99fe52a1949869c4a4c0b5a90e873ef24974424adc47cca99f40c19a",
+      "integrated/frontend/src/components/BrowserLogin.tsx": "56ebf9fbdeed94de05f4796501bf8c84036dc157cdb8054c2fca8a0606dfcd6f",
       "integrated/frontend/src/components/ConfigFeedback.tsx": "c1d234c20c26338e362541c422a411d585cd85b7cff1d828748457362623c9b7",
       "integrated/frontend/src/components/ConfigState.tsx": "3d9321cdac1cf7d560efcbf3d718bdda866ccc3f12c6a083c5bb780ec9766388",
       "integrated/frontend/src/components/ConfigVerification.tsx": "e8aa5fc6889b4515c64160ba24969f3b54c6016dc9da3a07d8002d8fc6f9a970",
@@ -126,7 +126,7 @@
       "integrated/frontend/src/settingsIdentity.ts": "f8695c187e3a97b439af3aac6fc80960fb7ffd27526bba77753c006729d00179",
       "integrated/frontend/src/sourceDevices.ts": "de2e1058b45aaa7d6fa4b64002f50d04d0398770ec698da77b03ac9f56afbac9",
       "integrated/frontend/src/store.ts": "95c2afc37a320f34ec1e61f73e5b19750bed0114c3fff304fc9d807e08bdf85c",
-      "integrated/frontend/src/suite.css": "f40350f67fc9013794bb4aed280600427f82e09e177b8e051ad068cae0c018b5",
+      "integrated/frontend/src/suite.css": "c4bc19350f6e2c956d2f1c4f4b7eba9276e9805901061f7b4d6418e2023e8214",
       "integrated/frontend/src/suiteApi.ts": "b7d64808ba6421f14c2684369baff87f4621192be585e6c0c438e429958d0b8b",
       "integrated/frontend/src/suiteContext.ts": "15a4a1da74526fb1b233ed757edd0cccfc61a0285fb875b3684a73af51c0379a",
       "integrated/frontend/src/trend.ts": "3fb2348f810d328964af135082e70fb8472b23ae2c0f15bfebbcb60787f2a69e",
@@ -294,7 +294,7 @@
       "scripts/test-cachedb-history-replay.py": "e22a2616a5e2456482df726d1c8e3e70bd17c9481529e199e3b435e71a385e4b",
       "scripts/test-cachedb-timeout.py": "f9ab7151a1fe186605e13df88c28f52437bccacbbf9cddc523b75de9ccd93c49",
       "scripts/test-cachedb-upgrade-rewarm.py": "918c6b24f70ad3c38361118b50ff351e9da3aefbfaa466e0d2a3bf069cc44cce",
-      "scripts/test-console-navigation.mjs": "0567ada47db9861ae6491e5c7f2dc62bba18a671394871890f405d2e2960250a",
+      "scripts/test-console-navigation.mjs": "d7fc0ff687c457490f5c597c27cc0a110af54cae81141033eacf762429a71c7b",
       "scripts/test-control-capacity.py": "b65529ea83823923dc46859e0f5293cb7a4def6d8ff991b55df770065f16f229",
       "scripts/test-dns-filter.py": "29f992a2fda7a6eca499a69d9adf050328384ad212cdd8b0f33e9df6d8968fc9",
       "scripts/test-dnscrypt-compatibility.py": "dc93ec3bd4615050e7184debbf8c9c10517ed71a12ad9983d78f18b043b929bd",
@@ -410,7 +410,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "61d8ef4372d77b3418930525ee1e92dd9a601bfd85404a3b13384b626e772cb3"
+    "sha256": "bf070a864d1acdb280164b9556154d7f8d5e4b3b863e4bb62ecf850b8916cb9a"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

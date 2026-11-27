@@ -512,9 +512,13 @@ body { min-width: 0; }
   gap: 30px;
   background: radial-gradient(ellipse at 50% 5%,var(--suite-accent-soft),transparent 55%),var(--suite-bg);
 }
+:root[data-theme='dark'] .suite-login {
+  --suite-accent-solid: var(--suite-accent);
+  --suite-accent-solid-hover: var(--suite-accent-hover);
+  --suite-accent-on-solid: var(--suite-panel);
+}
 .suite-login-brand { display: flex; align-items: center; gap: 9px; }
 .suite-login-brand strong { font-size: 23px; letter-spacing: -.7px; }
-.suite-login-brand > span { padding-left: 13px; margin-left: 4px; border-left: 1px solid var(--suite-line-strong); color: var(--suite-muted); font-size: 12px; }
 .suite-login-card {
   width: 100%;
   max-width: 408px;
@@ -544,13 +548,14 @@ body { min-width: 0; }
   min-width: 0;
   height: 43px;
   padding: 10px 12px;
-  border: 1px solid var(--suite-line-strong);
+  border: 1px solid var(--suite-muted);
   border-radius: 8px;
   background: var(--suite-panel);
   color: var(--suite-ink);
   font-size: var(--suite-body-size);
 }
-.suite-login-card input:focus { outline: 2px solid var(--suite-accent-ring); outline-offset: 1px; border-color: var(--suite-accent); }
+.suite-login-card .suite-field input:focus { border-color: var(--suite-accent); }
+.suite-login-card .suite-field input::placeholder { color: var(--suite-muted); opacity: 1; }
 .suite-password-input { display: flex; position: relative; }
 .suite-login-card .suite-password-input input { padding-right: 42px; }
 .suite-password-input button {
@@ -566,8 +571,26 @@ body { min-width: 0; }
   color: var(--suite-muted);
   cursor: pointer;
 }
-.suite-login-remember { display: flex; align-items: center; gap: 8px; margin: 17px 0 21px; color: var(--suite-muted); font-size: 12px; cursor: pointer; }
-.suite-login-remember input { accent-color: var(--suite-accent-solid); width: 14px; height: 14px; }
+.suite-login-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: 4px 0;
+  color: var(--suite-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.suite-login-remember input { flex: none; width: 17px; height: 17px; accent-color: var(--suite-accent); cursor: inherit; }
+.suite-login-remember input:not(:checked) {
+  appearance: none;
+  border: 1px solid var(--suite-muted);
+  border-radius: 3px;
+}
+@media (forced-colors: active) {
+  .suite-login-remember input:not(:checked) { appearance: auto; }
+}
 .suite-login-submit { width: 100%; justify-content: center; height: 43px; margin-top: 9px; }
 .suite-login-cancel {
   display: block;
@@ -588,12 +611,13 @@ body { min-width: 0; }
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
-.suite-login-error .btn { margin-top: 10px; display: block; }
+.suite-login-error .btn { margin-top: 10px; display: block; border-color: var(--suite-muted); }
 .suite-login-help { margin-top: 22px; padding-top: 17px; border-top: 1px solid var(--suite-line); color: var(--suite-muted); font-size: 12px; line-height: 1.7; }
 .suite-login-help summary { cursor: pointer; }
 .suite-login-help p { margin: 8px 0; }
 .suite-login-help code { display: block; padding: 9px; background: var(--suite-panel-soft); border-radius: 6px; overflow-wrap: anywhere; color: var(--suite-ink); }
-.suite-login-footer { color: var(--suite-muted); font-size: 12px; }
+.suite-login-footer { color: var(--suite-muted); font-size: 12px; line-height: 1.6; text-align: center; }
+.suite-login-footer > span { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
 
 /* Diagnostics, maintenance and integrations */
 .suite-status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; white-space: nowrap; color: var(--suite-muted); }
@@ -847,8 +871,16 @@ body { min-width: 0; }
 @media (max-width: 420px) {
   .suite-login { padding: 24px 16px; gap: 24px; }
   .suite-login-card { padding: 25px 22px; }
-  .suite-login-brand > span { display: none; }
   .suite-topbar { gap: 6px; }
+}
+
+@media (max-height: 440px) and (orientation: landscape) {
+  .suite-login { padding-block: 12px; gap: 10px; }
+  .suite-login-brand img { width: 36px; height: 36px; }
+  .suite-login-card { padding-block: 14px; }
+  .suite-login-symbol { display: none; }
+  .suite-login-card h1 { margin-top: 0; }
+  .suite-login-card form { margin-top: 15px; }
 }
 
 @media (max-width: 360px) {

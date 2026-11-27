@@ -52,8 +52,123 @@ try {
   screenshot = async (name) => { const result = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }); await fs.writeFile(path.join(output, name), Buffer.from(result.data, 'base64')); };
   const assertFits = async (label) => assert(await evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), label + ' overflows horizontally');
   await send('Page.enable'); await send('Runtime.enable');
-  await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 960, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url: origin });
+  await send('Page.bringToFront');
+  await wait("document.activeElement?.matches('input[name=password]')");
+  assert(await evaluate(`(() => {
+    const input = document.querySelector('input[name=password]');
+    const label = input.labels[0];
+    const toggle = document.querySelector('.suite-password-input button');
+    return input.id && input.autocomplete === 'current-password' && label?.htmlFor === input.id
+      && label.textContent.trim() === '管理员密码' && !toggle.closest('label') && toggle.type === 'button';
+  })()`), 'Password label should be associated with only the password field');
+  assert.equal(await evaluate("document.querySelector('.suite-login-card h1').textContent"), '登录 DNS 管理面板');
+  assert.equal(await evaluate("document.querySelector('.suite-login-footer code').textContent"), 'sudo lovestdnsctl password');
+
+  const press = async (key, windowsVirtualKeyCode, text = '') => {
+    const params = { key, code: key, windowsVirtualKeyCode };
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', ...params, text });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', ...params });
+  };
+  const focusRing = () => evaluate(`(() => {
+    const style = getComputedStyle(document.activeElement);
+    return { color: style.outlineColor, style: style.outlineStyle, width: style.outlineWidth, offset: style.outlineOffset };
+  })()`);
+  const contrast = (foreground, background) => {
+    const luminance = (color) => color.match(/[\d.]+/g).slice(0, 3).map((channel) => {
+      const value = Number(channel) / 255;
+      return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4;
+    }).reduce((sum, channel, index) => sum + channel * [.2126, .7152, .0722][index], 0);
+    const [low, high] = [luminance(foreground), luminance(background)].sort((a, b) => a - b);
+    return (high + .05) / (low + .05);
+  };
+  const viewports = [[1440, 900], [1280, 720], [768, 1024], [390, 844], [667, 375], [360, 640]];
+  for (const theme of ['light', 'dark']) {
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: theme }] });
+    await wait(`document.documentElement.dataset.theme === '${theme}'`);
+    await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
+    await evaluate("document.querySelector('input[name=password]').focus()");
+    await press('Tab', 9);
+    await wait("document.activeElement.matches('.suite-password-input button[aria-label=显示密码]:focus-visible')");
+    const toggleRing = await focusRing();
+    await press('Enter', 13, '\r');
+    await wait("document.activeElement.getAttribute('aria-label') === '隐藏密码' && document.querySelector('input[name=password]').type === 'text'");
+    await press('Enter', 13, '\r');
+    await wait("document.activeElement.getAttribute('aria-label') === '显示密码' && document.querySelector('input[name=password]').type === 'password'");
+    await press('Tab', 9);
+    await wait("document.activeElement.matches('.suite-login-remember input:checked:focus-visible')");
+    const rememberRing = await focusRing();
+    await screenshot(`login-focus-${theme}.png`);
+    await press('Tab', 9);
+    await wait("document.activeElement.matches('.suite-login-submit:focus-visible')");
+    assert.deepEqual(rememberRing, toggleRing, `${theme} password toggle and checkbox focus rings should match`);
+    assert.deepEqual(rememberRing, await focusRing(), `${theme} submit and checkbox focus rings should match`);
+    assert.equal(rememberRing.style, 'solid');
+    assert.equal(rememberRing.width, '2px');
+    assert(Number.parseFloat(rememberRing.offset) >= 2);
+    assert.match(rememberRing.color, /^rgb\(/, `${theme} checkbox focus ring should be opaque`);
+
+    const colors = await evaluate(`(() => {
+      const style = (selector) => getComputedStyle(document.querySelector(selector));
+      const card = style('.suite-login-card').backgroundColor;
+      const password = style('input[name=password]');
+      const submit = style('.suite-login-submit');
+      return { card, pairs: {
+        heading: [style('.suite-login-card h1').color, card],
+        description: [style('.suite-login-card > p').color, card],
+        passwordLabel: [style('.suite-field > label').color, card],
+        passwordText: [password.color, password.backgroundColor],
+        passwordBorder: [password.borderColor, card],
+        toggle: [style('.suite-password-input button').color, password.backgroundColor],
+        rememberLabel: [style('.suite-login-remember').color, card],
+        rememberChecked: [style('.suite-login-remember input').accentColor, card],
+        submitText: [submit.color, submit.backgroundColor],
+        submitFill: [submit.backgroundColor, card],
+        resetHint: [style('.suite-login-footer').color, style('.suite-login').backgroundColor],
+      } };
+    })()`);
+    assert(contrast(rememberRing.color, colors.card) >= 3, `${theme} checkbox focus ring contrast`);
+    for (const [part, pair] of Object.entries(colors.pairs)) {
+      const ratio = contrast(...pair);
+      assert(ratio >= 4.5, `${theme} login ${part} contrast is ${ratio.toFixed(2)}`);
+    }
+
+    for (const [width, height] of viewports) {
+      await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width <= 768 });
+      const viewport = `${width}x${height} ${theme}`;
+      await assertFits(`Login at ${viewport}`);
+      const layout = await evaluate(`(() => {
+        const label = document.querySelector('.suite-login-remember');
+        const row = label.getBoundingClientRect();
+        const box = label.control.getBoundingClientRect();
+        return { labelHeight: row.height, checkboxSize: [box.width, box.height], pageHeight: document.documentElement.scrollHeight,
+          touchX: box.left + box.width / 2, touchTop: row.top + 3, touchBottom: row.bottom - 3 };
+      })()`);
+      assert(layout.pageHeight <= height, `Login should fit vertically at ${viewport}: ${layout.pageHeight}px`);
+      assert(layout.labelHeight >= 44, `Remember login touch target at ${viewport}`);
+      assert(layout.checkboxSize.every((size) => size >= 16 && size <= 18), `Remember login checkbox size at ${viewport}`);
+      if (width === 360) {
+        await send('Emulation.setTouchEmulationEnabled', { enabled: true });
+        for (const [y, checked] of [[layout.touchTop, false], [layout.touchBottom, true]]) {
+          await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: layout.touchX, y }] });
+          await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await wait(`document.querySelector('.suite-login-remember input').checked === ${checked}`);
+          if (!checked) {
+            const border = await evaluate("getComputedStyle(document.querySelector('.suite-login-remember input')).borderColor");
+            assert(contrast(border, colors.card) >= 4.5, `${theme} unchecked checkbox border contrast`);
+          }
+        }
+        await send('Emulation.setTouchEmulationEnabled', { enabled: false });
+      }
+      if (width === 390 || width === 667) await screenshot(`login-${width}x${height}-${theme}.png`);
+    }
+  }
+  await send('Emulation.setEmulatedMedia', { features: [] });
+  await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 960, deviceScaleFactor: 1, mobile: false });
+  console.log('PASS: login semantics, keyboard focus, contrast, touch targets and layout across six viewports in light and dark mode');
+  const previousLoginPage = await evaluate('performance.timeOrigin');
+  await send('Page.reload');
+  await wait(`performance.timeOrigin !== ${previousLoginPage}`);
   const login = async () => { await wait("document.querySelector('input[name=password]')"); await change('input[name=password]', 'synthetic-browser-password'); await evaluate("document.querySelector('.suite-login-submit').click()"); await wait("document.querySelector('.suite-page-heading')"); };
   await login();
   await evaluate('window.confirm = () => true');
