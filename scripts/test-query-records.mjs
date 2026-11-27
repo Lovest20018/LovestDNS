@@ -208,9 +208,8 @@ try {
   await evaluate(`document.querySelector('.query-record-desktop '+${JSON.stringify(longDomainButton)}).click()`);
   for (const width of [390, 320]) {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false });
-    await sleep(200);
+    await wait("!document.querySelector('.query-record-desktop') && !!document.querySelector('.query-record-cards')?.getClientRects().length");
     assert(await evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'), 'page overflow at ' + width);
-    assert(await evaluate("getComputedStyle(document.querySelector('.query-record-desktop')).display==='none' && getComputedStyle(document.querySelector('.query-record-cards')).display!=='none'"), 'mobile uses readable record cards');
     assert(await evaluate("getComputedStyle(document.querySelector('.query-record-filters')).display==='none'"), 'mobile filters start collapsed');
     await evaluate("document.querySelector('.query-filter-mobile button').click()");
     assert(await evaluate("document.querySelector('.query-filter-mobile button').getAttribute('aria-expanded')==='true' && getComputedStyle(document.querySelector('.query-record-filters')).display!=='none'"));

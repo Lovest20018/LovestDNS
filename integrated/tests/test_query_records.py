@@ -529,6 +529,47 @@ def test_slow_write_keeps_status_and_emit_responsive_and_clear_fences_old_events
     assert not writer.is_alive()
 
 
+def test_disabling_recording_waits_for_in_flight_write(tmp_path, monkeypatch):
+    recorder = Recorder(tmp_path, tmp_path)
+    recorder.configure(True)
+    append_entered, release_append, disable_started = (threading.Event() for _ in range(3))
+    append = recorder.store.append
+
+    def slow_append(events):
+        append_entered.set()
+        assert release_append.wait(5)
+        append(events)
+
+    def disable():
+        disable_started.set()
+        return recorder.request({'operation': 'configure', 'enabled': False})
+
+    monkeypatch.setattr(recorder.store, 'append', slow_append)
+    recorder.emit(recorder.generation, event())
+    writer = threading.Thread(target=recorder.write_loop, daemon=True)
+    writer.start()
+    try:
+        with ThreadPoolExecutor(max_workers=2) as calls:
+            try:
+                assert append_entered.wait(2)
+                disabling = calls.submit(disable)
+                assert disable_started.wait(2)
+                with pytest.raises(TimeoutError):
+                    disabling.result(timeout=.2)
+                status = calls.submit(recorder.status).result(timeout=1)
+                assert status['enabled'] and status['retained_rows'] == 0
+                release_append.set()
+                status = disabling.result(timeout=2)
+                assert not status['enabled'] and status['retained_rows'] == 1
+            finally:
+                release_append.set()
+    finally:
+        recorder.stop.set()
+        writer.join(timeout=2)
+        recorder.store.close()
+    assert not writer.is_alive()
+
+
 @pytest.mark.parametrize('scenario', ['shared', 'error', 'clear'])
 def test_recorder_analytics_singleflight_for_the_same_generation_and_hours(tmp_path, monkeypatch, scenario):
     recorder = Recorder(tmp_path, tmp_path)

@@ -424,8 +424,18 @@ def _prune_unlocked(p, *, keep_backups=2, keep_releases=2, dry_run=False):
         raise ValueError(f'Cannot prune with invalid rollback.json or release.json: {exc}') from exc
 
     backup_candidates = _prune_candidates(backups, protected_backups, backups=True)
-    release_candidates = _prune_candidates(releases, protected_releases)
     kept_backups, removed_backups = backup_candidates[:keep_backups], backup_candidates[keep_backups:]
+    for retained in kept_backups:
+        try:
+            release = _rollback_reference(retained / 'release.json', 'release', releases, missing_ok=True)
+        except FileNotFoundError:
+            continue  # A previous cleanup may already have removed this release.
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            raise ValueError(f'Cannot prune with invalid release.json in {retained.name}: {exc}') from exc
+        if release is not None:
+            protected_releases.add(release)
+
+    release_candidates = _prune_candidates(releases, protected_releases)
     kept_releases, removed_releases = release_candidates[:keep_releases], release_candidates[keep_releases:]
     removed_directories = removed_backups + removed_releases
     removed_release_names = {path.name for path in removed_releases}

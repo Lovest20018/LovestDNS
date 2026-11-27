@@ -135,7 +135,8 @@ class Recorder:
         self.summary_flights = {}
 
     def configure(self, enabled):
-        with self.lock:
+        # Complete any admitted write before acknowledging the new capture state.
+        with self.storage_lock, self.lock:
             if self.settings.is_symlink():
                 raise ValueError('查询采集设置不可写')
             temporary = self.settings.with_name('.query-recording-' + uuid.uuid4().hex)

@@ -3,14 +3,14 @@
   "artifacts": {
     "openapi.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "6fb4416b59b37f394c17030538ddb96debf2e2bc421476e2bc50d01352ee160d"
+      "sha256": "c48d079bdc9b8282799064d82b0e6df601e0fa95cc10355252e7dd9ada9dcead"
     },
     "samples.json": {
       "hash_mode": "UTF-8 canonical JSON with LF",
-      "sha256": "098ee6fd5681c96b1dfe4292885acec26dbefe1f94e9a7bf34c13a7c4fd44c31"
+      "sha256": "5eb989ae68229eefe84a5a2ffd6e576da5da832b3b9ad5ecfc1d5a92e5c9c670"
     }
   },
-  "candidate_version": "0.2.2",
+  "candidate_version": "0.2.3-rc.1",
   "container_runtime_acceptance": "isolated_linux_amd64_passed_for_recorded_revision",
   "format_version": 1,
   "provenance": "All responses from actual Flask handlers with synthetic I/O and clocks; no live core/network acceptance evidence",
@@ -45,7 +45,7 @@
       "integrated/backend/history.py": "925a295c1080c96cafde7d81629632c319c8f809bb8ca8f309ab988b3e9dc2f6",
       "integrated/backend/installation.py": "64190ebaa3b32c2dfb6f5aa67a8a35303e77be1547114d8a6a866cfc44fd6a84",
       "integrated/backend/runtime_client.py": "f97b233696bcfb36eba5249d6557a57e0f3b8ef589dd064417a9b01f6dcd9408",
-      "integrated/backend/server.py": "4d32c8cf6c995ca899276cdbfe7adf1bc65daa223b9b2f7f2a567ad7407b3f0c",
+      "integrated/backend/server.py": "79b01f9c32ebda80ef8884646465e713fbd2329125ac289fd4e56e76e2d28c67",
       "integrated/backend/software_update.py": "b52458da2c3da101c1f9def879a71a2aaf24134511fecaf5b1ffdc6f190b42bb",
       "integrated/backend/state_database.py": "79b9eb301cd15ba7e1b5a005d076f921c23fba913e95aa908809f10a4c8313ac",
       "integrated/frontend/package-lock.json": "a9cc6c4341237b1ddb91874a72cf08878df13787d20fc3cbc19b1bfc56a915a7",
@@ -148,7 +148,7 @@
       "integrated/frontend/tests/settingsIdentity.test.ts": "6d86364e22a2aa94613a9cfab2698aae6563b7014fbeaf60db9ee2bd97395ac2",
       "integrated/frontend/tests/software-update.test.ts": "8ec675a462c303e1dad7640b0f66ecb02889b140c3b0fd5c0a0ca4ed898722fb",
       "integrated/frontend/tests/suite.test.ts": "81bd20c1dafcd6efa746e061c3ebcb84e5fbf96fac611bcfa07aa6b6ce361534",
-      "integrated/frontend/vite.config.ts": "dfd5c68fe27bd27fc9b2fb678a5d8b0a4e3fed6127e70bcaa7e439f300653176",
+      "integrated/frontend/vite.config.ts": "4c1ce9d2a32aff77053e1b450c9d5ac2fb37d1d83d906bb174dfe21d2aadc704",
       "integrated/runtime/__init__.py": "80faef3cbd8f2b035a424c0f80f54089520af70973d45d6d4dc3abf11f72748d",
       "integrated/runtime/admission.py": "cb64f17b64ef7c3b4110630591a60d9dbdcf12b56df3411d36c8d08793bb7943",
       "integrated/runtime/component.py": "e818fcdb33c3d331354e34af6b324e2597afcc53b6ee4776f789320c0f92fec3",
@@ -167,7 +167,7 @@
       "integrated/runtime/manager.py": "f9e6ed09800d8c89e4994eb89afcadcbd4eff701d93549c69a2a634fd10558bf",
       "integrated/runtime/observer.py": "2749e6a994eb9d8d0fe886afa2e305cb4c27ee914ed2875ed16bccdfa95bce88",
       "integrated/runtime/query_capture.py": "e6eabde2af00b84b6175317263b0c1c3491a1a153920462e041677d351128ee1",
-      "integrated/runtime/query_recorder.py": "e9e75a48f78348ac136418b4b9b0ffe0121886a3c2b9ec2dbaca2fee98648341",
+      "integrated/runtime/query_recorder.py": "15d6728554d8013e79f24cfab41fcbda8b09a50f3b9fab5fda15ed14e7868089",
       "integrated/runtime/query_store.py": "2a48e3b41fd90621219bc31e644eb09935e9a45c6101589ecca35a307db2210d",
       "integrated/runtime/query_wire.py": "48374625eccee338e7381d7ae54d8f3de1e40c6de019210fbe1b7468eb0da38c",
       "integrated/runtime/resources.py": "43aa796dd6976be8e0b34a7c3d34784032032a65b3e65520db08a62ef5bd14cb",
@@ -193,7 +193,7 @@
       "integrated/tests/test_maintenance.py": "cc9bf9ae6d1b7702f2c39b6bbe5574b5b04c8359fb17529357c298647bad86c6",
       "integrated/tests/test_native_online_update.py": "29ef8b8c72cbdb6592ce451138585919c9794406de600d97d0101bb73548ffbc",
       "integrated/tests/test_provider_baseline.py": "739e4aada6909f1c1156ed8f9b2e499b49028156445dba3c176fee1c15e98bc9",
-      "integrated/tests/test_query_records.py": "93432e3191db718745606f848527c8be36fcccd6cab1ff44f89ec82d933ae498",
+      "integrated/tests/test_query_records.py": "164d8cad7d23871c056feb750b79fe33966398057f25305e7a72e492b6178d97",
       "integrated/tests/test_runtime.py": "656c87f35079645ed3a974769fac54dce8712aa114e58e20904b32c8de34339e",
       "integrated/tests/test_runtime_client.py": "59924920b14eae2ab2aa7d194f24c5d57ba2e76f08e9a5190ea54ee2dc3cc33d",
       "integrated/tests/test_runtime_idle.py": "4c622e07f1ae95bc9b2b1266ab5ae953bd5b4a16a12c74f79788c01b05053503",
@@ -228,7 +228,7 @@
       "packaging/legacy/web-docker-ghcr.yml.disabled": "ec310e0e1080ca1225d835f8ea30d441d56919574201cf7fc45ce8966a7e8fcb",
       "packaging/mosdns-filter.lock.json": "6a2f158fbce4e848e089f1b2f343d60fdb40ded9c6c30d230e3e5eaa57fcb2f0",
       "packaging/native/adapt_upstream.py": "814adb6c49657e5d1198cb732e8114c97da191f6e815739e5882134076d28495",
-      "packaging/native/install.py": "3b1365b38df0fd3bc4d45934cfd5926aba82dd8b6f27afc56ca49a88e9d03d5d",
+      "packaging/native/install.py": "19a3c3bc9c4d043b343e86487ae7259ad2525d2e01c334f26265307ca9e40390",
       "packaging/native/requirements.lock.txt": "0b63aa4fd0e4abe316ac8b6524ecdbe243e1b9b1690c20ace3b2ede18d9b9922",
       "packaging/native/runtime/__init__.py": "d07fe518abd1ce934cdac25faa4c56c051788a38b58a64bce6576272d07b7955",
       "packaging/native/runtime/backup.py": "7e5940802be800780c0dad0a4996425a62d1f73266ae615d5877f4b01a3df367",
@@ -306,7 +306,7 @@
       "scripts/test-integrated-container.py": "4627f8701ffd8b1e0f4ee938f18a086815ddc02e2a2d1b8c5bc237d92d2bac9e",
       "scripts/test-native-instance.py": "faa5bf2f392b833df9814871f258037d40574d316d0f7ad796fbbb47d26150ec",
       "scripts/test-native-root-hints.py": "d1aad18c4ff2f5832125b36001e8e17ad583bc3d3b487de51555e212b6246f43",
-      "scripts/test-query-records.mjs": "fb7afe638508d07101d36877d2305ebefffdd085276c5ed76e3160f100b8fb9d",
+      "scripts/test-query-records.mjs": "08c47a2b15605e349696d08e3d22637264d32d38d53616a5c04d0b74007c55fd",
       "scripts/test-redis-persistence-upgrade.py": "403ba8b366c5e841dcaca15823aadd56f90d78e0eb8b1d571004f6fd6a9223e0",
       "scripts/test-ui-optimization.mjs": "2e5931fde78d33b7c9291660ab22e1553a695404d75b28ab77c0af4405e39fda",
       "scripts/tests/test_cachedb_case_compat.py": "ed2babc4be9d734d32d4f0ba6ef7239682ee3a7c1cab6e33637773013c1b5f47",
@@ -334,7 +334,7 @@
       "scripts/tests/test_home_dns_client.py": "4e70638729af4df96af5e0b33230f6397dc08bb48457b9dba8416ee668df1c65",
       "scripts/tests/test_native_dnscrypt_candidate.py": "89a851db18f8d06a96164a4255b7395dc5b99cd8b98cf2437f889d394bffbca3",
       "scripts/tests/test_native_frontend_provenance.py": "d24256c281a9ebb016a6863c05973ac4e15cbecc565c5653548d020e75e3cb44",
-      "scripts/tests/test_native_package.py": "4f5f9ff04f9f86550ca2b91e36413576e0fc60655424aae1e4affa6803149d27",
+      "scripts/tests/test_native_package.py": "db745d5115b17a3227f7fc22d7ef3ffdbcd32893dae70dbf04b9d5692c43545c",
       "scripts/tests/test_native_refresh.py": "0015414489201e1604322bbccb20331a3777448cbe459bc99a67ce18a36f8f07",
       "scripts/tests/test_native_restart.py": "ee3a051e8d1fa3f747341c82c9b934628d5cb1934d700c2a1416524e0cd33ff8",
       "scripts/tests/test_native_rollback.py": "118a1e36614cb7e347a662661025c2767f06a7e1710bc1ebad9019b5ec4448b6",
@@ -410,7 +410,7 @@
       "packaging/dnscrypt-source.lock.json",
       "packaging/mosdns-filter.lock.json"
     ],
-    "sha256": "a8ce106ac8b9cc51f0d0545502228fea658901d1fcafcd99433f800204d8d64b"
+    "sha256": "004d1d994eb9772d5e64e2c0f4dcc5fbd2f5e478ff8ff819e64a22ffa2c5ee98"
   },
   "stable_release": false,
   "standalone_checkpoint": "standalone-20261024",

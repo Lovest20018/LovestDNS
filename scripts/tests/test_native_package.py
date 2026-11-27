@@ -405,6 +405,33 @@ def test_prune_cli_preview_and_actual_removal_protect_referenced_paths(prune_ins
     assert not install.prune(p, keep_backups=1, keep_releases=1)['reclaimed_bytes']
 
 
+def test_prune_preserves_the_release_of_a_retained_backup(prune_instance, install_link):
+    p = prune_instance
+    releases, backups = p['home'] / 'releases', p['storage'] / 'backups'
+    active = older_directory(releases / 'active', 3)
+    rollback = older_directory(releases / 'rollback', 2)
+    discard = older_directory(releases / 'unused', 1)
+    retained = older_directory(releases / 'older', 0)
+    active_backup = older_directory(backups / '20261127-120000', 3)
+    retained_backup = older_directory(backups / '20261126-120000', 2)
+    discard_backup = older_directory(backups / '20261125-120000', 1)
+    for backup, release in ((active_backup, rollback), (retained_backup, retained), (discard_backup, discard)):
+        stamp = backup.stat().st_mtime_ns
+        (backup / 'release.json').write_text(json.dumps({'release': str(release)}))
+        os.utime(backup, ns=(stamp, stamp))
+    install_link(p['home'] / 'current', active, is_dir=True)
+    (p['home'] / 'rollback.json').write_text(json.dumps({'backup': str(active_backup)}))
+
+    plan = install.prune(p, keep_backups=1, keep_releases=0, dry_run=True)
+    assert plan['kept_backups'] == [str(retained_backup)]
+    assert plan['protected_releases'] == sorted(map(str, (active, rollback, retained)))
+    assert plan['removed_releases'] == [str(discard)]
+
+    install.prune(p, keep_backups=1, keep_releases=0)
+    assert retained_backup.is_dir() and retained.is_dir()
+    assert not discard_backup.exists() and not discard.exists()
+
+
 def test_prune_refuses_a_redirected_release_root(prune_instance, install_link, tmp_path):
     p = prune_instance
     releases = p['home'] / 'releases'
